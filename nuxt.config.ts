@@ -7,6 +7,20 @@ export default defineNuxtConfig({
     '@vueuse/nuxt'
   ],
 
+  ui: {
+    global: true,
+    safelistColors: ['emerald', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'teal', 'cyan', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose', 'slate', 'gray', 'zinc', 'neutral', 'stone']
+  },
+
+  components: {
+    dirs: [
+      {
+        path: '~/components',
+        global: true
+      }
+    ]
+  },
+
   devtools: {
     enabled: true
   },

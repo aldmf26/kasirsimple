@@ -126,7 +126,9 @@ export const useTransactions = () => {
         customer_phone?: string
         notes?: string
     }) => {
-        if (!store.value || !user.value) throw new Error('Store or user not found')
+        const { isDummyMode, createDummyTransaction, getDummyStore } = useDummyMode()
+        
+        if (!store.value && !isDummyMode.value) throw new Error('Store or user not found')
         if (cart.value.length === 0) throw new Error('Cart is empty')
 
         loading.value = true
@@ -149,6 +151,45 @@ export const useTransactions = () => {
 
             if (change < 0) throw new Error('Pembayaran kurang')
 
+            // Handle dummy mode
+            if (isDummyMode.value) {
+                const dummyStore = getDummyStore()
+                const items = cart.value.map(item => ({
+                    product_id: item.product_id,
+                    product_name: item.product_name,
+                    quantity: item.quantity,
+                    price: item.product_price,
+                    subtotal: item.subtotal
+                }))
+
+                const dummyTransaction = createDummyTransaction({
+                    store_id: dummyStore.id,
+                    user_id: 'dummy-user',
+                    customer_name: paymentData.customer_name || 'Pelanggan Umum',
+                    total_amount: total,
+                    discount_amount: discountAmount,
+                    discount_type: paymentData.discount_type || 'nominal',
+                    paid_amount: paymentData.paid,
+                    change_amount: change,
+                    payment_method: paymentData.payment_method,
+                    items: items as any
+                })
+
+                console.log('✅ Dummy Mode: Transaction created', dummyTransaction.id)
+                
+                // Add to transactions list
+                transactions.value.push({
+                    ...dummyTransaction,
+                    items: items as any
+                } as TransactionWithItems)
+                
+                // Clear cart
+                clearCart()
+                
+                return dummyTransaction
+            }
+
+            // Original Supabase logic continues...
             const transactionNumber = await generateTransactionNumber()
 
             // Insert transaction header

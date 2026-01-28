@@ -15,6 +15,7 @@ export interface ProductWithCategory extends Product {
 export const useProducts = () => {
     const supabase = useSupabaseClient<Database>()
     const { store } = useStore()
+    const { isDummyMode, getDummyProducts, getDummyCategories } = useDummyMode()
 
     const products = useState<ProductWithCategory[]>('products', () => [])
     const loading = useState('products_loading', () => false)
@@ -22,12 +23,28 @@ export const useProducts = () => {
 
     // Fetch all products for current store
     const fetchProducts = async (categoryId?: string) => {
-        if (!store.value) return []
+        if (!store.value && !isDummyMode.value) return []
 
         loading.value = true
         error.value = null
 
         try {
+            // Use dummy data if dummy mode is enabled
+            if (isDummyMode.value) {
+                const dummyProducts = getDummyProducts(categoryId)
+                const categories = getDummyCategories()
+                
+                const productsWithCategory = dummyProducts.map(p => ({
+                    ...p,
+                    category: categories.find(c => c.id === p.category_id) || null
+                }))
+                
+                products.value = productsWithCategory as ProductWithCategory[]
+                console.log('📦 Dummy Mode: Loaded', productsWithCategory.length, 'products')
+                return productsWithCategory
+            }
+
+            // Original Supabase logic
             let query = supabase
                 .from('products')
                 .select(`

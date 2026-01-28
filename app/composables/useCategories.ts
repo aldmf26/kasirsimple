@@ -7,6 +7,7 @@ type CategoryUpdate = Database['public']['Tables']['categories']['Update']
 export const useCategories = () => {
     const supabase = useSupabaseClient<Database>()
     const { store } = useStore()
+    const { isDummyMode, getDummyCategories } = useDummyMode()
 
     const categories = useState<Category[]>('categories', () => [])
     const loading = useState('categories_loading', () => false)
@@ -14,30 +15,45 @@ export const useCategories = () => {
 
     // Fetch all categories for current store
     const fetchCategories = async () => {
-        if (!store.value) return []
+        if (!store.value && !isDummyMode.value) {
+            console.warn('⚠️ Store is null, cannot fetch categories');
+            return [];
+        }
 
-        loading.value = true
-        error.value = null
+        loading.value = true;
+        error.value = null;
 
         try {
+            // Use dummy data if dummy mode is enabled
+            if (isDummyMode.value) {
+                const dummyCategories = getDummyCategories()
+                categories.value = dummyCategories as unknown as Category[]
+                console.log('📦 Dummy Mode: Loaded', dummyCategories.length, 'categories')
+                return dummyCategories
+            }
+
+            // Original Supabase logic
+            console.log(`📦 Fetching categories for store:`, store.value.id);
             const { data, error: fetchError } = await supabase
                 .from('categories')
                 .select('*')
                 .eq('store_id', store.value.id)
                 .eq('is_active', true)
-                .order('sort_order', { ascending: true })
+                .order('sort_order', { ascending: true });
 
-            if (fetchError) throw fetchError
+            if (fetchError) throw fetchError;
 
-            categories.value = data || []
-            return data
+            console.log(`✅ Categories fetched:`, data);
+            categories.value = data || [];
+            return data;
         } catch (e: any) {
-            error.value = e.message
-            return []
+            error.value = e.message;
+            console.error('❌ Error fetching categories:', error.value);
+            return [];
         } finally {
-            loading.value = false
+            loading.value = false;
         }
-    }
+    };
 
     // Create a new category
     const createCategory = async (categoryData: Omit<CategoryInsert, 'store_id'>) => {

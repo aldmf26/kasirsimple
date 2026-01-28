@@ -7,6 +7,7 @@ type StoreUpdate = Database['public']['Tables']['stores']['Update']
 export const useStore = () => {
     const supabase = useSupabaseClient<Database>()
     const user = useSupabaseUser()
+    const { isDummyMode, getDummyStore } = useDummyMode()
 
     const store = useState<Store | null>('current_store', () => null)
     const loading = useState('store_loading', () => false)
@@ -14,32 +15,50 @@ export const useStore = () => {
 
     // Fetch current user's store
     const fetchStore = async () => {
-        if (!user.value) return null
+        // Use dummy data if dummy mode is enabled
+        if (isDummyMode.value) {
+            loading.value = true
+            try {
+                const dummyStore = getDummyStore()
+                store.value = dummyStore as unknown as Store
+                console.log('📦 Dummy Mode: Loaded store', dummyStore.name)
+                return dummyStore
+            } finally {
+                loading.value = false
+            }
+        }
 
-        loading.value = true
-        error.value = null
+        if (!user.value?.id) {
+            console.warn('⏳ No authenticated user yet, skipping store fetch');
+            store.value = null;
+            return null;
+        }
+
+        loading.value = true;
+        error.value = null;
 
         try {
+            console.log('📦 Fetching store for user:', user.value.sub);
+
             const { data, error: fetchError } = await supabase
                 .from('stores')
                 .select('*')
-                .eq('user_id', user.value.id)
+                .eq('user_id', user.value.sub)
                 .eq('is_active', true)
-                .single()
+                .maybeSingle();  // <-- ganti single() jadi maybeSingle() biar tidak error kalau 0 row
 
-            if (fetchError && fetchError.code !== 'PGRST116') {
-                throw fetchError
-            }
+            if (fetchError) throw fetchError;
 
-            store.value = data
-            return data
+            store.value = data;
+            return data;
         } catch (e: any) {
-            error.value = e.message
-            return null
+            console.error('❌ Error fetching store:', e);
+            error.value = e.message;
+            return null;
         } finally {
-            loading.value = false
+            loading.value = false;
         }
-    }
+    };
 
     // Create a new store
     const createStore = async (storeData: StoreInsert) => {
@@ -53,7 +72,7 @@ export const useStore = () => {
                 .from('stores')
                 .insert({
                     ...storeData,
-                    user_id: user.value.id
+                    user_id: user.value.sub
                 })
                 .select()
                 .single()

@@ -24,10 +24,15 @@ const lowStockItems = ref<any[]>([]);
 const loading = ref(true);
 
 const refreshDashboard = async () => {
-  if (!store.value) return;
+  if (!store.value) {
+    console.warn("⚠️ Store is null");
+    loading.value = false;
+    return;
+  }
 
   loading.value = true;
   try {
+    console.log("📦 Refreshing dashboard...");
     const [summary, recent, lowStock, prods] = await Promise.all([
       getTodaySummary(),
       fetchTransactions(),
@@ -35,6 +40,7 @@ const refreshDashboard = async () => {
       fetchProducts(),
     ]);
 
+    console.log("✅ Dashboard data:", { summary, recent, lowStock, prods });
     if (summary) {
       dashboardStats.value = {
         totalSales: summary.totalSales || 0,
@@ -44,16 +50,33 @@ const refreshDashboard = async () => {
     }
     recentTransactions.value = (recent || []).slice(0, 5);
     lowStockItems.value = lowStock || [];
-  } catch (e) {
-    console.error("Error refreshing dashboard:", e);
+  } catch (e: any) {
+    console.error("❌ Error refreshing dashboard:", e);
   } finally {
     loading.value = false;
   }
 };
 
 onMounted(() => {
-  refreshDashboard();
+  if (store.value) {
+    refreshDashboard();
+  } else {
+    console.log("⏳ Waiting for store to load...");
+    loading.value = false;
+  }
 });
+
+// Watch store changes
+watch(
+  () => store.value,
+  () => {
+    if (store.value) {
+      console.log("🔄 Store changed, refreshing dashboard...");
+      refreshDashboard();
+    }
+  },
+  { deep: true },
+);
 
 // Aksi Cepat - Diurutkan berdasarkan prioritas ibu-ibu
 const quickActions = [

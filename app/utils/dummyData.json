@@ -1,0 +1,174 @@
+{
+  "store": {
+    "id": "dummy-store-1",
+    "name": "Toko Demo Kasir",
+    "owner_id": "dummy-user",
+    "phone": "081234567890",
+    "address": "Jl. Demo No. 123",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  },
+  "categories": [
+    {
+      "id": "cat-1",
+      "store_id": "dummy-store-1",
+      "name": "Minuman",
+      "color": "blue",
+      "created_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "cat-2",
+      "store_id": "dummy-store-1",
+      "name": "Makanan Ringan",
+      "color": "amber",
+      "created_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "cat-3",
+      "store_id": "dummy-store-1",
+      "name": "Makanan Berat",
+      "color": "green",
+      "created_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "cat-4",
+      "store_id": "dummy-store-1",
+      "name": "Snack",
+      "color": "red",
+      "created_at": "2024-01-01T00:00:00Z"
+    }
+  ],
+  "products": [
+    {
+      "id": "prod-1",
+      "store_id": "dummy-store-1",
+      "category_id": "cat-1",
+      "name": "Kopi Hitam",
+      "description": "Kopi hitam premium",
+      "price": 10000,
+      "stock": 50,
+      "is_active": true,
+      "image_url": "https://images.unsplash.com/photo-1559056199-641a0ac8b3f7?w=400",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "prod-2",
+      "store_id": "dummy-store-1",
+      "category_id": "cat-1",
+      "name": "Teh Tarik",
+      "description": "Teh tarik original",
+      "price": 12000,
+      "stock": 45,
+      "is_active": true,
+      "image_url": "https://images.unsplash.com/photo-1597318473763-fe6b8cc1b25c?w=400",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "prod-3",
+      "store_id": "dummy-store-1",
+      "category_id": "cat-1",
+      "name": "Jus Jeruk",
+      "description": "Jus jeruk segar",
+      "price": 15000,
+      "stock": 30,
+      "is_active": true,
+      "image_url": "https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=400",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "prod-4",
+      "store_id": "dummy-store-1",
+      "category_id": "cat-2",
+      "name": "Donut Coklat",
+      "description": "Donut lembut dengan topping coklat",
+      "price": 8000,
+      "stock": 60,
+      "is_active": true,
+      "image_url": "https://images.unsplash.com/photo-1585507252519-2fb3d67b7e70?w=400",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "prod-5",
+      "store_id": "dummy-store-1",
+      "category_id": "cat-2",
+      "name": "Roti Tawar",
+      "description": "Roti tawar lembut",
+      "price": 25000,
+      "stock": 20,
+      "is_active": true,
+      "image_url": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "prod-6",
+      "store_id": "dummy-store-1",
+      "category_id": "cat-3",
+      "name": "Nasi Goreng",
+      "description": "Nasi goreng spesial rumah",
+      "price": 35000,
+      "stock": 25,
+      "is_active": true,
+      "image_url": "https://images.unsplash.com/photo-1585864299869-592050ee3242?w=400",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "prod-7",
+      "store_id": "dummy-store-1",
+      "category_id": "cat-3",
+      "name": "Mie Goreng",
+      "description": "Mie goreng dengan telur",
+      "price": 30000,
+      "stock": 35,
+      "is_active": true,
+      "image_url": "https://images.unsplash.com/photo-1609501676725-7186f017a4b8?w=400",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "prod-8",
+      "store_id": "dummy-store-1",
+      "category_id": "cat-3",
+      "name": "Soto Ayam",
+      "description": "Soto ayam tradisional",
+      "price": 28000,
+      "stock": 40,
+      "is_active": true,
+      "image_url": "https://images.unsplash.com/photo-1585329267903-5a1fb139e127?w=400",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "prod-9",
+      "store_id": "dummy-store-1",
+      "category_id": "cat-4",
+      "name": "Keripik Singkong",
+      "description": "Keripik singkong renyah",
+      "price": 12000,
+      "stock": 100,
+      "is_active": true,
+      "image_url": "https://images.unsplash.com/photo-1513621776144-60967b0f800f?w=400",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": "prod-10",
+      "store_id": "dummy-store-1",
+      "category_id": "cat-4",
+      "name": "Kacang Mete",
+      "description": "Kacang mete gurih",
+      "price": 18000,
+      "stock": 75,
+      "is_active": true,
+      "image_url": "https://images.unsplash.com/photo-1585860387522-04706900d00d?w=400",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  ],
+  "transactions": []
+}
