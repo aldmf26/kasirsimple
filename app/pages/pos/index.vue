@@ -608,9 +608,9 @@ watch(
               <div
                 class="w-20 h-20 mx-auto bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center mb-2"
               >
-                <span class="text-white text-4xl font-bold">T</span>
+                <span class="text-4xl font-bold">T</span>
               </div>
-              <h2 class="text-2xl font-black">
+              <h2 class="text-2xl font-bold text-primary">
                 {{ store?.name || "TOKO BARAT" }}
               </h2>
               <p class="text-sm text-gray-600">
@@ -646,14 +646,14 @@ watch(
             </div>
 
             <!-- Ringkasan -->
-            <div class="space-y-2 text-sm">
+            <div class="space-y-2 text-sm text-black">
               <div class="flex justify-between font-medium">
                 <span>Subtotal</span>
                 <span>{{ formatCurrency(transactionData?.subtotal) }}</span>
               </div>
               <div class="flex justify-between text-lg font-black">
                 <span>TOTAL</span>
-                <span class="text-primary">{{
+                <span class="text-black">{{
                   formatCurrency(transactionData?.total)
                 }}</span>
               </div>
@@ -666,7 +666,7 @@ watch(
                 <span>{{ formatCurrency(transactionData?.paid) }}</span>
               </div>
               <div
-                class="flex justify-between font-bold text-green-700 text-lg"
+                class="flex justify-between font-bold text-success text-lg"
               >
                 <span>Kembalian</span>
                 <span>{{ formatCurrency(transactionData?.change) }}</span>
@@ -680,8 +680,7 @@ watch(
             <!-- Tombol Action -->
             <div class="grid grid-cols-2 gap-3 pt-4">
               <button
-                @click="window.print()"
-                class="px-4 py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 active:scale-95 transition-all flex items-center gap-2"
+                class="justify-center px-4 py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 active:scale-95 transition-all flex items-center gap-2"
               >
                 <UIcon name="i-heroicons-printer" class="w-6 h-6" />
                 CETAK
@@ -689,7 +688,7 @@ watch(
 
               <button
                 @click="showReceiptModal = false"
-                class="px-4 py-3 bg-gray-200 text-gray-800 rounded-xl font-bold hover:bg-gray-300 active:scale-95 transition-all flex items-center gap-2"
+                class="justify-center px-4 py-3 bg-gray-200 text-gray-800 rounded-xl font-bold hover:bg-gray-300 active:scale-95 transition-all flex items-center gap-2"
               >
                 <UIcon name="i-heroicons-x-mark" class="w-6 h-6" />
                 TUTUP

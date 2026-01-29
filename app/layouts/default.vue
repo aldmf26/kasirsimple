@@ -27,6 +27,11 @@ const links = [
     icon: "i-heroicons-document-chart-bar",
     to: "/reports",
   },
+  {
+    label: "Pengaturan",
+    icon: "i-heroicons-cog-6-tooth",
+    to: "/settings",
+  },
 ];
 
 // Logout dengan Supabase
