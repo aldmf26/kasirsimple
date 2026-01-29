@@ -193,25 +193,25 @@ watch(
 <template>
   <div class="min-h-screen bg-gray-100 p-6">
     <!-- Statistik Header -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
       <div
-        class="bg-cyan-500 text-white rounded-xl p-6 shadow-lg relative overflow-hidden"
+        class="bg-cyan-500 text-white rounded-xl p-4 shadow-lg relative overflow-hidden"
       >
-        <div class="absolute top-4 right-4 text-5xl opacity-20">📦</div>
-        <p class="text-lg font-medium">TOTAL PRODUK</p>
-        <p class="text-5xl font-black mt-2">{{ totalProducts }}</p>
+        <div class="absolute top-2 right-2 text-3xl opacity-20">📦</div>
+        <p class="text-base font-medium">TOTAL PRODUK</p>
+        <p class="text-2xl font-black mt-2">{{ totalProducts }}</p>
       </div>
 
       <div
-        class="bg-purple-500 text-white rounded-xl p-6 shadow-lg relative overflow-hidden"
+        class="bg-purple-500 text-white rounded-xl p-4 shadow-lg relative overflow-hidden"
       >
-        <div class="absolute top-4 right-4 text-5xl opacity-20">🗂️</div>
-        <p class="text-lg font-medium">TOTAL KATEGORI</p>
-        <p class="text-5xl font-black mt-2">{{ totalCategories }}</p>
+        <div class="absolute top-2 right-2 text-3xl opacity-20">🗂️</div>
+        <p class="text-base font-medium">TOTAL KATEGORI</p>
+        <p class="text-2xl font-black mt-2">{{ totalCategories }}</p>
       </div>
 
-      <div class="bg-gray-900 text-white rounded-xl p-6 shadow-lg">
-        <p class="text-lg font-bold mb-4">RINCIAN KATEGORI</p>
+      <div class="bg-gray-900 text-white rounded-xl p-4 shadow-lg">
+        <p class="text-base font-bold mb-4">RINCIAN KATEGORI</p>
         <div class="space-y-3">
           <div
             v-for="cat in categorySummary"
