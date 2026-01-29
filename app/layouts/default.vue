@@ -79,7 +79,7 @@ const handleLogout = async () => {
         title="Keluar dari aplikasi"
       >
         <UIcon name="i-heroicons-arrow-left-on-rectangle" class="w-5 h-5" />
-        <span class="hidden sm:inline">Keluar</span>
+        <span class="hidden sm:inline">Keluar / Logout</span>
       </button>
     </header>
 

@@ -19,10 +19,24 @@ const {
 } = useTransactions();
 const { categories, fetchCategories } = useCategories();
 
+const displayPaid = ref("0");
 const selectedCategory = ref("all");
 const searchQuery = ref("");
 const showPaymentModal = ref(false);
+const showReceiptModal = ref(false);
 const loading = ref(false);
+const transactionData = ref(null); // untuk simpan data nota
+
+const formattedPaid = computed({
+  get: () => displayPaid.value,
+  set: (value: string) => {
+    const numericValue = value.replace(/\D/g, "");
+    paymentForm.value.paid = parseInt(numericValue) || 0;
+    displayPaid.value = numericValue
+      ? parseInt(numericValue).toLocaleString("id-ID")
+      : "0";
+  },
+});
 
 const paymentForm = ref({
   paid: 0,
@@ -57,23 +71,44 @@ const changeAmount = computed(() =>
   Math.max(0, paymentForm.value.paid - cartTotal.value),
 );
 
+const quickCashAmounts = computed(() => {
+  const total = cartTotal.value;
+  const amounts = [
+    Math.ceil(total / 1000) * 1000,
+    Math.ceil(total / 5000) * 5000,
+    Math.ceil(total / 10000) * 10000,
+    Math.ceil(total / 50000) * 50000,
+  ];
+  return [...new Set(amounts)].sort((a, b) => a - b).slice(0, 6);
+});
+
 const handleAddToCart = (product) => {
   try {
     addToCart(product);
     toast.add({
-      title: "Ditambah!",
-      color: "green",
-      icon: "i-heroicons-check",
+      title: "Ditambahkan!",
+      color: "success",
+      icon: "i-heroicons-check-circle",
     });
   } catch (e) {
-    toast.add({ title: "Stok habis!", color: "red" });
+    toast.add({
+      title: "Stok habis!",
+      color: "error",
+      icon: "i-heroicons-exclamation-circle",
+    });
   }
 };
 
 const openPayment = () => {
   if (!cart.value.length) return;
   paymentForm.value.paid = cartTotal.value;
+  displayPaid.value = cartTotal.value.toLocaleString("id-ID");
   showPaymentModal.value = true;
+};
+
+const setExactAmount = () => {
+  paymentForm.value.paid = cartTotal.value;
+  displayPaid.value = cartTotal.value.toLocaleString("id-ID");
 };
 
 const processPayment = async () => {
@@ -81,20 +116,56 @@ const processPayment = async () => {
     paymentForm.value.paid < cartTotal.value &&
     paymentForm.value.paymentMethod === "cash"
   ) {
-    toast.add({ title: "Uang kurang!", color: "yellow" });
+    toast.add({
+      title: "Uang kurang dari total!",
+      color: "orange",
+      icon: "i-heroicons-exclamation-triangle",
+    });
     return;
   }
+
   loading.value = true;
   try {
-    await createTransaction({
+    const result = await createTransaction({
       paid: paymentForm.value.paid,
       payment_method: paymentForm.value.paymentMethod,
-      discount: paymentForm.value.discount,
+      discount: discountAmount.value,
       discount_type: paymentForm.value.discountType,
       customer_name: paymentForm.value.customerName,
     });
-    toast.add({ title: "Transaksi berhasil!", color: "green" });
+
+    // Siapkan data nota (sesuaikan kalau createTransaction return ID/date)
+    transactionData.value = {
+      id: result?.id || `TRX-${Date.now().toString().slice(-8)}`,
+      date: new Date().toLocaleString("id-ID", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      items: cart.value.map((item) => ({
+        name: item.product_name,
+        qty: item.quantity,
+        price: item.product_price,
+        subtotal: item.quantity * item.product_price,
+      })),
+      subtotal: cartSubtotal.value,
+      total: cartTotal.value,
+      paid: paymentForm.value.paid,
+      change: changeAmount.value,
+      method: paymentForm.value.paymentMethod === "cash" ? "Tunai" : "Lainnya",
+    };
+
+    toast.add({
+      title: "✅ Transaksi Berhasil!",
+      description: `Total: ${formatCurrency(cartTotal.value)} | Kembalian: ${formatCurrency(changeAmount.value)}`,
+      color: "success",
+      icon: "i-heroicons-check-badge",
+    });
+
     showPaymentModal.value = false;
+    showReceiptModal.value = true; // Buka nota
     clearCart();
     paymentForm.value = {
       paid: 0,
@@ -103,8 +174,13 @@ const processPayment = async () => {
       discount: 0,
       discountType: "nominal",
     };
-  } catch (err) {
-    toast.add({ title: "Gagal proses", color: "red" });
+  } catch (err: any) {
+    toast.add({
+      title: "Gagal proses transaksi",
+      description: err.message || "Terjadi kesalahan",
+      color: "error",
+      icon: "i-heroicons-x-circle",
+    });
   } finally {
     loading.value = false;
   }
@@ -127,33 +203,30 @@ watch(
 </script>
 
 <template>
-  <!-- Mobile: Stacked layout, Desktop: Flex layout -->
   <div
     class="flex flex-col lg:flex-row min-h-[calc(100vh-64px)] bg-gray-50 gap-0 lg:gap-0"
   >
     <!-- LEFT: Produk -->
     <div class="flex-1 flex flex-col p-2 sm:p-3 lg:p-4 overflow-hidden">
       <!-- Search & Kategori -->
-      <div
-        class="rounded-lg shadow-sm p-2 sm:p-3 mb-3 sm:mb-4 sticky top-0 z-10"
-      >
+      <div class="bg-white rounded-xl shadow-sm p-3 sm:p-4 mb-3 sm:mb-4">
         <!-- Search Bar -->
-        <div class="flex items-center gap-2 mb-3">
-          <UInput
+        <div class="mb-3">
+          <input
             v-model="searchQuery"
             placeholder="Cari produk..."
-            class="flex-1"
-            icon="i-heroicons-magnifying-glass"
+            class="w-full flex-1 rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring focus:ring-indigo-500"
+            type="search"
           />
         </div>
 
         <!-- Kategori Button -->
-        <div class="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
+        <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           <UButton
             label="Semua"
-            size="xs"
-            :color="selectedCategory === 'all' ? 'blue' : 'gray'"
-            variant="solid"
+            size="lg"
+            :color="selectedCategory === 'all' ? 'primary' : 'info'"
+            :variant="selectedCategory === 'all' ? 'solid' : 'soft'"
             @click="selectedCategory = 'all'"
             class="flex-shrink-0"
           />
@@ -161,16 +234,16 @@ watch(
             v-for="cat in categories"
             :key="cat.id"
             :label="cat.name"
-            size="xs"
-            :color="selectedCategory === cat.id ? 'blue' : 'gray'"
-            variant="solid"
+            size="lg"
+            :color="selectedCategory === cat.id ? 'primary' : 'info'"
+            :variant="selectedCategory === cat.id ? 'solid' : 'soft'"
             @click="selectedCategory = cat.id"
             class="flex-shrink-0"
           />
         </div>
       </div>
 
-      <!-- Grid Produk - Responsive -->
+      <!-- Grid Produk -->
       <div class="flex-1 overflow-y-auto">
         <div
           class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3"
@@ -179,9 +252,9 @@ watch(
             v-for="product in filteredProducts"
             :key="product.id"
             @click="handleAddToCart(product)"
-            class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden cursor-pointer active:scale-95 transition-transform hover:shadow-md"
+            class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer active:scale-95 transition-transform hover:shadow-md hover:border-primary-200"
             :class="{
-              'opacity-60 pointer-events-none': product.stock === 0,
+              'opacity-50 pointer-events-none': product.stock === 0,
             }"
           >
             <!-- Gambar Produk -->
@@ -197,15 +270,16 @@ watch(
               <UIcon
                 v-else
                 name="i-heroicons-photo"
-                class="w-8 sm:w-10 h-8 sm:h-10 text-gray-300"
+                class="w-10 sm:w-12 h-10 sm:h-12 text-gray-300"
               />
 
               <!-- Stock Badge -->
               <div
-                class="absolute bottom-0 left-0 right-0 text-center text-xs font-bold py-1 px-1"
+                v-if="product.has_stock"
+                class="absolute bottom-0 left-0 right-0 text-center text-xs font-bold py-1"
                 :class="{
                   'bg-green-500 text-white': product.stock > 10,
-                  'bg-yellow-500 text-white':
+                  'bg-orange-500 text-white':
                     product.stock > 0 && product.stock <= 10,
                   'bg-red-600 text-white': product.stock === 0,
                 }"
@@ -215,11 +289,13 @@ watch(
             </div>
 
             <!-- Info Produk -->
-            <div class="p-2 sm:p-2.5 text-center">
-              <p class="text-xs sm:text-sm font-medium line-clamp-2 h-8 sm:h-9">
+            <div class="p-3 text-center">
+              <p
+                class="text-xs sm:text-sm font-bold text-gray-800 line-clamp-2 h-8 sm:h-10 mb-2"
+              >
                 {{ product.name }}
               </p>
-              <p class="text-sm sm:text-base font-bold text-blue-600 mt-1">
+              <p class="text-sm sm:text-base font-black text-primary-600">
                 {{ formatCurrency(product.price) }}
               </p>
             </div>
@@ -228,283 +304,401 @@ watch(
           <!-- Empty State -->
           <div
             v-if="!filteredProducts.length"
-            class="col-span-full py-8 sm:py-12 text-center text-gray-500"
+            class="col-span-full py-12 sm:py-16 text-center text-gray-400"
           >
             <UIcon
               name="i-heroicons-cube"
-              class="w-12 h-12 mx-auto opacity-50 mb-2"
+              class="w-16 h-16 mx-auto mb-3 opacity-50"
             />
-            <p class="font-semibold">Tidak ada produk</p>
-            <p class="text-sm mt-1">Coba cari dengan kata lain</p>
+            <p class="font-bold text-lg">Tidak ada produk</p>
+            <p class="text-sm mt-1">Coba kata kunci lain</p>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- RIGHT: Keranjang - Mobile: Bottom sheet, Desktop: Sidebar -->
+    <!-- RIGHT: Keranjang -->
     <div class="lg:w-96 lg:border-l border-gray-200 bg-white flex flex-col">
       <!-- Header -->
-      <div class="bg-indigo-600 text-white p-3 sm:p-4 flex-shrink-0">
+      <div class="p-4 border-b border-gray-200 flex-shrink-0">
         <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2 sm:gap-3">
+          <div class="flex items-center gap-3">
             <UIcon
               name="i-heroicons-shopping-cart"
-              class="w-5 sm:w-6 h-5 sm:h-6"
+              class="w-6 h-6 text-primary-600"
             />
             <div>
-              <p class="font-bold text-sm sm:text-base">Keranjang</p>
-              <p class="text-xs opacity-90">{{ cartItemsCount }} item</p>
+              <p class="font-black text-base">KERANJANG</p>
+              <p class="text-xs text-gray-500">{{ cartItemsCount }} item</p>
             </div>
           </div>
           <UButton
             color="error"
-            variant="ghost"
+            variant="soft"
             icon="i-heroicons-trash"
-            size="xs"
+            size="lg"
             @click="clearCart"
           />
         </div>
       </div>
 
       <!-- Cart Items -->
-      <div
-        class="overflow-y-auto p-2 sm:p-3 space-y-2 sm:space-y-3"
-        style="max-height: 300px"
-      >
-        <div v-if="!cart.length" class="text-center py-8 text-gray-500">
+      <div class="flex-1 overflow-y-auto p-3 space-y-3">
+        <div
+          v-if="!cart.length"
+          class="text-center py-12 text-gray-400 h-full flex flex-col items-center justify-center"
+        >
           <UIcon
             name="i-heroicons-shopping-bag"
-            class="w-10 h-10 mx-auto opacity-50 mb-2"
+            class="w-16 h-16 mx-auto mb-3 opacity-50"
           />
-          <p class="text-sm font-medium">Keranjang kosong</p>
-          <p class="text-xs mt-1">Pilih produk di sebelah kiri</p>
+          <p class="text-sm font-bold">Keranjang Kosong</p>
+          <p class="text-xs mt-1">Pilih produk untuk mulai transaksi</p>
         </div>
 
         <div
-          v-for="item in cart"
-          :key="item.product_id"
-          class="flex items-center gap-2 sm:gap-3 bg-gray-50 p-2 sm:p-3 rounded-lg"
+          class="overflow-y-auto p-2 sm:p-3 space-y-2 sm:space-y-3"
+          style="max-height: 300px"
         >
-          <div class="flex-1 min-w-0">
-            <p class="font-medium text-sm truncate">{{ item.product_name }}</p>
-            <p class="text-xs sm:text-sm text-gray-600">
-              {{ formatCurrency(item.product_price) }}
-            </p>
-          </div>
           <div
-            class="flex items-center bg-white rounded-lg border flex-shrink-0"
+            v-for="item in cart"
+            :key="item.product_id"
+            class="flex items-center gap-3 bg-gray-50 p-3 rounded-xl"
           >
-            <button
-              @click="
-                updateCartItemQuantity(item.product_id, item.quantity - 1)
-              "
-              class="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-red-600 hover:bg-red-50 text-lg"
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-sm text-gray-800 truncate">
+                {{ item.product_name }}
+              </p>
+              <p class="text-xs text-gray-500">
+                {{ formatCurrency(item.product_price) }}
+              </p>
+            </div>
+            <div
+              class="flex items-center bg-white rounded-lg border-2 border-gray-200"
             >
-              −
-            </button>
-            <span
-              class="w-8 sm:w-10 text-center font-bold text-xs sm:text-sm"
-              >{{ item.quantity }}</span
-            >
-            <button
-              @click="
-                updateCartItemQuantity(item.product_id, item.quantity + 1)
-              "
-              class="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-blue-600 hover:bg-blue-50 text-lg"
-            >
-              +
-            </button>
+              <button
+                @click="
+                  updateCartItemQuantity(item.product_id, item.quantity - 1)
+                "
+                class="w-8 h-8 flex items-center justify-center text-red-600 hover:bg-red-50 font-bold text-lg active:scale-90 transition-all"
+              >
+                −
+              </button>
+              <span class="w-10 text-center font-black text-sm">{{
+                item.quantity
+              }}</span>
+              <button
+                @click="
+                  updateCartItemQuantity(item.product_id, item.quantity + 1)
+                "
+                class="w-8 h-8 flex items-center justify-center text-primary-600 hover:bg-primary-50 font-bold text-lg active:scale-90 transition-all"
+              >
+                +
+              </button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Footer: Total & Buttons -->
-      <div
-        class="p-3 sm:p-4 border-t bg-gray-50 flex-shrink-0 space-y-2 sm:space-y-3"
-      >
-        <!-- Total -->
-        <div
-          class="flex justify-between text-base sm:text-lg font-bold bg-white p-2 sm:p-3 rounded-lg"
-        >
-          <span>Total</span>
-          <span class="text-indigo-600">{{ formatCurrency(cartTotal) }}</span>
-        </div>
+        <!-- Footer -->
+        <div class="p-4 border-gray-200 bg-gray-50 space-y-3">
+          <!-- Total -->
+          <div
+            class="flex justify-between items-center text-xl font-black bg-gradient-to-br from-primary-50 to-primary-100 p-5 rounded-2xl border-2 border-primary-200"
+          >
+            <span class="text-gray-700">TOTAL</span>
+            <span class="text-primary-700 text-2xl">{{
+              formatCurrency(cartTotal)
+            }}</span>
+          </div>
 
-        <!-- Button Row 1 -->
-        <div class="grid grid-cols-2 gap-2">
-          <UButton
-            label="INPUT"
-            color="error"
-            variant="outline"
-            block
-            size="sm"
-          />
-          <UButton
-            label="KOSONG"
-            color="error"
-            variant="solid"
-            block
-            size="sm"
-            @click="clearCart"
-          />
-        </div>
-
-        <!-- Button Row 2 -->
-        <div class="grid grid-cols-2 gap-2">
-          <UButton
-            label="QRIS LAYAR"
-            color="primary"
-            variant="solid"
-            block
-            size="md"
-            @click="openPayment"
-          />
-          <UButton
-            label="CETAK QRIS"
-            color="primary"
-            variant="outline"
-            block
-            size="md"
-          />
-        </div>
-
-        <!-- Button Row 3 -->
-        <div class="grid grid-cols-2 gap-2">
-          <UButton
-            label="TUNAI PAS"
-            color="success"
-            variant="solid"
-            block
-            size="md"
-            @click="openPayment"
-          />
-          <UButton
-            label="LAINNYA"
-            color="primary"
-            variant="solid"
-            block
-            size="md"
-            @click="openPayment"
-          />
+          <!-- Payment Buttons -->
+          <div class="grid grid-cols-2 gap-2">
+            <UButton
+              label="TUNAI PAS"
+              color="success"
+              size="xl"
+              block
+              :disabled="!cart.length"
+              @click="
+                setExactAmount();
+                processPayment();
+              "
+              class="font-black"
+            />
+            <UButton
+              label="BAYAR"
+              color="primary"
+              size="xl"
+              block
+              :disabled="!cart.length"
+              @click="openPayment"
+              class="font-black"
+            />
+          </div>
         </div>
       </div>
     </div>
-    <!-- Modal Pembayaran -->
-    <UModal v-model:open="showPaymentModal" title="Modal with title">
-      <template #body>
-        <div class="space-y-3 sm:space-y-4">
-          <!-- Ringkasan Transaksi -->
-          <div class="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200">
-            <div class="space-y-2 text-sm">
-              <div class="flex justify-between">
-                <span class="text-gray-600">Subtotal:</span>
-                <span class="font-semibold">{{
-                  formatCurrency(cartSubtotal)
-                }}</span>
-              </div>
-              <div class="flex justify-between" v-if="discountAmount > 0">
-                <span class="text-gray-600">Diskon:</span>
-                <span class="font-semibold text-red-600"
-                  >-{{ formatCurrency(discountAmount) }}</span
-                >
-              </div>
-              <div
-                class="border-t border-blue-300 pt-2 flex justify-between font-bold"
-              >
-                <span>Total:</span>
-                <span class="text-blue-600">{{
-                  formatCurrency(cartTotal)
-                }}</span>
-              </div>
-            </div>
+
+    <!-- Modal Pembayaran (kode kamu tetap utuh) -->
+    <Teleport to="body">
+      <div
+        v-if="showPaymentModal"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style="background-color: rgba(0, 0, 0, 0.5)"
+      >
+        <div
+          class="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+          @click.stop
+        >
+          <!-- Header -->
+          <div
+            class="p-6 border-b border-gray-200 text-center sticky top-0 bg-white z-10 rounded-t-2xl"
+          >
+            <h3 class="text-2xl font-black text-gray-800">PEMBAYARAN</h3>
           </div>
 
-          <!-- Form Pembayaran -->
-          <div class="space-y-2 sm:space-y-3">
-            <!-- Nama Customer -->
+          <!-- Body -->
+          <div class="p-6 space-y-4">
+            <!-- Total Tagihan -->
+            <div
+              class="text-center p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border-2 border-blue-200"
+            >
+              <p class="text-xs font-bold text-blue-600 uppercase mb-2">
+                Total Tagihan
+              </p>
+              <h2 class="text-5xl font-black text-blue-700">
+                {{ formatCurrency(cartTotal) }}
+              </h2>
+              <p class="text-sm text-blue-600 mt-2 font-medium">
+                {{ cartItemsCount }} item
+              </p>
+            </div>
+
+            <!-- Nama Pelanggan -->
             <div>
-              <label class="text-xs font-semibold text-gray-700 uppercase"
-                >Nama Pelanggan</label
-              >
-              <UInput
+              <label class="block text-sm font-bold text-gray-700 mb-2">
+                👤 Nama Pelanggan (Opsional)
+              </label>
+              <input
                 v-model="paymentForm.customerName"
-                placeholder="Opsional"
-                size="sm"
+                placeholder="Masukkan nama pelanggan..."
+                class="w-full px-4 py-3 text-blue-700 rounded-xl border-2 border-gray-300 focus:border-blue-500 focus:outline-none"
               />
             </div>
 
             <!-- Metode Pembayaran -->
             <div>
-              <label class="text-xs font-semibold text-gray-700 uppercase"
-                >Metode Pembayaran</label
-              >
-              <USelect
-                v-model="paymentForm.paymentMethod"
-                :options="[
-                  { label: 'Tunai', value: 'cash' },
-                  { label: 'Transfer', value: 'transfer' },
-                  { label: 'QRIS', value: 'qris' },
-                  { label: 'Debit', value: 'debit' },
-                  { label: 'Kartu Kredit', value: 'credit' },
-                ]"
-                size="sm"
-              />
-            </div>
-
-            <!-- Diskon -->
-            <div class="grid grid-cols-3 gap-2">
-              <div class="col-span-2">
-                <label class="text-xs font-semibold text-gray-700 uppercase"
-                  >Diskon</label
-                >
-                <UInput
-                  v-model.number="paymentForm.discount"
-                  type="number"
-                  placeholder="0"
-                  size="sm"
-                />
-              </div>
-              <div>
-                <label class="text-xs font-semibold text-gray-700 uppercase"
-                  >Tipe</label
-                >
-                <USelect
-                  v-model="paymentForm.discountType"
-                  :options="[
-                    { label: 'Rp', value: 'nominal' },
-                    { label: '%', value: 'percent' },
+              <label class="block text-sm font-bold text-gray-700 mb-2">
+                💳 Metode Pembayaran
+              </label>
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  v-for="method in [
+                    { label: 'Tunai', value: 'cash', icon: '💵' },
+                    { label: 'Transfer', value: 'transfer', icon: '🏦' },
                   ]"
-                  size="sm"
-                />
+                  :key="method.value"
+                  @click="paymentForm.paymentMethod = method.value"
+                  class="px-4 py-3 rounded-xl border-2 font-bold text-base transition-all active:scale-95"
+                  :class="
+                    paymentForm.paymentMethod === method.value
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-gray-300'
+                  "
+                >
+                  <span class="mr-2">{{ method.icon }}</span>
+                  {{ method.label }}
+                </button>
               </div>
             </div>
 
-            <!-- Uang Dibayar -->
+            <!-- Uang Diterima -->
             <div>
-              <label class="text-xs font-semibold text-gray-700 uppercase"
-                >Uang Dibayar</label
-              >
-              <UInput
-                v-model.number="paymentForm.paid"
-                type="number"
+              <label class="block text-sm font-bold text-gray-700 mb-2">
+                💵 Uang Diterima
+              </label>
+              <input
+                v-model="formattedPaid"
+                type="text"
                 placeholder="0"
-                size="sm"
+                class="w-full px-4 text-blue-700 py-4 text-3xl font-black text-center rounded-xl border-2 border-gray-300 focus:border-blue-500 focus:outline-none"
               />
+
+              <!-- Quick Cash -->
+              <div class="grid grid-cols-3 gap-2 mt-3">
+                <button
+                  v-for="amt in quickCashAmounts"
+                  :key="amt"
+                  @click="
+                    paymentForm.paid = amt;
+                    displayPaid = amt.toLocaleString('id-ID');
+                  "
+                  class="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs active:scale-95 transition-all"
+                >
+                  {{ formatCurrency(amt) }}
+                </button>
+              </div>
             </div>
 
             <!-- Kembalian -->
-            <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-200">
-              <p class="text-xs text-emerald-600 font-semibold uppercase">
-                Kembalian
-              </p>
-              <p class="text-2xl font-bold text-emerald-700">
-                {{ formatCurrency(changeAmount) }}
-              </p>
+            <div class="bg-green-50 p-5 rounded-2xl border-2 border-green-200">
+              <div class="flex justify-between items-center">
+                <span class="font-black text-green-700 text-lg"
+                  >💰 Kembalian</span
+                >
+                <span class="text-4xl font-black text-green-700">
+                  {{ formatCurrency(changeAmount) }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div
+            class="p-6 border-t border-gray-200 sticky bottom-0 bg-white rounded-b-2xl"
+          >
+            <div class="flex gap-2">
+              <button
+                @click="showPaymentModal = false"
+                class="flex-1 px-6 py-4 border-2 border-red-400 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-lg active:scale-95 transition-all"
+              >
+                BATAL
+              </button>
+              <button
+                @click="processPayment"
+                :disabled="
+                  (paymentForm.paid < cartTotal &&
+                    paymentForm.paymentMethod === 'cash') ||
+                  loading
+                "
+                class="flex-1 px-6 py-4 rounded-xl font-black text-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+                :class="
+                  (paymentForm.paid < cartTotal &&
+                    paymentForm.paymentMethod === 'cash') ||
+                  loading
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                "
+              >
+                <span v-if="loading">⏳</span>
+                <span v-else>✓</span>
+                SELESAI
+              </button>
             </div>
           </div>
         </div>
-      </template>
-    </UModal>
+      </div>
+    </Teleport>
+
+    <!-- Modal Nota / Struk -->
+    <Teleport to="body">
+      <div
+        v-if="showReceiptModal"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style="background-color: rgba(0, 0, 0, 0.6)"
+      >
+        <div
+          class="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto"
+          @click.stop
+        >
+          <!-- Struk Content -->
+          <div class="p-6 text-center space-y-4">
+            <!-- Logo & Toko -->
+            <div>
+              <div
+                class="w-20 h-20 mx-auto bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center mb-2"
+              >
+                <span class="text-white text-4xl font-bold">T</span>
+              </div>
+              <h2 class="text-2xl font-black">
+                {{ store?.name || "TOKO BARAT" }}
+              </h2>
+              <p class="text-sm text-gray-600">
+                {{ store?.address || "JL Alalak" }}
+              </p>
+              <p class="text-sm text-gray-600">
+                {{ store?.phone || "08123456789" }}
+              </p>
+            </div>
+
+            <!-- Tanggal & ID -->
+            <div class="text-sm text-gray-500 border-b pb-3">
+              {{ transactionData?.date }}
+              <br />
+              ID: {{ transactionData?.id }}
+            </div>
+
+            <!-- Daftar Item -->
+            <div class="text-left space-y-2 text-sm">
+              <div
+                v-for="item in transactionData?.items"
+                :key="item.name"
+                class="flex justify-between border-b pb-1"
+              >
+                <div>
+                  <p class="font-medium">{{ item.name }}</p>
+                  <p class="text-gray-500">
+                    {{ item.qty }} pcs x {{ formatCurrency(item.price) }}
+                  </p>
+                </div>
+                <p class="font-medium">{{ formatCurrency(item.subtotal) }}</p>
+              </div>
+            </div>
+
+            <!-- Ringkasan -->
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between font-medium">
+                <span>Subtotal</span>
+                <span>{{ formatCurrency(transactionData?.subtotal) }}</span>
+              </div>
+              <div class="flex justify-between text-lg font-black">
+                <span>TOTAL</span>
+                <span class="text-primary">{{
+                  formatCurrency(transactionData?.total)
+                }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Metode Bayar</span>
+                <span>{{ transactionData?.method }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Dibayar</span>
+                <span>{{ formatCurrency(transactionData?.paid) }}</span>
+              </div>
+              <div
+                class="flex justify-between font-bold text-green-700 text-lg"
+              >
+                <span>Kembalian</span>
+                <span>{{ formatCurrency(transactionData?.change) }}</span>
+              </div>
+            </div>
+
+            <div class="pt-4 text-gray-500 text-xs italic">
+              --- Terima Kasih Telah Berbelanja ---
+            </div>
+
+            <!-- Tombol Action -->
+            <div class="grid grid-cols-2 gap-3 pt-4">
+              <button
+                @click="window.print()"
+                class="px-4 py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 active:scale-95 transition-all flex items-center gap-2"
+              >
+                <UIcon name="i-heroicons-printer" class="w-6 h-6" />
+                CETAK
+              </button>
+
+              <button
+                @click="showReceiptModal = false"
+                class="px-4 py-3 bg-gray-200 text-gray-800 rounded-xl font-bold hover:bg-gray-300 active:scale-95 transition-all flex items-center gap-2"
+              >
+                <UIcon name="i-heroicons-x-mark" class="w-6 h-6" />
+                TUTUP
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -516,8 +710,22 @@ watch(
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-</style>
 
-<style scoped>
-/* Tambahan style jika perlu */
+/* Print style untuk cetak struk */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .fixed.inset-0:last-child,
+  .fixed.inset-0:last-child * {
+    visibility: visible;
+  }
+  .fixed.inset-0:last-child {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white !important;
+  }
+}
 </style>
