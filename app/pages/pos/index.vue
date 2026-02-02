@@ -187,7 +187,11 @@ const processPayment = async () => {
 };
 
 onMounted(async () => {
-  if (!store.value) await useStore().fetchStore();
+  // Ensure store is loaded before fetching products/categories
+  if (!store.value) {
+    await useStore().fetchStore();
+  }
+
   if (store.value) {
     await Promise.all([fetchCategories(), fetchProducts()]);
   }
@@ -665,9 +669,7 @@ watch(
                 <span>Dibayar</span>
                 <span>{{ formatCurrency(transactionData?.paid) }}</span>
               </div>
-              <div
-                class="flex justify-between font-bold text-success text-lg"
-              >
+              <div class="flex justify-between font-bold text-success text-lg">
                 <span>Kembalian</span>
                 <span>{{ formatCurrency(transactionData?.change) }}</span>
               </div>

@@ -74,13 +74,5 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     window.debugInfo = debugInfo
     
     console.log('🔧 Debug tools available! Use window.debugInfo.checkStatus(), window.debugInfo.reloadData(), etc')
-    
-    // Also check on app initialization
-    const user = useSupabaseUser()
-    if (user.value) {
-      console.log('✅ User logged in:', user.value.email)
-    } else {
-      console.log('⏳ User not authenticated')
-    }
   }
 })

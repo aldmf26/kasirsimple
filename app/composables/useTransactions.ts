@@ -157,7 +157,6 @@ export const useTransactions = () => {
                 throw new Error('Pembayaran kurang')
             }
 
-            console.log('💳 Creating transaction...')
             const transactionNumber = await generateTransactionNumber()
 
             // Insert transaction header
@@ -183,11 +182,8 @@ export const useTransactions = () => {
                 .single()
 
             if (transactionError) {
-                console.error('❌ Transaction error:', transactionError)
                 throw transactionError
             }
-
-            console.log('📝 Transaction created:', transaction.transaction_number)
 
             // Insert transaction items
             const items: TransactionItemInsert[] = cart.value.map(item => ({
@@ -207,11 +203,8 @@ export const useTransactions = () => {
                 .select()
 
             if (itemsError) {
-                console.error('❌ Items error:', itemsError)
                 throw itemsError
             }
-
-            console.log('📦 Added', items.length, 'items to transaction')
 
             // Update stock for products with stock tracking
             for (const item of cart.value) {
@@ -245,10 +238,8 @@ export const useTransactions = () => {
                                 notes: `Penjualan: ${transactionNumber}`,
                                 created_by: user.value?.id
                             })
-
-                        console.log('📦 Stock updated for:', item.product_name)
                     } catch (e: any) {
-                        console.warn('⚠️ Stock update warning:', e.message)
+                        console.warn('Stock update failed:', e.message)
                     }
                 }
             }
@@ -263,10 +254,8 @@ export const useTransactions = () => {
             }
             transactions.value.unshift(fullTransaction)
 
-            console.log('✅ Transaction completed:', transactionNumber)
             return fullTransaction
         } catch (e: any) {
-            console.error('❌ Transaction failed:', e)
             error.value = e.message
             throw e
         } finally {

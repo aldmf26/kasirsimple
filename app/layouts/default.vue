@@ -9,10 +9,7 @@ const toast = useToast();
 const { store, fetchStore } = useStore();
 
 onMounted(async () => {
-  if (user.value && !store.value) {
-    console.log("📦 Layout: Loading store for user...");
-    await fetchStore();
-  }
+  // Store fetch akan di-trigger oleh initStoreAutoFetch di composable
 });
 
 // Menu yang disederhanakan bahasanya

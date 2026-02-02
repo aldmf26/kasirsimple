@@ -12,50 +12,63 @@ export const useStore = () => {
     const store = useState<Store | null>('current_store', () => null)
     const loading = useState('store_loading', () => false)
     const error = useState<string | null>('store_error', () => null)
+    
+    // Prevent concurrent fetches
+    let fetchInProgress = false
 
     // Fetch current user's store
-    const fetchStore = async () => {
+    const fetchStore = async (userId?: string) => {
+        // Prevent concurrent fetches
+        if (fetchInProgress) {
+            return
+        }
+
+        // Skip on server-side to avoid hydration issues
+        if (process.server) {
+            return null;
+        }
+
         // Use dummy data if dummy mode is enabled
         if (isDummyMode.value) {
             loading.value = true
             try {
                 const dummyStore = getDummyStore()
                 store.value = dummyStore as unknown as Store
-                console.log('📦 Dummy Mode: Loaded store', dummyStore.name)
                 return dummyStore
             } finally {
                 loading.value = false
             }
         }
 
-        if (!user.value?.id) {
-            console.warn('⏳ No authenticated user yet, skipping store fetch');
+        // Get user ID from parameter OR from reactive user object
+        const targetUserId = userId || user.value?.id
+        
+        if (!targetUserId) {
             store.value = null;
             return null;
         }
 
+        fetchInProgress = true
         loading.value = true;
         error.value = null;
 
         try {
-            console.log('📦 Fetching store for user:', user.value.sub);
-
             const { data, error: fetchError } = await supabase
                 .from('stores')
                 .select('*')
-                .eq('user_id', user.value.sub)
+                .eq('user_id', targetUserId)
                 .eq('is_active', true)
-                .maybeSingle();  // <-- ganti single() jadi maybeSingle() biar tidak error kalau 0 row
+                .maybeSingle();
 
             if (fetchError) throw fetchError;
 
             store.value = data;
             return data;
         } catch (e: any) {
-            console.error('❌ Error fetching store:', e);
             error.value = e.message;
             return null;
         } finally {
+            fetchInProgress = false
             loading.value = false;
         }
     };
@@ -72,7 +85,7 @@ export const useStore = () => {
                 .from('stores')
                 .insert({
                     ...storeData,
-                    user_id: user.value.sub
+                    user_id: user.value.id
                 })
                 .select()
                 .single()
@@ -116,6 +129,31 @@ export const useStore = () => {
             loading.value = false
         }
     }
+
+    // Auto-fetch store when user becomes available
+    const initStoreAutoFetch = () => {
+        // Only run on client-side
+        if (process.client) {
+            // Use onAuthStateChange to reliably detect auth events
+            const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+                if (event === 'SIGNED_IN' && session?.user?.id) {
+                    fetchStore(session.user.id)
+                } else if (event === 'SIGNED_OUT') {
+                    store.value = null
+                } else if (event === 'INITIAL_SESSION' && session?.user?.id) {
+                    fetchStore(session.user.id)
+                }
+            })
+
+            // Cleanup subscription on component unmount
+            onBeforeUnmount(() => {
+                subscription?.unsubscribe()
+            })
+        }
+    }
+
+    // Initialize auto-fetch
+    initStoreAutoFetch()
 
     return {
         store,

@@ -23,7 +23,6 @@ export const useProducts = () => {
     // Fetch all products for current store
     const fetchProducts = async (categoryId?: string) => {
         if (!store.value) {
-            console.warn('⏳ Store not loaded yet')
             return []
         }
 
@@ -31,8 +30,6 @@ export const useProducts = () => {
         error.value = null
 
         try {
-            console.log('📦 Fetching products for store:', store.value.id)
-
             let query = supabase
                 .from('products')
                 .select(`
@@ -50,15 +47,12 @@ export const useProducts = () => {
             const { data, error: fetchError } = await query
 
             if (fetchError) {
-                console.error('❌ Error fetching products:', fetchError)
                 throw fetchError
             }
 
             products.value = data || []
-            console.log('✅ Loaded', data?.length, 'products')
             return data
         } catch (e: any) {
-            console.error('❌ Error:', e)
             error.value = e.message
             return []
         } finally {
@@ -114,10 +108,8 @@ export const useProducts = () => {
 
             // Filter products where stock <= min_stock
             const lowStockProducts = (data || []).filter(p => p.stock <= (p.min_stock || 5))
-            console.log('✅ Found', lowStockProducts.length, 'low stock products')
             return lowStockProducts
         } catch (e: any) {
-            console.error('❌ Error:', e)
             error.value = e.message
             return []
         }
@@ -148,10 +140,8 @@ export const useProducts = () => {
             if (createError) throw createError
 
             products.value.push(data)
-            console.log('✅ Product created:', data.name)
             return data
         } catch (e: any) {
-            console.error('❌ Error:', e)
             error.value = e.message
             throw e
         } finally {
@@ -165,7 +155,6 @@ export const useProducts = () => {
         error.value = null
 
         try {
-            console.log('✏️ Updating product:', productId)
 
             const { data, error: updateError } = await supabase
                 .from('products')

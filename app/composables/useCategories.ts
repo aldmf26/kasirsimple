@@ -15,7 +15,6 @@ export const useCategories = () => {
     // Fetch all categories for current store
     const fetchCategories = async () => {
         if (!store.value) {
-            console.warn('⏳ Store is null, cannot fetch categories')
             return []
         }
 
@@ -23,8 +22,6 @@ export const useCategories = () => {
         error.value = null
 
         try {
-            console.log('📦 Fetching categories for store:', store.value.id)
-            
             const { data, error: fetchError } = await supabase
                 .from('categories')
                 .select('*')
@@ -33,15 +30,12 @@ export const useCategories = () => {
                 .order('sort_order', { ascending: true })
 
             if (fetchError) {
-                console.error('❌ Error:', fetchError)
                 throw fetchError
             }
 
             categories.value = data || []
-            console.log('✅ Loaded', data?.length, 'categories')
             return data
         } catch (e: any) {
-            console.error('❌ Error:', e)
             error.value = e.message
             return []
         } finally {
@@ -57,8 +51,6 @@ export const useCategories = () => {
         error.value = null
 
         try {
-            console.log('📝 Creating category:', categoryData.name)
-
             const { data, error: createError } = await supabase
                 .from('categories')
                 .insert({
@@ -71,7 +63,6 @@ export const useCategories = () => {
             if (createError) throw createError
 
             categories.value.push(data)
-            console.log('✅ Category created')
             return data
         } catch (e: any) {
             console.error('❌ Error:', e)
@@ -88,8 +79,6 @@ export const useCategories = () => {
         error.value = null
 
         try {
-            console.log('✏️ Updating category:', categoryId)
-
             const { data, error: updateError } = await supabase
                 .from('categories')
                 .update({
@@ -106,7 +95,6 @@ export const useCategories = () => {
             if (index !== -1) {
                 categories.value[index] = data
             }
-            console.log('✅ Category updated')
             return data
         } catch (e: any) {
             console.error('❌ Error:', e)
@@ -123,8 +111,6 @@ export const useCategories = () => {
         error.value = null
 
         try {
-            console.log('🗑️ Deleting category:', categoryId)
-
             const { error: deleteError } = await supabase
                 .from('categories')
                 .update({ is_active: false, updated_at: new Date().toISOString() })
@@ -133,9 +119,7 @@ export const useCategories = () => {
             if (deleteError) throw deleteError
 
             categories.value = categories.value.filter(c => c.id !== categoryId)
-            console.log('✅ Category deleted')
         } catch (e: any) {
-            console.error('❌ Error:', e)
             error.value = e.message
             throw e
         } finally {
