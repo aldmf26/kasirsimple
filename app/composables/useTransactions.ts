@@ -104,16 +104,22 @@ export const useTransactions = () => {
         const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString()
         const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString()
 
-        // @ts-ignore
-        const { count } = await supabase
-            .from('transactions')
-            .select('*', { count: 'exact', head: true })
-            .eq('store_id', store.value.id)
-            .gte('created_at', startOfDay)
-            .lte('created_at', endOfDay)
+        try {
+            // @ts-ignore
+            const { count } = await supabase
+                .from('transactions')
+                .select('*', { count: 'exact', head: true })
+                .eq('store_id', store.value.id)
+                .gte('created_at', startOfDay)
+                .lte('created_at', endOfDay)
 
-        const sequence = String((count || 0) + 1).padStart(3, '0')
-        return `${prefix}-${sequence}`
+            const sequence = String((count || 0) + 1).padStart(3, '0')
+            return `${prefix}-${sequence}`
+        } catch (e: any) {
+            console.warn('⚠️ Using fallback transaction number:', e.message)
+            const timestamp = Date.now().toString().slice(-6)
+            return `${prefix}-${timestamp}`
+        }
     }
 
     // Create transaction
@@ -126,9 +132,7 @@ export const useTransactions = () => {
         customer_phone?: string
         notes?: string
     }) => {
-        const { isDummyMode, createDummyTransaction, getDummyStore } = useDummyMode()
-        
-        if (!store.value && !isDummyMode.value) throw new Error('Store or user not found')
+        if (!store.value) throw new Error('Store not found')
         if (cart.value.length === 0) throw new Error('Cart is empty')
 
         loading.value = true
@@ -149,47 +153,11 @@ export const useTransactions = () => {
             const total = subtotal - discountAmount
             const change = paymentData.paid - total
 
-            if (change < 0) throw new Error('Pembayaran kurang')
-
-            // Handle dummy mode
-            if (isDummyMode.value) {
-                const dummyStore = getDummyStore()
-                const items = cart.value.map(item => ({
-                    product_id: item.product_id,
-                    product_name: item.product_name,
-                    quantity: item.quantity,
-                    price: item.product_price,
-                    subtotal: item.subtotal
-                }))
-
-                const dummyTransaction = createDummyTransaction({
-                    store_id: dummyStore.id,
-                    user_id: 'dummy-user',
-                    customer_name: paymentData.customer_name || 'Pelanggan Umum',
-                    total_amount: total,
-                    discount_amount: discountAmount,
-                    discount_type: paymentData.discount_type || 'nominal',
-                    paid_amount: paymentData.paid,
-                    change_amount: change,
-                    payment_method: paymentData.payment_method,
-                    items: items as any
-                })
-
-                console.log('✅ Dummy Mode: Transaction created', dummyTransaction.id)
-                
-                // Add to transactions list
-                transactions.value.push({
-                    ...dummyTransaction,
-                    items: items as any
-                } as TransactionWithItems)
-                
-                // Clear cart
-                clearCart()
-                
-                return dummyTransaction
+            if (paymentData.payment_method === 'cash' && change < 0) {
+                throw new Error('Pembayaran kurang')
             }
 
-            // Original Supabase logic continues...
+            console.log('💳 Creating transaction...')
             const transactionNumber = await generateTransactionNumber()
 
             // Insert transaction header
@@ -206,15 +174,20 @@ export const useTransactions = () => {
                     paid: paymentData.paid,
                     change,
                     payment_method: paymentData.payment_method,
-                    customer_name: paymentData.customer_name,
-                    customer_phone: paymentData.customer_phone,
-                    notes: paymentData.notes,
-                    created_by: user.value.id
+                    customer_name: paymentData.customer_name || null,
+                    customer_phone: paymentData.customer_phone || null,
+                    notes: paymentData.notes || null,
+                    created_by: user.value?.id
                 })
                 .select()
                 .single()
 
-            if (transactionError) throw transactionError
+            if (transactionError) {
+                console.error('❌ Transaction error:', transactionError)
+                throw transactionError
+            }
+
+            console.log('📝 Transaction created:', transaction.transaction_number)
 
             // Insert transaction items
             const items: TransactionItemInsert[] = cart.value.map(item => ({
@@ -233,34 +206,50 @@ export const useTransactions = () => {
                 .insert(items)
                 .select()
 
-            if (itemsError) throw itemsError
+            if (itemsError) {
+                console.error('❌ Items error:', itemsError)
+                throw itemsError
+            }
+
+            console.log('📦 Added', items.length, 'items to transaction')
 
             // Update stock for products with stock tracking
             for (const item of cart.value) {
                 if (item.has_stock) {
-                    // @ts-ignore
-                    await supabase
-                        .from('products')
-                        .update({
-                            stock: item.current_stock - item.quantity,
-                            updated_at: new Date().toISOString()
-                        })
-                        .eq('id', item.product_id)
+                    try {
+                        const newStock = item.current_stock - item.quantity
 
-                    // Log stock movement
-                    // @ts-ignore
-                    await supabase
-                        .from('stock_movements')
-                        .insert({
-                            product_id: item.product_id,
-                            transaction_id: transaction.id,
-                            type: 'out',
-                            quantity: -item.quantity,
-                            stock_before: item.current_stock,
-                            stock_after: item.current_stock - item.quantity,
-                            notes: `Penjualan: ${transactionNumber}`,
-                            created_by: user.value.id
-                        })
+                        // Update product stock
+                        // @ts-ignore
+                        const { error: stockError } = await supabase
+                            .from('products')
+                            .update({
+                                stock: newStock,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', item.product_id)
+
+                        if (stockError) throw stockError
+
+                        // Log stock movement
+                        // @ts-ignore
+                        await supabase
+                            .from('stock_movements')
+                            .insert({
+                                product_id: item.product_id,
+                                transaction_id: transaction.id,
+                                type: 'out',
+                                quantity: item.quantity,
+                                stock_before: item.current_stock,
+                                stock_after: newStock,
+                                notes: `Penjualan: ${transactionNumber}`,
+                                created_by: user.value?.id
+                            })
+
+                        console.log('📦 Stock updated for:', item.product_name)
+                    } catch (e: any) {
+                        console.warn('⚠️ Stock update warning:', e.message)
+                    }
                 }
             }
 
@@ -274,8 +263,10 @@ export const useTransactions = () => {
             }
             transactions.value.unshift(fullTransaction)
 
+            console.log('✅ Transaction completed:', transactionNumber)
             return fullTransaction
         } catch (e: any) {
+            console.error('❌ Transaction failed:', e)
             error.value = e.message
             throw e
         } finally {

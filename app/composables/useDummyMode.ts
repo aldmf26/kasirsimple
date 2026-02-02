@@ -54,7 +54,7 @@ export interface DummyTransaction {
 }
 
 export const useDummyMode = () => {
-  const isDummyMode = useState('isDummyMode', () => true)
+  const isDummyMode = useState('isDummyMode', () => false)
   
   // Get dummy store
   const getDummyStore = (): DummyStore => dummyData.store as DummyStore

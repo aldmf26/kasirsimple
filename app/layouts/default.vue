@@ -5,6 +5,16 @@ const supabase = useSupabaseClient();
 const user = useSupabaseUser();
 const toast = useToast();
 
+// Load store when layout mounted
+const { store, fetchStore } = useStore();
+
+onMounted(async () => {
+  if (user.value && !store.value) {
+    console.log("📦 Layout: Loading store for user...");
+    await fetchStore();
+  }
+});
+
 // Menu yang disederhanakan bahasanya
 const links = [
   {

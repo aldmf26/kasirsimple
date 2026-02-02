@@ -15,7 +15,6 @@ export interface ProductWithCategory extends Product {
 export const useProducts = () => {
     const supabase = useSupabaseClient<Database>()
     const { store } = useStore()
-    const { isDummyMode, getDummyProducts, getDummyCategories } = useDummyMode()
 
     const products = useState<ProductWithCategory[]>('products', () => [])
     const loading = useState('products_loading', () => false)
@@ -23,28 +22,17 @@ export const useProducts = () => {
 
     // Fetch all products for current store
     const fetchProducts = async (categoryId?: string) => {
-        if (!store.value && !isDummyMode.value) return []
+        if (!store.value) {
+            console.warn('⏳ Store not loaded yet')
+            return []
+        }
 
         loading.value = true
         error.value = null
 
         try {
-            // Use dummy data if dummy mode is enabled
-            if (isDummyMode.value) {
-                const dummyProducts = getDummyProducts(categoryId)
-                const categories = getDummyCategories()
-                
-                const productsWithCategory = dummyProducts.map(p => ({
-                    ...p,
-                    category: categories.find(c => c.id === p.category_id) || null
-                }))
-                
-                products.value = productsWithCategory as ProductWithCategory[]
-                console.log('📦 Dummy Mode: Loaded', productsWithCategory.length, 'products')
-                return productsWithCategory
-            }
+            console.log('📦 Fetching products for store:', store.value.id)
 
-            // Original Supabase logic
             let query = supabase
                 .from('products')
                 .select(`
@@ -61,11 +49,16 @@ export const useProducts = () => {
 
             const { data, error: fetchError } = await query
 
-            if (fetchError) throw fetchError
+            if (fetchError) {
+                console.error('❌ Error fetching products:', fetchError)
+                throw fetchError
+            }
 
             products.value = data || []
+            console.log('✅ Loaded', data?.length, 'products')
             return data
         } catch (e: any) {
+            console.error('❌ Error:', e)
             error.value = e.message
             return []
         } finally {
@@ -108,19 +101,23 @@ export const useProducts = () => {
         if (!store.value) return []
 
         try {
+            console.log('📦 Fetching low stock products for store:', store.value.id)
+            
             const { data, error: fetchError } = await supabase
                 .from('products')
                 .select('*')
                 .eq('store_id', store.value.id)
                 .eq('is_active', true)
                 .eq('has_stock', true)
-                .lte('stock', supabase.rpc ? 0 : 5) // Fallback
 
             if (fetchError) throw fetchError
 
             // Filter products where stock <= min_stock
-            return (data || []).filter(p => p.stock <= p.min_stock)
+            const lowStockProducts = (data || []).filter(p => p.stock <= (p.min_stock || 5))
+            console.log('✅ Found', lowStockProducts.length, 'low stock products')
+            return lowStockProducts
         } catch (e: any) {
+            console.error('❌ Error:', e)
             error.value = e.message
             return []
         }
@@ -134,6 +131,8 @@ export const useProducts = () => {
         error.value = null
 
         try {
+            console.log('📝 Creating product:', productData.name)
+
             const { data, error: createError } = await supabase
                 .from('products')
                 .insert({
@@ -149,8 +148,10 @@ export const useProducts = () => {
             if (createError) throw createError
 
             products.value.push(data)
+            console.log('✅ Product created:', data.name)
             return data
         } catch (e: any) {
+            console.error('❌ Error:', e)
             error.value = e.message
             throw e
         } finally {
@@ -164,6 +165,8 @@ export const useProducts = () => {
         error.value = null
 
         try {
+            console.log('✏️ Updating product:', productId)
+
             const { data, error: updateError } = await supabase
                 .from('products')
                 .update({
@@ -183,8 +186,10 @@ export const useProducts = () => {
             if (index !== -1) {
                 products.value[index] = data
             }
+            console.log('✅ Product updated')
             return data
         } catch (e: any) {
+            console.error('❌ Error:', e)
             error.value = e.message
             throw e
         } finally {
@@ -198,15 +203,19 @@ export const useProducts = () => {
         error.value = null
 
         try {
+            console.log('🗑️ Deleting product:', productId)
+
             const { error: deleteError } = await supabase
                 .from('products')
-                .update({ is_active: false })
+                .update({ is_active: false, updated_at: new Date().toISOString() })
                 .eq('id', productId)
 
             if (deleteError) throw deleteError
 
             products.value = products.value.filter(p => p.id !== productId)
+            console.log('✅ Product deleted')
         } catch (e: any) {
+            console.error('❌ Error:', e)
             error.value = e.message
             throw e
         } finally {
@@ -215,62 +224,51 @@ export const useProducts = () => {
     }
 
     // Update stock
-    const updateStock = async (productId: string, quantity: number, type: 'in' | 'out' | 'adjustment', notes?: string) => {
-        if (!store.value) throw new Error('Store not found')
-
-        loading.value = true
-        error.value = null
-
+    const updateStock = async (productId: string, quantity: number, notes?: string) => {
         try {
-            // Get current product
+            console.log('📦 Updating stock for product:', productId, 'quantity:', quantity)
+
             const product = products.value.find(p => p.id === productId)
             if (!product) throw new Error('Product not found')
 
-            const stockBefore = product.stock
-            let stockAfter = stockBefore
-
-            switch (type) {
-                case 'in':
-                    stockAfter = stockBefore + quantity
-                    break
-                case 'out':
-                    stockAfter = stockBefore - quantity
-                    break
-                case 'adjustment':
-                    stockAfter = quantity
-                    break
-            }
+            const newStock = (product.stock || 0) + quantity
+            if (newStock < 0) throw new Error('Stock tidak boleh negatif')
 
             // Update product stock
-            await supabase
+            const { error: updateError } = await supabase
                 .from('products')
-                .update({ stock: stockAfter, updated_at: new Date().toISOString() })
+                .update({
+                    stock: newStock,
+                    updated_at: new Date().toISOString()
+                })
                 .eq('id', productId)
 
+            if (updateError) throw updateError
+
             // Log stock movement
-            await supabase
+            const { error: logError } = await supabase
                 .from('stock_movements')
                 .insert({
                     product_id: productId,
-                    type,
-                    quantity: type === 'adjustment' ? quantity - stockBefore : quantity,
-                    stock_before: stockBefore,
-                    stock_after: stockAfter,
-                    notes
+                    type: quantity > 0 ? 'in' : 'out',
+                    quantity: Math.abs(quantity),
+                    stock_before: product.stock || 0,
+                    stock_after: newStock,
+                    notes: notes || null
                 })
 
+            if (logError) console.error('⚠️ Warning: Could not log stock movement:', logError)
+
             // Update local state
-            const index = products.value.findIndex(p => p.id === productId)
-            if (index !== -1) {
-                products.value[index] = { ...products.value[index], stock: stockAfter }
+            const productIndex = products.value.findIndex(p => p.id === productId)
+            if (productIndex !== -1) {
+                products.value[productIndex].stock = newStock
             }
 
-            return stockAfter
+            console.log('✅ Stock updated. Old:', product.stock || 0, 'New:', newStock)
         } catch (e: any) {
-            error.value = e.message
+            console.error('❌ Error:', e)
             throw e
-        } finally {
-            loading.value = false
         }
     }
 

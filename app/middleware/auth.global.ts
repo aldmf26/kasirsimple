@@ -19,13 +19,4 @@ export default defineNuxtRouteMiddleware(async (to) => {
         console.log('🔐 User logged in, redirecting to dashboard');
         return navigateTo('/dashboard')
     }
-
-    // Ensure store is loaded if authenticated
-    if (user.value) {
-        const { store, fetchStore } = useStore()
-        if (!store.value) {
-            console.log('🔐 Fetching store for authenticated user...');
-            await fetchStore()
-        }
-    }
 })

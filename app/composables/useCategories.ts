@@ -7,7 +7,6 @@ type CategoryUpdate = Database['public']['Tables']['categories']['Update']
 export const useCategories = () => {
     const supabase = useSupabaseClient<Database>()
     const { store } = useStore()
-    const { isDummyMode, getDummyCategories } = useDummyMode()
 
     const categories = useState<Category[]>('categories', () => [])
     const loading = useState('categories_loading', () => false)
@@ -15,45 +14,40 @@ export const useCategories = () => {
 
     // Fetch all categories for current store
     const fetchCategories = async () => {
-        if (!store.value && !isDummyMode.value) {
-            console.warn('⚠️ Store is null, cannot fetch categories');
-            return [];
+        if (!store.value) {
+            console.warn('⏳ Store is null, cannot fetch categories')
+            return []
         }
 
-        loading.value = true;
-        error.value = null;
+        loading.value = true
+        error.value = null
 
         try {
-            // Use dummy data if dummy mode is enabled
-            if (isDummyMode.value) {
-                const dummyCategories = getDummyCategories()
-                categories.value = dummyCategories as unknown as Category[]
-                console.log('📦 Dummy Mode: Loaded', dummyCategories.length, 'categories')
-                return dummyCategories
-            }
-
-            // Original Supabase logic
-            console.log(`📦 Fetching categories for store:`, store.value.id);
+            console.log('📦 Fetching categories for store:', store.value.id)
+            
             const { data, error: fetchError } = await supabase
                 .from('categories')
                 .select('*')
                 .eq('store_id', store.value.id)
                 .eq('is_active', true)
-                .order('sort_order', { ascending: true });
+                .order('sort_order', { ascending: true })
 
-            if (fetchError) throw fetchError;
+            if (fetchError) {
+                console.error('❌ Error:', fetchError)
+                throw fetchError
+            }
 
-            console.log(`✅ Categories fetched:`, data);
-            categories.value = data || [];
-            return data;
+            categories.value = data || []
+            console.log('✅ Loaded', data?.length, 'categories')
+            return data
         } catch (e: any) {
-            error.value = e.message;
-            console.error('❌ Error fetching categories:', error.value);
-            return [];
+            console.error('❌ Error:', e)
+            error.value = e.message
+            return []
         } finally {
-            loading.value = false;
+            loading.value = false
         }
-    };
+    }
 
     // Create a new category
     const createCategory = async (categoryData: Omit<CategoryInsert, 'store_id'>) => {
@@ -63,6 +57,8 @@ export const useCategories = () => {
         error.value = null
 
         try {
+            console.log('📝 Creating category:', categoryData.name)
+
             const { data, error: createError } = await supabase
                 .from('categories')
                 .insert({
@@ -75,8 +71,10 @@ export const useCategories = () => {
             if (createError) throw createError
 
             categories.value.push(data)
+            console.log('✅ Category created')
             return data
         } catch (e: any) {
+            console.error('❌ Error:', e)
             error.value = e.message
             throw e
         } finally {
@@ -90,6 +88,8 @@ export const useCategories = () => {
         error.value = null
 
         try {
+            console.log('✏️ Updating category:', categoryId)
+
             const { data, error: updateError } = await supabase
                 .from('categories')
                 .update({
@@ -106,8 +106,10 @@ export const useCategories = () => {
             if (index !== -1) {
                 categories.value[index] = data
             }
+            console.log('✅ Category updated')
             return data
         } catch (e: any) {
+            console.error('❌ Error:', e)
             error.value = e.message
             throw e
         } finally {
@@ -121,15 +123,19 @@ export const useCategories = () => {
         error.value = null
 
         try {
+            console.log('🗑️ Deleting category:', categoryId)
+
             const { error: deleteError } = await supabase
                 .from('categories')
-                .update({ is_active: false })
+                .update({ is_active: false, updated_at: new Date().toISOString() })
                 .eq('id', categoryId)
 
             if (deleteError) throw deleteError
 
             categories.value = categories.value.filter(c => c.id !== categoryId)
+            console.log('✅ Category deleted')
         } catch (e: any) {
+            console.error('❌ Error:', e)
             error.value = e.message
             throw e
         } finally {

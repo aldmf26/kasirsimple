@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS stores (
     timezone TEXT DEFAULT 'Asia/Jakarta',
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    updated_at TIMESTAMPTZ DEFAULT NOW()    
 );
 
 -- Index for faster user queries
