@@ -5,18 +5,69 @@ definePageMeta({
   layout: "default",
 });
 
-const toast = useToast();
+const { store, updateStore } = useStore();
+const supabase = useSupabaseClient();
 
-// Store settings (mock data)
-const storeSettings = ref({
-  name: "Toko Demo",
-  businessType: "retail",
-  address: "Jl. Contoh No. 123, Jakarta",
-  phone: "08123456789",
+// Store settings form
+const storeSettings = reactive({
+  name: "",
+  business_type: "retail",
+  address: "",
+  phone: "",
   currency: "Rp",
+  logo_url: "",
 });
 
-// Printer settings
+const selectedLogoFile = ref<File | null>(null);
+const logoPreview = ref<string | null>(null);
+
+// Sync form with store data
+watch(store, (newStore) => {
+  if (newStore) {
+    storeSettings.name = newStore.name;
+    storeSettings.business_type = newStore.business_type || "retail";
+    storeSettings.address = newStore.address || "";
+    storeSettings.phone = newStore.phone || "";
+    storeSettings.currency = newStore.currency || "Rp";
+    storeSettings.logo_url = newStore.logo_url || "";
+    
+    // Reset preview saat load data baru
+    if(!selectedLogoFile.value) {
+        logoPreview.value = newStore.logo_url || "";
+    }
+  }
+}, { immediate: true });
+
+const handleFileSelect = (event: any) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (file.size > 2 * 1024 * 1024) {
+    showAlert("error", "Maksimal ukuran file 2MB");
+    return;
+  }
+
+  selectedLogoFile.value = file;
+  logoPreview.value = URL.createObjectURL(file);
+};
+
+const triggerFileInput = () => {
+    document.getElementById('logoInput')?.click();
+};
+
+// Alert State
+const alert = reactive({
+  show: false,
+  type: "success" as "success" | "error",
+  message: "",
+});
+
+const showAlert = (type: "success" | "error", message: string) => {
+  alert.show = true;
+  alert.type = type;
+  alert.message = message;
+  setTimeout(() => (alert.show = false), 3000);
+};
 const printerSettings = ref({
   printerType: "thermal",
   paperWidth: 58,
@@ -53,25 +104,64 @@ const togglePaymentMethod = (method: string) => {
     if (enabledPaymentMethods.value.length > 1) {
       enabledPaymentMethods.value.splice(index, 1);
     } else {
-      toast.add({
-        title: "Tidak dapat menonaktifkan",
-        description: "Minimal satu metode pembayaran harus aktif",
-        color: "warning",
-        icon: "i-heroicons-exclamation-triangle",
-      });
+      showAlert("error", "Minimal satu metode pembayaran harus aktif");
     }
   } else {
     enabledPaymentMethods.value.push(method);
   }
 };
 
-const saveSettings = () => {
-  toast.add({
-    title: "Pengaturan Disimpan",
-    description: "Perubahan berhasil disimpan",
-    color: "success",
-    icon: "i-heroicons-check-circle",
-  });
+const saveSettings = async () => {
+  if (activeSection.value === 'store') {
+    try {
+      if (store.value?.id) {
+        let logoUrl = storeSettings.logo_url;
+
+        // Upload logo jika ada file baru di client
+        if (selectedLogoFile.value) {
+           const file = selectedLogoFile.value;
+           const fileExt = file.name.split(".").pop();
+           const fileName = `${store.value.id}-${Date.now()}.${fileExt}`;
+           
+           const { error: uploadError } = await supabase.storage
+              .from("logos")
+              .upload(fileName, file, {
+                 cacheControl: "3600",
+                 upsert: false
+              });
+            
+           if (uploadError) throw uploadError;
+
+           const { data: { publicUrl } } = supabase.storage
+              .from("logos")
+              .getPublicUrl(fileName);
+           
+           logoUrl = publicUrl;
+        }
+
+        await updateStore(store.value.id, {
+          name: storeSettings.name,
+          business_type: storeSettings.business_type,
+          address: storeSettings.address,
+          phone: storeSettings.phone,
+          currency: storeSettings.currency,
+          logo_url: logoUrl
+        });
+        
+        // Reset local state
+        selectedLogoFile.value = null;
+        storeSettings.logo_url = logoUrl;
+        
+        showAlert("success", "Profil toko berhasil diperbarui");
+      }
+    } catch (e: any) {
+      console.error(e);
+      showAlert("error", e.message || "Gagal menyimpan perubahan");
+    }
+  } else {
+    // Mock save for other sections
+    showAlert("success", "Perubahan berhasil disimpan");
+  }
 };
 
 const handleLogout = () => {
@@ -102,6 +192,13 @@ const handleLogout = () => {
         </button>
       </div>
     </div>
+    
+    <AppAlert 
+      :show="alert.show" 
+      :type="alert.type" 
+      :message="alert.message"
+      @close="alert.show = false"
+    />
 
     <div class="flex min-h-screen md:min-h-auto">
       <!-- Sidebar (Hidden on Mobile) -->
@@ -146,15 +243,33 @@ const handleLogout = () => {
                 <div
                   class="w-24 h-24 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-400 flex-shrink-0"
                 >
-                  <UIcon name="i-heroicons-photo" class="w-10 h-10" />
+                  <img
+                    v-if="logoPreview"
+                    :src="logoPreview"
+                    alt="Logo Toko"
+                    class="w-full h-full object-cover"
+                  />
+                  <UIcon v-else name="i-heroicons-photo" class="w-10 h-10" />
                 </div>
                 <div class="w-full">
-                  <UButton variant="soft" color="primary" size="sm">
+                  <input
+                    id="logoInput"
+                    type="file"
+                    class="hidden"
+                    accept="image/*"
+                    @change="handleFileSelect"
+                  />
+                  <UButton
+                    variant="soft"
+                    color="primary"
+                    size="sm"
+                    @click="triggerFileInput"
+                  >
                     <UIcon
                       name="i-heroicons-arrow-up-tray"
                       class="w-4 h-4 mr-2"
                     />
-                    Upload Logo
+                    {{ logoPreview ? 'Ganti Logo' : 'Upload Logo' }}
                   </UButton>
                   <p class="text-xs text-gray-400 mt-2">JPG, PNG max 2MB</p>
                 </div>
@@ -183,11 +298,11 @@ const handleLogout = () => {
                     :key="type.value"
                     class="p-3 sm:p-4 rounded-xl border-2 transition-all text-center"
                     :class="
-                      storeSettings.businessType === type.value
+                      storeSettings.business_type === type.value
                         ? 'border-emerald-500 bg-emerald-50'
                         : 'border-gray-200 hover:border-gray-300'
                     "
-                    @click="storeSettings.businessType = type.value"
+                    @click="storeSettings.business_type = type.value"
                   >
                     <span class="text-2xl block mb-2">{{ type.icon }}</span>
                     <span

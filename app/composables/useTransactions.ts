@@ -133,6 +133,7 @@ export const useTransactions = () => {
         notes?: string
     }) => {
         if (!store.value) throw new Error('Store not found')
+        if (!user.value) throw new Error('User pengguna tidak ditemukan (Login diperlukan)') // Tambahkan auth check
         if (cart.value.length === 0) throw new Error('Cart is empty')
 
         loading.value = true
@@ -176,7 +177,7 @@ export const useTransactions = () => {
                     customer_name: paymentData.customer_name || null,
                     customer_phone: paymentData.customer_phone || null,
                     notes: paymentData.notes || null,
-                    created_by: user.value?.id
+                    created_by: user.value?.id // Pastikan user value valid
                 })
                 .select()
                 .single()
@@ -188,6 +189,7 @@ export const useTransactions = () => {
             // Insert transaction items
             const items: TransactionItemInsert[] = cart.value.map(item => ({
                 transaction_id: transaction.id,
+                // store_id dihapus karena tidak ada di schema
                 product_id: item.product_id,
                 product_name: item.product_name,
                 product_sku: item.product_sku,
@@ -338,6 +340,32 @@ export const useTransactions = () => {
         }
     }
 
+    // Delete transaction
+    const deleteTransaction = async (transactionId: string) => {
+        if (!confirm('Apakah Anda yakin ingin menghapus transaksi ini? Data tidak dapat dikembalikan.')) return
+
+        loading.value = true
+        try {
+            // Restore stock first (optional, but good practice)
+            // For now just delete the record
+
+            // @ts-ignore
+            const { error: delError } = await supabase
+                .from('transactions')
+                .delete()
+                .eq('id', transactionId)
+
+            if (delError) throw delError
+
+            transactions.value = transactions.value.filter(t => t.id !== transactionId)
+        } catch (e: any) {
+            error.value = e.message
+            throw e
+        } finally {
+            loading.value = false
+        }
+    }
+
     return {
         transactions,
         cart,
@@ -351,6 +379,7 @@ export const useTransactions = () => {
         clearCart,
         createTransaction,
         fetchTransactions,
-        getTodaySummary
+        getTodaySummary,
+        deleteTransaction
     }
 }

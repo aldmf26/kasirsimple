@@ -1,4 +1,4 @@
-# 🎨 KasirSimple - Design & Feature Guide
+# 🎨 KasirOK - Design & Feature Guide
 
 ## Dashboard Page (`/`)
 

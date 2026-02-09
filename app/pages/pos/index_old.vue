@@ -6,7 +6,7 @@ definePageMeta({
 })
 
 useHead({
-  title: 'Kasir - KasirSimple'
+  title: 'Kasir - KasirOK'
 })
 
 const toast = useToast()

@@ -77,12 +77,8 @@ const handleLogout = async () => {
       class="bg-white border-b border-gray-200 sticky top-0 z-40 px-4 h-16 flex items-center justify-between shadow-sm"
     >
       <div class="flex items-center gap-2">
-        <div
-          class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white"
-        >
-          <UIcon name="i-heroicons-shopping-bag-20-solid" class="w-5 h-5" />
-        </div>
-        <span class="font-bold text-lg tracking-tight">KasirSimple</span>
+        <img src="/images/logo-kasirok.png" alt="Logo" class="w-10 h-10" />
+        <span class="font-bold text-lg tracking-tight">KasirOK</span>
       </div>
 
       <button
@@ -124,6 +120,9 @@ const handleLogout = async () => {
         </NuxtLink>
       </div>
     </nav>
+
+    <!-- Toast Notifications -->
+    <UNotifications />
   </div>
 </template>
 

@@ -101,11 +101,14 @@ export interface Database {
                     description: string | null
                     price: number
                     cost: number | null
+                    buy_price: number | null
                     type: string
                     has_stock: boolean
                     stock: number
                     min_stock: number
+                    unit: string | null
                     image_url: string | null
+                    is_favorite: boolean
                     is_active: boolean
                     created_at: string
                     updated_at: string
@@ -119,11 +122,14 @@ export interface Database {
                     description?: string | null
                     price: number
                     cost?: number | null
+                    buy_price?: number | null
                     type?: string
                     has_stock?: boolean
                     stock?: number
                     min_stock?: number
+                    unit?: string | null
                     image_url?: string | null
+                    is_favorite?: boolean
                     is_active?: boolean
                     created_at?: string
                     updated_at?: string
@@ -137,11 +143,14 @@ export interface Database {
                     description?: string | null
                     price?: number
                     cost?: number | null
+                    buy_price?: number | null
                     type?: string
                     has_stock?: boolean
                     stock?: number
                     min_stock?: number
+                    unit?: string | null
                     image_url?: string | null
+                    is_favorite?: boolean
                     is_active?: boolean
                     created_at?: string
                     updated_at?: string

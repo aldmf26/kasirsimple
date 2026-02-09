@@ -5,6 +5,9 @@ type ProductInsert = Database['public']['Tables']['products']['Insert']
 type ProductUpdate = Database['public']['Tables']['products']['Update']
 
 export interface ProductWithCategory extends Product {
+    buy_price?: number | null
+    unit?: string | null
+    is_favorite?: boolean
     category?: {
         id: string
         name: string
@@ -96,7 +99,7 @@ export const useProducts = () => {
 
         try {
             console.log('📦 Fetching low stock products for store:', store.value.id)
-            
+
             const { data, error: fetchError } = await supabase
                 .from('products')
                 .select('*')
@@ -261,6 +264,38 @@ export const useProducts = () => {
         }
     }
 
+    // Toggle favorite
+    const toggleFavorite = async (productId: string) => {
+        try {
+            const product = products.value.find(p => p.id === productId)
+            if (!product) throw new Error('Product not found')
+
+            const newFavoriteStatus = !product.is_favorite
+
+            const { error: updateError } = await supabase
+                .from('products')
+                .update({
+                    is_favorite: newFavoriteStatus,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', productId)
+
+            if (updateError) throw updateError
+
+            // Update local state
+            const productIndex = products.value.findIndex(p => p.id === productId)
+            if (productIndex !== -1) {
+                products.value[productIndex].is_favorite = newFavoriteStatus
+            }
+
+            console.log('✅ Favorite status updated:', newFavoriteStatus)
+            return newFavoriteStatus
+        } catch (e: any) {
+            console.error('❌ Error:', e)
+            throw e
+        }
+    }
+
     return {
         products,
         loading,
@@ -271,6 +306,7 @@ export const useProducts = () => {
         createProduct,
         updateProduct,
         deleteProduct,
-        updateStock
+        updateStock,
+        toggleFavorite
     }
 }

@@ -11,6 +11,11 @@ const email = ref("");
 const password = ref("");
 const loading = ref(false);
 
+// Validation errors
+const emailError = ref("");
+const passwordError = ref("");
+const loginError = ref("");
+
 // Redirect if already logged in
 watchEffect(() => {
   if (user.value) {
@@ -18,10 +23,65 @@ watchEffect(() => {
   }
 });
 
+// Email validation
+const validateEmail = () => {
+  emailError.value = "";
+  loginError.value = "";
+  
+  if (!email.value) {
+    emailError.value = "Email harus diisi";
+    return false;
+  }
+  
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email.value)) {
+    emailError.value = "Format email tidak valid";
+    return false;
+  }
+  
+  return true;
+};
+
+// Password validation
+const validatePassword = () => {
+  passwordError.value = "";
+  loginError.value = "";
+  
+  if (!password.value) {
+    passwordError.value = "Password harus diisi";
+    return false;
+  }
+  
+  if (password.value.length < 6) {
+    passwordError.value = "Password minimal 6 karakter";
+    return false;
+  }
+  
+  return true;
+};
+
+// Clear errors when typing
+watch(email, () => {
+  if (emailError.value) emailError.value = "";
+  if (loginError.value) loginError.value = "";
+});
+
+watch(password, () => {
+  if (passwordError.value) passwordError.value = "";
+  if (loginError.value) loginError.value = "";
+});
+
 const handleLogin = async () => {
-  if (!email.value || !password.value) return;
+  // Validate form
+  const isEmailValid = validateEmail();
+  const isPasswordValid = validatePassword();
+  
+  if (!isEmailValid || !isPasswordValid) {
+    return;
+  }
 
   loading.value = true;
+  loginError.value = "";
 
   try {
     const { error } = await supabase.auth.signInWithPassword({
@@ -29,7 +89,27 @@ const handleLogin = async () => {
       password: password.value,
     });
 
-    if (error) throw error;
+    if (error) {
+      // Handle specific Supabase errors
+      if (error.message.includes("Invalid login credentials")) {
+        loginError.value = "Email atau password salah. Silakan coba lagi.";
+      } else if (error.message.includes("Email not confirmed")) {
+        loginError.value = "Email belum diverifikasi. Silakan cek email Anda.";
+      } else if (error.message.includes("User not found")) {
+        loginError.value = "Akun tidak ditemukan. Silakan daftar terlebih dahulu.";
+      } else {
+        loginError.value = error.message;
+      }
+      
+      toast.add({
+        title: "Login Gagal",
+        description: loginError.value,
+        color: "error",
+        icon: "i-heroicons-x-circle",
+      });
+      
+      throw error;
+    }
 
     // Brief wait untuk ensure session settled on client
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -43,12 +123,7 @@ const handleLogin = async () => {
 
     navigateTo("/dashboard");
   } catch (error: any) {
-    toast.add({
-      title: "Login Gagal",
-      description: error.message,
-      color: "error",
-      icon: "i-heroicons-x-circle",
-    });
+    // Error already handled above
   } finally {
     loading.value = false;
   }
@@ -56,8 +131,11 @@ const handleLogin = async () => {
 
 // Demo Login Shortcut
 const loginDemo = () => {
-  email.value = "demo@kasirsimple.com";
+  email.value = "demo@kasirok.com";
   password.value = "password123";
+  emailError.value = "";
+  passwordError.value = "";
+  loginError.value = "";
 };
 </script>
 
@@ -75,7 +153,19 @@ const loginDemo = () => {
         </p>
       </div>
 
+      <!-- General Login Error Alert -->
+      <div
+        v-if="loginError"
+        class="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3"
+      >
+        <UIcon name="i-heroicons-exclamation-circle" class="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+        <div class="flex-1">
+          <p class="text-sm font-medium text-red-800">{{ loginError }}</p>
+        </div>
+      </div>
+
       <form @submit.prevent="handleLogin" class="space-y-6">
+        <!-- Email Field -->
         <div>
           <label for="email" class="block text-sm font-medium text-gray-700"
             >Email</label
@@ -87,12 +177,19 @@ const loginDemo = () => {
             placeholder="nama@email.com"
             icon="i-heroicons-envelope"
             size="lg"
-            class="mt-1"
+            class="mt-1 w-full"
+            :class="{ 'ring-2 ring-red-500': emailError }"
             required
             autofocus
+            @blur="validateEmail"
           />
+          <p v-if="emailError" class="mt-2 text-sm text-red-600 flex items-center gap-1">
+            <UIcon name="i-heroicons-exclamation-circle" class="w-4 h-4" />
+            {{ emailError }}
+          </p>
         </div>
 
+        <!-- Password Field -->
         <div>
           <div class="flex items-center justify-between">
             <label
@@ -113,9 +210,15 @@ const loginDemo = () => {
             placeholder="••••••••"
             icon="i-heroicons-lock-closed"
             size="lg"
-            class="mt-1"
+            class="mt-1 w-full"
+            :class="{ 'ring-2 ring-red-500': passwordError }"
             required
+            @blur="validatePassword"
           />
+          <p v-if="passwordError" class="mt-2 text-sm text-red-600 flex items-center gap-1">
+            <UIcon name="i-heroicons-exclamation-circle" class="w-4 h-4" />
+            {{ passwordError }}
+          </p>
         </div>
 
         <UButton
@@ -124,9 +227,10 @@ const loginDemo = () => {
           size="lg"
           color="primary"
           :loading="loading"
+          :disabled="loading"
           class="font-bold"
         >
-          Masuk
+          {{ loading ? 'Memproses...' : 'Masuk' }}
         </UButton>
       </form>
 

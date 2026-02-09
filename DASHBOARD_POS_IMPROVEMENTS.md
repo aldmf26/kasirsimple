@@ -1,4 +1,4 @@
-# 📊 KasirSimple Dashboard & POS Improvements
+# 📊 KasirOK Dashboard & POS Improvements
 
 ## 🎯 Apa yang Sudah Dilakukan
 

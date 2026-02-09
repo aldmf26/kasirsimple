@@ -5,7 +5,6 @@ definePageMeta({ layout: "default" });
 
 useHead({ title: "Kasir - POS" });
 
-const toast = useToast();
 const { store } = useStore();
 const { products, fetchProducts } = useProducts();
 const {
@@ -19,13 +18,48 @@ const {
 } = useTransactions();
 const { categories, fetchCategories } = useCategories();
 
+// Alert State
+const alert = reactive({
+  show: false,
+  type: "success" as "success" | "error",
+  message: "",
+});
+
+const showAlert = (type: "success" | "error", message: string) => {
+  alert.show = true;
+  alert.type = type;
+  alert.message = message;
+  setTimeout(() => (alert.show = false), 3000);
+};
+
 const displayPaid = ref("0");
 const selectedCategory = ref("all");
 const searchQuery = ref("");
 const showPaymentModal = ref(false);
-const showReceiptModal = ref(false);
+const showReceiptModal = ref(false); // Original receipt modal state, will be replaced by showReceipt
+const showReceipt = ref(false); // NEW state for the thermal printer style receipt
+
+interface TransactionReceipt {
+  id: string;
+  receipt_no: string;
+  date: string;
+  items: {
+    name: string;
+    quantity: number;
+    price: number;
+    subtotal: number;
+  }[];
+  subtotal: number;
+  total_amount: number;
+  paid_amount: number;
+  change_amount: number;
+  payment_method: string;
+  customer_name: string;
+}
+
+const lastTransaction = ref<TransactionReceipt | null>(null); // NEW state to store transaction data for the receipt
 const loading = ref(false);
-const transactionData = ref(null); // untuk simpan data nota
+const transactionData = ref(null); // untuk simpan data nota (this will be replaced by lastTransaction for the new receipt)
 
 const formattedPaid = computed({
   get: () => displayPaid.value,
@@ -48,9 +82,15 @@ const paymentForm = ref({
 
 const filteredProducts = computed(() => {
   let result = products.value || [];
-  if (selectedCategory.value !== "all") {
+  
+  // Filter by favorite first
+  if (selectedCategory.value === "favorite") {
+    result = result.filter((p) => p.is_favorite === true);
+  } else if (selectedCategory.value !== "all") {
     result = result.filter((p) => p.category_id === selectedCategory.value);
   }
+  
+  // Then filter by search query
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.toLowerCase().trim();
     result = result.filter((p) => p.name.toLowerCase().includes(q));
@@ -85,17 +125,8 @@ const quickCashAmounts = computed(() => {
 const handleAddToCart = (product) => {
   try {
     addToCart(product);
-    toast.add({
-      title: "Ditambahkan!",
-      color: "success",
-      icon: "i-heroicons-check-circle",
-    });
   } catch (e) {
-    toast.add({
-      title: "Stok habis!",
-      color: "error",
-      icon: "i-heroicons-exclamation-circle",
-    });
+    showAlert("error", "Gagal menambahkan produk");
   }
 };
 
@@ -112,61 +143,62 @@ const setExactAmount = () => {
 };
 
 const processPayment = async () => {
-  if (
-    paymentForm.value.paid < cartTotal.value &&
-    paymentForm.value.paymentMethod === "cash"
-  ) {
-    toast.add({
-      title: "Uang kurang dari total!",
-      color: "orange",
-      icon: "i-heroicons-exclamation-triangle",
-    });
+  if (!cart.value.length) return;
+
+  const total = cartTotal.value;
+  const paid = paymentForm.value.paid; // Access value from ref
+
+  if (paid < total && paymentForm.value.paymentMethod === "cash") { // Access value from ref
+    showAlert("error", "Pembayaran kurang dari total belanja");
     return;
   }
 
+  // Snapshot data sebelum createTransaction (karena cart akan di-clear)
+  const currentItems = cart.value.map(item => ({
+        name: item.product_name,
+        quantity: item.quantity,
+        price: item.product_price,
+        subtotal: item.subtotal
+  }));
+  const currentTotal = cartTotal.value;
+  const currentPaid = paymentForm.value.paid;
+  const currentChange = changeAmount.value;
+  const currentPaymentMethod = paymentForm.value.paymentMethod;
+  const currentCustomerName = paymentForm.value.customerName;
+
   loading.value = true;
   try {
-    const result = await createTransaction({
-      paid: paymentForm.value.paid,
-      payment_method: paymentForm.value.paymentMethod,
+    const transactionPayload = {
+      paid: currentPaid,
+      payment_method: currentPaymentMethod,
       discount: discountAmount.value,
       discount_type: paymentForm.value.discountType,
-      customer_name: paymentForm.value.customerName,
-    });
-
-    // Siapkan data nota (sesuaikan kalau createTransaction return ID/date)
-    transactionData.value = {
-      id: result?.id || `TRX-${Date.now().toString().slice(-8)}`,
-      date: new Date().toLocaleString("id-ID", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      items: cart.value.map((item) => ({
-        name: item.product_name,
-        qty: item.quantity,
-        price: item.product_price,
-        subtotal: item.quantity * item.product_price,
-      })),
-      subtotal: cartSubtotal.value,
-      total: cartTotal.value,
-      paid: paymentForm.value.paid,
-      change: changeAmount.value,
-      method: paymentForm.value.paymentMethod === "cash" ? "Tunai" : "Lainnya",
+      customer_name: currentCustomerName,
     };
 
-    toast.add({
-      title: "✅ Transaksi Berhasil!",
-      description: `Total: ${formatCurrency(cartTotal.value)} | Kembalian: ${formatCurrency(changeAmount.value)}`,
-      color: "success",
-      icon: "i-heroicons-check-badge",
-    });
+    const result = await createTransaction(transactionPayload);
 
-    showPaymentModal.value = false;
-    showReceiptModal.value = true; // Buka nota
-    clearCart();
+    // Simpan data untuk struk baru (gunakan snapshot)
+    lastTransaction.value = {
+        id: result?.id || `TRX-${Date.now().toString().slice(-8)}`,
+        date: new Date().toLocaleString('id-ID', {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }),
+        receipt_no: result?.transaction_number || result?.id || `TRX-${Date.now().toString().slice(-8)}`,
+        items: currentItems,
+        subtotal: currentTotal + (discountAmount.value || 0), // Perkiraan subtotal
+        total_amount: currentTotal,
+        paid_amount: currentPaid,
+        change_amount: currentChange,
+        payment_method: currentPaymentMethod,
+        customer_name: currentCustomerName,
+    };
+
+    // Reset Form
     paymentForm.value = {
       paid: 0,
       paymentMethod: "cash",
@@ -174,17 +206,35 @@ const processPayment = async () => {
       discount: 0,
       discountType: "nominal",
     };
-  } catch (err: any) {
-    toast.add({
-      title: "Gagal proses transaksi",
-      description: err.message || "Terjadi kesalahan",
-      color: "error",
-      icon: "i-heroicons-x-circle",
-    });
+    displayPaid.value = "0"; // Reset display paid
+    showPaymentModal.value = false;
+    
+    // Tampilkan Struk baru
+    showReceipt.value = true;
+    
+    // Feedback User
+    showAlert("success", "Transaksi Berhasil Disimpan");
+
+  } catch (error: any) {
+    showAlert("error", error.message || "Gagal Memproses Transaksi");
   } finally {
     loading.value = false;
   }
 };
+
+const printReceipt = () => {
+    const content = document.getElementById('receipt-content')?.innerHTML;
+    const printWindow = window.open('', '', 'height=600,width=400');
+    if(printWindow && content) {
+        printWindow.document.write('<html><head><title>Struk Belanja</title>');
+        printWindow.document.write('<style>body{font-family:monospace; font-size: 12px; text-align: center;} .flex{display:flex; justify-content:space-between;} .bold{font-weight:bold;} hr{border-top: 1px dashed #000; border-bottom: none;} img{max-width: 80px; margin: 0 auto; display: block;}</style>');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write(content);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.print();
+    }
+}
 
 onMounted(async () => {
   // Ensure store is loaded before fetching products/categories
@@ -210,6 +260,12 @@ watch(
   <div
     class="flex flex-col lg:flex-row min-h-[calc(100vh-64px)] bg-gray-50 gap-0 lg:gap-0"
   >
+    <AppAlert 
+      :show="alert.show" 
+      :type="alert.type" 
+      :message="alert.message"
+      @close="alert.show = false"
+    />
     <!-- LEFT: Produk -->
     <div class="flex-1 flex flex-col p-2 sm:p-3 lg:p-4 overflow-hidden">
       <!-- Search & Kategori -->
@@ -232,6 +288,14 @@ watch(
             :color="selectedCategory === 'all' ? 'primary' : 'info'"
             :variant="selectedCategory === 'all' ? 'solid' : 'soft'"
             @click="selectedCategory = 'all'"
+            class="flex-shrink-0"
+          />
+          <UButton
+            label="⭐ Favorit"
+            size="lg"
+            :color="selectedCategory === 'favorite' ? 'amber' : 'info'"
+            :variant="selectedCategory === 'favorite' ? 'solid' : 'soft'"
+            @click="selectedCategory = 'favorite'"
             class="flex-shrink-0"
           />
           <UButton
@@ -594,7 +658,7 @@ watch(
       </div>
     </Teleport>
 
-    <!-- Modal Nota / Struk -->
+    <!-- Modal Nota / Struk (Original, will be replaced by the new one) -->
     <Teleport to="body">
       <div
         v-if="showReceiptModal"
@@ -655,11 +719,9 @@ watch(
                 <span>Subtotal</span>
                 <span>{{ formatCurrency(transactionData?.subtotal) }}</span>
               </div>
-              <div class="flex justify-between text-lg font-black">
+              <div class="flex justify-between text-lg font-black border-t pt-2">
                 <span>TOTAL</span>
-                <span class="text-black">{{
-                  formatCurrency(transactionData?.total)
-                }}</span>
+                <span>{{ formatCurrency(transactionData?.total) }}</span>
               </div>
               <div class="flex justify-between">
                 <span>Metode Bayar</span>
@@ -697,6 +759,77 @@ watch(
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Modal Struk (NEW thermal printer style) -->
+     <Teleport to="body">
+      <div
+        v-if="showReceipt && lastTransaction"
+        class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        @click.self="showReceipt = false"
+      >
+        <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto flex flex-col">
+           <!-- Preview Area -->
+           <div id="receipt-content" class="bg-white p-4 font-mono text-xs text-gray-800 border border-gray-100 shadow-sm mb-4">
+              <div class="text-center mb-4">
+                  <img v-if="store?.logo_url" :src="store.logo_url" class="w-16 h-16 object-contain mx-auto mb-2 grayscale" />
+                  <h2 class="font-bold text-base uppercase">{{ store?.name || 'Kasir Simple' }}</h2>
+                  <p v-if="store?.address">{{ store.address }}</p>
+                  <p v-if="store?.phone">{{ store.phone }}</p>
+                  <p class="mt-2">{{ lastTransaction.date }}</p>
+                  <p>No: {{ lastTransaction.receipt_no }}</p>
+              </div>
+
+              <hr class="border-t border-dashed border-gray-400 my-2" />
+
+              <div class="space-y-1">
+                  <div v-for="(item, idx) in lastTransaction.items" :key="idx" class="flex justify-between">
+                      <span class="truncate pr-2">{{ item.quantity }}x {{ item.name }}</span>
+                      <span class="whitespace-nowrap">{{ formatCurrency(item.price * item.quantity) }}</span>
+                  </div>
+              </div>
+
+              <hr class="border-t border-dashed border-gray-400 my-2" />
+
+               <div class="space-y-1 font-bold">
+                  <div class="flex justify-between">
+                      <span>TOTAL</span>
+                      <span>{{ formatCurrency(lastTransaction.total_amount) }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                      <span>BAYAR ({{ lastTransaction.payment_method === 'cash' ? 'Tunai' : 'Transfer' }})</span>
+                      <span>{{ formatCurrency(lastTransaction.paid_amount) }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                      <span>KEMBALI</span>
+                      <span>{{ formatCurrency(lastTransaction.change_amount) }}</span>
+                  </div>
+              </div>
+
+               <div class="mt-6 text-center">
+                  <p>Terima Kasih</p>
+                  <p>Silahkan Datang Kembali</p>
+              </div>
+           </div>
+
+           <!-- Actions -->
+           <div class="flex gap-2">
+               <button 
+                  @click="showReceipt = false"
+                  class="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200"
+                >
+                  TUTUP
+               </button>
+               <button 
+                  @click="printReceipt"
+                  class="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 flex items-center justify-center gap-2"
+                >
+                  <UIcon name="i-heroicons-printer" class="w-5 h-5" />
+                  PRINT
+               </button>
+           </div>
         </div>
       </div>
     </Teleport>

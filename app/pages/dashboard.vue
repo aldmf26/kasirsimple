@@ -6,7 +6,7 @@ definePageMeta({
 });
 
 useHead({
-  title: "Beranda Toko - KasirSimple",
+  title: "Beranda Toko - KasirOK",
 });
 
 const { store } = useStore();

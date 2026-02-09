@@ -4,10 +4,8 @@
     <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
       <div class="container mx-auto px-6 h-20 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
-             <UIcon name="i-heroicons-shopping-bag-20-solid" class="w-6 h-6" />
-          </div>
-          <span class="text-xl font-bold tracking-tight text-gray-900">KasirSimple</span>
+             <img src="/images/logo-kasirok.png" alt="Logo" class="w-10 h-10" />
+          <span class="text-xl font-bold tracking-tight text-gray-900">KasirOK</span>
         </div>
         <nav class="hidden md:flex items-center gap-8">
           <a href="#features" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors">Fitur</a>
@@ -35,11 +33,14 @@
              <div class="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center text-gray-600">
                  <UIcon name="i-heroicons-shopping-bag-20-solid" class="w-5 h-5" />
              </div>
-             <span class="font-bold text-gray-900">KasirSimple</span>
+             <span class="font-bold text-gray-900">KasirOK</span>
           </div>
-          <p class="text-gray-500 text-sm">© {{ new Date().getFullYear() }} KasirSimple. All rights reserved.</p>
+          <p class="text-gray-500 text-sm">© {{ new Date().getFullYear() }} KasirOK. All rights reserved.</p>
         </div>
       </div>
     </footer>
+
+    <!-- Toast Notifications -->
+    <UNotifications />
   </div>
 </template>
