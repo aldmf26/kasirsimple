@@ -17,8 +17,10 @@
     "@nuxtjs/supabase": "^2.0.3",
     "@vueuse/core": "^14.1.0",
     "@vueuse/nuxt": "^14.1.0",
+    "chart.js": "^4.5.1",
     "nuxt": "^4.2.2",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "vue-chartjs": "^5.3.3"
   },
   "devDependencies": {
     "@nuxt/eslint": "^1.12.1",
