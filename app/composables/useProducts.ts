@@ -1,4 +1,5 @@
 import type { Database } from '~/types/database'
+import { logToActivity, ACTIVITY_TYPES } from '~/utils/activityLogger'
 
 type Product = Database['public']['Tables']['products']['Row']
 type ProductInsert = Database['public']['Tables']['products']['Insert']
@@ -18,6 +19,7 @@ export interface ProductWithCategory extends Product {
 export const useProducts = () => {
     const supabase = useSupabaseClient<Database>()
     const { store } = useStore()
+    const user = useSupabaseUser()
 
     const products = useState<ProductWithCategory[]>('products', () => [])
     const loading = useState('products_loading', () => false)
@@ -143,6 +145,23 @@ export const useProducts = () => {
             if (createError) throw createError
 
             products.value.push(data)
+
+            // Log activity
+            logToActivity(
+                store.value.id,
+                ACTIVITY_TYPES.PRODUCT_CREATED,
+                {
+                    productName: data.name,
+                    sku: data.sku,
+                    price: data.price,
+                    buyPrice: data.buy_price,
+                    stock: data.stock,
+                    category: data.category
+                },
+                data.id,
+                user.value?.id
+            )
+
             return data
         } catch (e: any) {
             error.value = e.message
@@ -158,6 +177,8 @@ export const useProducts = () => {
         error.value = null
 
         try {
+            // Get product before update for logging changes
+            const oldProduct = products.value.find(p => p.id === productId)
 
             const { data, error: updateError } = await supabase
                 .from('products')
@@ -178,6 +199,26 @@ export const useProducts = () => {
             if (index !== -1) {
                 products.value[index] = data
             }
+
+            // Log activity with changes
+            const changes: any = {}
+            if (oldProduct && oldProduct.name !== data.name) changes.name = { old: oldProduct.name, new: data.name }
+            if (oldProduct && oldProduct.price !== data.price) changes.price = { old: oldProduct.price, new: data.price }
+            if (oldProduct && oldProduct.buy_price !== data.buy_price) changes.buyPrice = { old: oldProduct.buy_price, new: data.buy_price }
+            if (oldProduct && oldProduct.stock !== data.stock) changes.stock = { old: oldProduct.stock, new: data.stock }
+
+            logToActivity(
+                store.value?.id || '',
+                ACTIVITY_TYPES.PRODUCT_UPDATED,
+                {
+                    productName: data.name,
+                    sku: data.sku,
+                    changes
+                },
+                productId,
+                user.value?.id
+            )
+
             console.log('✅ Product updated')
             return data
         } catch (e: any) {
@@ -196,6 +237,9 @@ export const useProducts = () => {
         error.value = null
 
         try {
+            // Get product before delete for logging
+            const product = products.value.find(p => p.id === id)
+
             // @ts-ignore
             const { error: deleteError } = await supabase
                 .from('products')
@@ -207,6 +251,19 @@ export const useProducts = () => {
 
             // Remove from local state
             products.value = products.value.filter(p => p.id !== id)
+
+            // Log activity
+            logToActivity(
+                store.value.id,
+                ACTIVITY_TYPES.PRODUCT_DELETED,
+                {
+                    productName: product?.name,
+                    sku: product?.sku,
+                    price: product?.price
+                },
+                id,
+                user.value?.id
+            )
         } catch (e: any) {
             error.value = e.message
             throw e
@@ -227,11 +284,14 @@ export const useProducts = () => {
             const currentStock = product.stock || 0
             let newStock = currentStock
             let movementType = type
+            let activityType = ACTIVITY_TYPES.STOCK_ADJUSTMENT
 
             if (type === 'in') {
                 newStock += quantity
+                activityType = ACTIVITY_TYPES.STOCK_IN
             } else if (type === 'out') {
                 newStock -= quantity
+                activityType = ACTIVITY_TYPES.STOCK_OUT
             } else if (type === 'adjustment') {
                 newStock = quantity
                 if (newStock > currentStock) movementType = 'in'
@@ -260,6 +320,22 @@ export const useProducts = () => {
                 stock_after: newStock,
                 notes: notes,
             })
+
+            // Log activity
+            logToActivity(
+                store.value.id,
+                activityType,
+                {
+                    productName: product.name,
+                    productId,
+                    stockBefore: currentStock,
+                    stockAfter: newStock,
+                    quantity: type === 'adjustment' ? Math.abs(newStock - currentStock) : quantity,
+                    notes
+                },
+                productId,
+                user.value?.id
+            )
 
             // Update Local
             product.stock = newStock

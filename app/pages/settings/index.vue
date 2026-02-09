@@ -22,21 +22,25 @@ const selectedLogoFile = ref<File | null>(null);
 const logoPreview = ref<string | null>(null);
 
 // Sync form with store data
-watch(store, (newStore) => {
-  if (newStore) {
-    storeSettings.name = newStore.name;
-    storeSettings.business_type = newStore.business_type || "retail";
-    storeSettings.address = newStore.address || "";
-    storeSettings.phone = newStore.phone || "";
-    storeSettings.currency = newStore.currency || "Rp";
-    storeSettings.logo_url = newStore.logo_url || "";
-    
-    // Reset preview saat load data baru
-    if(!selectedLogoFile.value) {
+watch(
+  store,
+  (newStore) => {
+    if (newStore) {
+      storeSettings.name = newStore.name;
+      storeSettings.business_type = newStore.business_type || "retail";
+      storeSettings.address = newStore.address || "";
+      storeSettings.phone = newStore.phone || "";
+      storeSettings.currency = newStore.currency || "Rp";
+      storeSettings.logo_url = newStore.logo_url || "";
+
+      // Reset preview saat load data baru
+      if (!selectedLogoFile.value) {
         logoPreview.value = newStore.logo_url || "";
+      }
     }
-  }
-}, { immediate: true });
+  },
+  { immediate: true },
+);
 
 const handleFileSelect = (event: any) => {
   const file = event.target.files[0];
@@ -52,7 +56,7 @@ const handleFileSelect = (event: any) => {
 };
 
 const triggerFileInput = () => {
-    document.getElementById('logoInput')?.click();
+  document.getElementById("logoInput")?.click();
 };
 
 // Alert State
@@ -92,6 +96,12 @@ const sections = [
     icon: "i-heroicons-credit-card",
   },
   { id: "account", label: "Akun", icon: "i-heroicons-user-circle" },
+  {
+    id: "activity",
+    label: "Riwayat Aktivitas",
+    icon: "i-heroicons-clock",
+    action: () => navigateTo("/activity-history"),
+  },
 ];
 
 // Enabled payment methods
@@ -111,31 +121,31 @@ const togglePaymentMethod = (method: string) => {
 };
 
 const saveSettings = async () => {
-  if (activeSection.value === 'store') {
+  if (activeSection.value === "store") {
     try {
       if (store.value?.id) {
         let logoUrl = storeSettings.logo_url;
 
         // Upload logo jika ada file baru di client
         if (selectedLogoFile.value) {
-           const file = selectedLogoFile.value;
-           const fileExt = file.name.split(".").pop();
-           const fileName = `${store.value.id}-${Date.now()}.${fileExt}`;
-           
-           const { error: uploadError } = await supabase.storage
-              .from("logos")
-              .upload(fileName, file, {
-                 cacheControl: "3600",
-                 upsert: false
-              });
-            
-           if (uploadError) throw uploadError;
+          const file = selectedLogoFile.value;
+          const fileExt = file.name.split(".").pop();
+          const fileName = `${store.value.id}-${Date.now()}.${fileExt}`;
 
-           const { data: { publicUrl } } = supabase.storage
-              .from("logos")
-              .getPublicUrl(fileName);
-           
-           logoUrl = publicUrl;
+          const { error: uploadError } = await supabase.storage
+            .from("logos")
+            .upload(fileName, file, {
+              cacheControl: "3600",
+              upsert: false,
+            });
+
+          if (uploadError) throw uploadError;
+
+          const {
+            data: { publicUrl },
+          } = supabase.storage.from("logos").getPublicUrl(fileName);
+
+          logoUrl = publicUrl;
         }
 
         await updateStore(store.value.id, {
@@ -144,13 +154,13 @@ const saveSettings = async () => {
           address: storeSettings.address,
           phone: storeSettings.phone,
           currency: storeSettings.currency,
-          logo_url: logoUrl
+          logo_url: logoUrl,
         });
-        
+
         // Reset local state
         selectedLogoFile.value = null;
         storeSettings.logo_url = logoUrl;
-        
+
         showAlert("success", "Profil toko berhasil diperbarui");
       }
     } catch (e: any) {
@@ -191,10 +201,10 @@ const handleLogout = () => {
         </button>
       </div>
     </div>
-    
-    <AppAlert 
-      :show="alert.show" 
-      :type="alert.type" 
+
+    <AppAlert
+      :show="alert.show"
+      :type="alert.type"
       :message="alert.message"
       @close="alert.show = false"
     />
@@ -219,7 +229,9 @@ const handleLogout = () => {
                 ? 'bg-emerald-50 text-emerald-700 border-l-4 border-emerald-600'
                 : 'text-gray-600 hover:bg-gray-50'
             "
-            @click="activeSection = section.id"
+            @click="
+              section.action ? section.action() : (activeSection = section.id)
+            "
           >
             <UIcon :name="section.icon" class="w-5 h-5 flex-shrink-0" />
             {{ section.label }}

@@ -1,4 +1,5 @@
 import type { Database } from '~/types/database'
+import { logToActivity, ACTIVITY_TYPES } from '~/utils/activityLogger'
 
 type Transaction = Database['public']['Tables']['transactions']['Row']
 type TransactionInsert = Database['public']['Tables']['transactions']['Insert']
@@ -256,6 +257,22 @@ export const useTransactions = () => {
             }
             transactions.value.unshift(fullTransaction)
 
+            // Log activity
+            logToActivity(
+                store.value.id,
+                ACTIVITY_TYPES.TRANSACTION_CREATED,
+                {
+                    transactionNumber: transaction.transaction_number,
+                    totalAmount: transaction.total,
+                    itemCount: transactionItems?.length || 0,
+                    paymentMethod: transaction.payment_method,
+                    customerName: transaction.customer_name,
+                    discountAmount: transaction.discount
+                },
+                transaction.id,
+                user.value?.id
+            )
+
             return fullTransaction
         } catch (e: any) {
             error.value = e.message
@@ -347,9 +364,67 @@ export const useTransactions = () => {
     const deleteTransaction = async (transactionId: string) => {
         loading.value = true
         try {
-            // Restore stock first (optional, but good practice)
-            // For now just delete the record
+            const { logActivity } = useActivityLog()
+            
+            // Get transaction data first
+            const transaction = transactions.value.find(t => t.id === transactionId)
+            if (!transaction) throw new Error('Transaksi tidak ditemukan')
 
+            // Restore stock for each item
+            if (transaction.items && transaction.items.length > 0) {
+                for (const item of transaction.items) {
+                    // @ts-ignore
+                    const { error: stockError } = await supabase
+                        .from('products')
+                        .update({ 
+                            stock: supabase.rpc('increment_stock', {
+                                product_id: item.product_id,
+                                quantity: item.quantity
+                            })
+                        })
+                        .eq('id', item.product_id)
+
+                    // Fallback: Manual stock update if RPC fails
+                    if (stockError) {
+                        // Get current stock
+                        // @ts-ignore
+                        const { data: product } = await supabase
+                            .from('products')
+                            .select('stock')
+                            .eq('id', item.product_id)
+                            .single()
+
+                        const currentStock = product?.stock || 0
+                        const newStock = currentStock + item.quantity
+
+                        // @ts-ignore
+                        await supabase
+                            .from('products')
+                            .update({ stock: newStock })
+                            .eq('id', item.product_id)
+                    }
+
+                    // Record stock movement as reversal
+                    // @ts-ignore
+                    await supabase.from('stock_movements').insert({
+                        product_id: item.product_id,
+                        type: 'in',
+                        quantity: item.quantity,
+                        notes: `Stok dikembalikan dari penghapusan transaksi ${transaction.transaction_number}`,
+                    })
+                }
+            }
+
+            // Delete transaction items first
+            // @ts-ignore
+            const { error: itemsError } = await supabase
+                .from('transaction_items')
+                .delete()
+                .eq('transaction_id', transactionId)
+
+            if (itemsError) throw itemsError
+
+            // Delete transaction
             // @ts-ignore
             const { error: delError } = await supabase
                 .from('transactions')
@@ -357,6 +432,23 @@ export const useTransactions = () => {
                 .eq('id', transactionId)
 
             if (delError) throw delError
+
+            // Log activity to localStorage
+            const userId = user.value?.id
+            if (store.value?.id) {
+                logToActivity(
+                    store.value.id,
+                    ACTIVITY_TYPES.TRANSACTION_DELETED,
+                    {
+                        transactionNumber: transaction.transaction_number,
+                        totalAmount: transaction.total,
+                        itemCount: transaction.items?.length || 0,
+                        paymentMethod: transaction.payment_method
+                    },
+                    transactionId,
+                    userId
+                )
+            }
 
             transactions.value = transactions.value.filter(t => t.id !== transactionId)
         } catch (e: any) {
