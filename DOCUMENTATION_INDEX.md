@@ -98,6 +98,57 @@
   - Migration to add new columns
   - Optional after initial setup
 
+- **[supabase/migrations/003_add_payment_config.sql](supabase/migrations/003_add_payment_config.sql)**
+  - Migration to add payment methods configuration
+  - Adds columns: enabled_payment_methods, bank_accounts
+
+---
+
+## 💳 Payment Methods Feature
+
+### Quick Links
+
+- **[PAYMENT_GUIDE.md](PAYMENT_GUIDE.md)** 🎯
+  - User-friendly step-by-step guide
+  - Real-world examples
+  - Common tasks and troubleshooting
+  - **Best for:** Store owners & operators
+  - **Read time:** 10 minutes
+
+- **[PAYMENT_METHODS.md](PAYMENT_METHODS.md)** 💳
+  - Complete feature documentation
+  - Configuration steps
+  - Database schema & types
+  - Common issues & fixes
+  - **Best for:** Developers & operators
+  - **Read time:** 15 minutes
+
+- **[PAYMENT_IMPLEMENTATION.md](PAYMENT_IMPLEMENTATION.md)** 🔧
+  - Implementation details
+  - File modifications summary
+  - TypeScript types
+  - Testing checklist
+  - Migration steps
+  - **Best for:** Developers & technical users
+  - **Read time:** 20 minutes
+
+### What is Payment Methods?
+
+The payment methods feature allows stores to:
+
+- ✅ Enable/disable payment methods (Cash, QRIS, Card)
+- ✅ Configure bank accounts for card payments
+- ✅ Display only enabled methods in POS
+- ✅ Select bank account during checkout
+
+### Files Modified
+
+- `app/utils/helpers.ts` - Payment methods constants
+- `app/pages/settings/index.vue` - Settings UI
+- `app/pages/pos/index.vue` - POS integration
+- `app/types/database.types.ts` - Type definitions
+- Database schema - New columns in stores table
+
 ---
 
 ## 🚀 Quick Navigation
@@ -303,6 +354,12 @@
 - [SUPABASE_SETUP.md](SUPABASE_SETUP.md) - Production checklist
 - [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) - Deployment section
 
+### Payment Methods
+
+- [PAYMENT_GUIDE.md](PAYMENT_GUIDE.md) - User guide (store owners)
+- [PAYMENT_METHODS.md](PAYMENT_METHODS.md) - Feature documentation
+- [PAYMENT_IMPLEMENTATION.md](PAYMENT_IMPLEMENTATION.md) - Technical details
+
 ---
 
 ## 💡 Pro Tips
@@ -317,16 +374,26 @@
 
 ## 🔗 Related Files in Project
 
-- `supabase/schema.sql` - Database schema (run this)
-- `supabase/RLS_FIX.sql` - Fix RLS (run if issues)
-- `app/composables/useStore.ts` - Store management
+### Core Application
+
+- `app/composables/useStore.ts` - Store management (includes payment config)
 - `app/composables/useProducts.ts` - Products (Supabase)
 - `app/composables/useCategories.ts` - Categories (Supabase)
 - `app/composables/useTransactions.ts` - Transactions (Supabase)
-- `app/pages/products/index.vue` - Products UI
-- `app/pages/pos/index.vue` - POS system
+- `app/utils/helpers.ts` - Utilities & payment methods constants
+
+### UI Pages
+
 - `app/pages/dashboard.vue` - Dashboard
-- `app/pages/settings/index.vue` - Settings
+- `app/pages/products/index.vue` - Products management
+- `app/pages/pos/index.vue` - POS system (payment methods integration)
+- `app/pages/settings/index.vue` - Settings (payment methods config)
+
+### Database
+
+- `supabase/schema.sql` - Database schema (run this)
+- `supabase/RLS_FIX.sql` - Fix RLS (run if issues)
+- `supabase/migrations/003_add_payment_config.sql` - Payment config migration
 
 ---
 

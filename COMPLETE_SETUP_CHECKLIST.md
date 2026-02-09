@@ -216,6 +216,51 @@ npm run dev
 6. [ ] Should only see products from current store ✅
 7. [ ] Should NOT see first user's products ✅
 
+### Test Payment Methods (NEW Feature)
+
+1. [ ] Login as store owner
+2. [ ] Go to Settings → Metode Pembayaran
+3. [ ] See 3 payment methods: Tunai, QRIS, Kartu
+4. [ ] Click Tunai - should toggle on/off
+5. [ ] Click QRIS - should toggle on/off
+6. [ ] Try disabling all methods - should show error message ✅
+7. [ ] Enable Kartu (Card) method
+8. [ ] Scroll down - should see "Rekening Bank Kartu" section ✅
+9. [ ] Fill bank account form:
+   - [ ] Nama Rekening: "Rekening Pribadi"
+   - [ ] Nama Bank: "BCA"
+   - [ ] Nomor Rekening: "1234567890"
+10. [ ] Click "Tambah Rekening" button
+11. [ ] Should see account added to list below ✅
+12. [ ] Click "Simpan" button
+13. [ ] Should see success message ✅
+14. [ ] Disable Kartu method
+15. [ ] Should see "Rekening Bank Kartu" section hidden ✅
+16. [ ] Click "Simpan" again
+17. [ ] Refresh page
+18. [ ] Settings should persist ✅
+
+### Test Payment Methods in POS
+
+1. [ ] Go to Settings → Metode Pembayaran
+2. [ ] Enable only: Tunai and QRIS
+3. [ ] Click "Simpan"
+4. [ ] Go to /pos
+5. [ ] Add product to cart
+6. [ ] Click "BAYAR" (Checkout)
+7. [ ] In payment modal, should see only: Tunai, QRIS ✅
+8. [ ] Should NOT see Kartu ✅
+9. [ ] Go back to settings
+10. [ ] Enable Kartu, add 2 bank accounts, save
+11. [ ] Go back to /pos
+12. [ ] Click "BAYAR"
+13. [ ] Should see all 3 methods now ✅
+14. [ ] Click Kartu
+15. [ ] Should see dropdown to select bank account ✅
+16. [ ] Select a bank account
+17. [ ] Continue to complete transaction
+18. [ ] Verify transaction saved with correct payment method ✅
+
 ## 🔍 Step 7: Verify Database (5 minutes)
 
 ### Check Data in Supabase

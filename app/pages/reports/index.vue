@@ -633,91 +633,12 @@ watch(
         <div
           class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto flex flex-col"
         >
-          <!-- Preview Area -->
-          <div
-            id="receipt-content"
-            class="bg-white p-4 font-mono text-xs text-gray-800 border border-gray-100 shadow-sm mb-4"
-          >
-            <div class="text-center mb-4">
-              <img
-                v-if="store?.logo_url"
-                :src="store.logo_url"
-                class="w-16 h-16 object-contain mx-auto mb-2 grayscale"
-              />
-              <h2 class="font-bold text-base uppercase">
-                {{ store?.name || "Kasir Simple" }}
-              </h2>
-              <p v-if="store?.address">{{ store.address }}</p>
-              <p v-if="store?.phone">{{ store.phone }}</p>
-              <p class="mt-2">
-                {{ formatDateTime(selectedTransaction.created_at) }}
-              </p>
-              <p>
-                No:
-                {{
-                  selectedTransaction.transaction_number ||
-                  selectedTransaction.id
-                }}
-              </p>
-              <p v-if="selectedTransaction.customer_name">
-                Customer: {{ selectedTransaction.customer_name }}
-              </p>
-            </div>
-
-            <hr class="border-t border-dashed border-gray-400 my-2" />
-
-            <div class="space-y-1">
-              <div
-                v-for="(item, idx) in selectedTransaction.items"
-                :key="idx"
-                class="flex justify-between"
-              >
-                <span class="truncate pr-2"
-                  >{{ item.quantity }}x {{ item.product_name }}</span
-                >
-                <span class="whitespace-nowrap">{{
-                  formatCurrency(item.product_price * item.quantity)
-                }}</span>
-              </div>
-            </div>
-
-            <hr class="border-t border-dashed border-gray-400 my-2" />
-
-            <div class="space-y-1 font-bold">
-              <div class="flex justify-between">
-                <span>TOTAL</span>
-                <span>{{ formatCurrency(selectedTransaction.total) }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span
-                  >BAYAR ({{
-                    selectedTransaction.payment_method === "cash"
-                      ? "Tunai"
-                      : "Transfer"
-                  }})</span
-                >
-                <span>{{
-                  formatCurrency(
-                    selectedTransaction.paid_amount ||
-                      selectedTransaction.total,
-                  )
-                }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span>KEMBALI</span>
-                <span>{{
-                  formatCurrency(
-                    (selectedTransaction.paid_amount ||
-                      selectedTransaction.total) - selectedTransaction.total,
-                  )
-                }}</span>
-              </div>
-            </div>
-
-            <div class="mt-6 text-center">
-              <p>Terima Kasih</p>
-              <p>Silahkan Datang Kembali</p>
-            </div>
+          <!-- Thermal Printer Receipt Component -->
+          <div class="mb-4">
+            <ThermalPrinterReceipt
+              :transaction="selectedTransaction"
+              :store="store"
+            />
           </div>
 
           <!-- Actions -->

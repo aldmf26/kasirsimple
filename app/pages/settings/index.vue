@@ -33,6 +33,38 @@ watch(
       storeSettings.currency = newStore.currency || "Rp";
       storeSettings.logo_url = newStore.logo_url || "";
 
+      // Load enabled payment methods from store
+      const storeData = newStore as any;
+      if (storeData.enabled_payment_methods) {
+        try {
+          const parsed =
+            typeof storeData.enabled_payment_methods === "string"
+              ? JSON.parse(storeData.enabled_payment_methods)
+              : storeData.enabled_payment_methods;
+          enabledPaymentMethods.value = Array.isArray(parsed)
+            ? parsed
+            : ["cash"];
+        } catch (e) {
+          enabledPaymentMethods.value = ["cash"];
+        }
+      }
+
+      // Load bank accounts from store
+      if (storeData.bank_accounts) {
+        try {
+          const parsed =
+            typeof storeData.bank_accounts === "string"
+              ? JSON.parse(storeData.bank_accounts)
+              : storeData.bank_accounts;
+          bankAccounts.value = Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          bankAccounts.value = [];
+        }
+      }
+
+      // Load product display setting
+      showProductImages.value = storeData.show_product_images !== false;
+
       // Reset preview saat load data baru
       if (!selectedLogoFile.value) {
         logoPreview.value = newStore.logo_url || "";
@@ -107,6 +139,32 @@ const sections = [
 // Enabled payment methods
 const enabledPaymentMethods = ref(["cash", "transfer", "qris"]);
 
+// Product display settings
+const showProductImages = ref(true);
+
+// Bank accounts for card payment
+const bankAccounts = ref<
+  Array<{
+    id: string;
+    accountName: string;
+    bank: string;
+    accountNumber: string;
+  }>
+>([]);
+const newBankAccount = reactive({
+  accountName: "",
+  bank: "",
+  accountNumber: "",
+});
+
+// Edit mode state
+const editingAccountId = ref<string | null>(null);
+const editingBankAccount = reactive({
+  accountName: "",
+  bank: "",
+  accountNumber: "",
+});
+
 const togglePaymentMethod = (method: string) => {
   const index = enabledPaymentMethods.value.indexOf(method);
   if (index > -1) {
@@ -117,6 +175,73 @@ const togglePaymentMethod = (method: string) => {
     }
   } else {
     enabledPaymentMethods.value.push(method);
+  }
+};
+
+const addBankAccount = () => {
+  if (
+    !newBankAccount.accountName ||
+    !newBankAccount.bank ||
+    !newBankAccount.accountNumber
+  ) {
+    showAlert("error", "Semua field rekening harus diisi");
+    return;
+  }
+
+  bankAccounts.value.push({
+    id: Math.random().toString(36).substr(2, 9),
+    accountName: newBankAccount.accountName,
+    bank: newBankAccount.bank,
+    accountNumber: newBankAccount.accountNumber,
+  });
+
+  newBankAccount.accountName = "";
+  newBankAccount.bank = "";
+  newBankAccount.accountNumber = "";
+  showAlert("success", "Rekening berhasil ditambahkan");
+};
+
+const removeBankAccount = (id: string) => {
+  bankAccounts.value = bankAccounts.value.filter((acc) => acc.id !== id);
+  showAlert("success", "Rekening berhasil dihapus");
+};
+
+const startEditBankAccount = (account: any) => {
+  editingAccountId.value = account.id;
+  editingBankAccount.accountName = account.accountName;
+  editingBankAccount.bank = account.bank;
+  editingBankAccount.accountNumber = account.accountNumber;
+};
+
+const cancelEditBankAccount = () => {
+  editingAccountId.value = null;
+  editingBankAccount.accountName = "";
+  editingBankAccount.bank = "";
+  editingBankAccount.accountNumber = "";
+};
+
+const saveEditBankAccount = () => {
+  if (
+    !editingBankAccount.accountName ||
+    !editingBankAccount.bank ||
+    !editingBankAccount.accountNumber
+  ) {
+    showAlert("error", "Semua field rekening harus diisi");
+    return;
+  }
+
+  const accountIndex = bankAccounts.value.findIndex(
+    (acc) => acc.id === editingAccountId.value,
+  );
+  if (accountIndex > -1) {
+    bankAccounts.value[accountIndex] = {
+      id: editingAccountId.value!,
+      accountName: editingBankAccount.accountName,
+      bank: editingBankAccount.bank,
+      accountNumber: editingBankAccount.accountNumber,
+    };
+    showAlert("success", "Rekening berhasil diubah");
+    cancelEditBankAccount();
   }
 };
 
@@ -167,8 +292,24 @@ const saveSettings = async () => {
       console.error(e);
       showAlert("error", e.message || "Gagal menyimpan perubahan");
     }
+  } else if (activeSection.value === "payment") {
+    // Save payment methods and product display settings
+    try {
+      if (store.value?.id) {
+        const updateData: any = {
+          enabled_payment_methods: JSON.stringify(enabledPaymentMethods.value),
+          bank_accounts: JSON.stringify(bankAccounts.value),
+          show_product_images: showProductImages.value,
+        };
+        await updateStore(store.value.id, updateData);
+        showAlert("success", "Pengaturan berhasil diperbarui");
+      }
+    } catch (e: any) {
+      console.error(e);
+      showAlert("error", e.message || "Gagal menyimpan perubahan");
+    }
   } else {
-    // Mock save for other sections
+    // For other sections
     showAlert("success", "Perubahan berhasil disimpan");
   }
 };
@@ -233,7 +374,7 @@ const handleLogout = () => {
               section.action ? section.action() : (activeSection = section.id)
             "
           >
-            <UIcon :name="section.icon" class="w-5 h-5 flex-shrink-0" />
+            <UIcon :name="section.icon" class="w-5 h-5 shrink-0" />
             {{ section.label }}
           </button>
         </nav>
@@ -314,6 +455,90 @@ const handleLogout = () => {
             </div>
           </div>
 
+          <!-- Product Display Settings -->
+          <div
+            class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"
+          >
+            <h2 class="text-xl font-bold text-gray-900 mb-2">
+              📸 Tampilan Produk
+            </h2>
+            <p class="text-sm text-gray-500 mb-6">
+              Pilih apakah foto produk ditampilkan di POS atau tidak
+            </p>
+
+            <div class="space-y-4">
+              <!-- Show Product Images Toggle -->
+              <div
+                class="flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer"
+                :class="
+                  showProductImages
+                    ? 'border-blue-200 bg-blue-50'
+                    : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                "
+                @click="showProductImages = !showProductImages"
+              >
+                <div class="flex items-center gap-4">
+                  <div
+                    class="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+                    :class="
+                      showProductImages
+                        ? 'bg-blue-100 text-blue-600'
+                        : 'bg-gray-200 text-gray-400'
+                    "
+                  >
+                    <UIcon
+                      :name="
+                        showProductImages
+                          ? 'i-heroicons-photo'
+                          : 'i-heroicons-photo-slash'
+                      "
+                      class="w-6 h-6"
+                    />
+                  </div>
+                  <div>
+                    <p class="font-medium text-gray-900 text-sm sm:text-base">
+                      {{
+                        showProductImages
+                          ? "Tampilkan Foto"
+                          : "Sembunyikan Foto"
+                      }}
+                    </p>
+                    <p class="text-xs text-gray-500 mt-1">
+                      {{
+                        showProductImages
+                          ? "Foto produk akan ditampilkan di POS"
+                          : "Menghemat ruang, foto tidak ditampilkan"
+                      }}
+                    </p>
+                  </div>
+                </div>
+                <UIcon
+                  :name="
+                    showProductImages
+                      ? 'i-heroicons-check-circle-solid'
+                      : 'i-heroicons-x-circle'
+                  "
+                  class="w-6 h-6 shrink-0"
+                  :class="showProductImages ? 'text-blue-600' : 'text-gray-300'"
+                />
+              </div>
+
+              <div
+                v-if="showProductImages"
+                class="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800"
+              >
+                ✅ Anda dapat upload/link foto untuk setiap produk
+              </div>
+              <div
+                v-else
+                class="p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600"
+              >
+                💾 Mode hemat: Foto tidak ditampilkan di POS untuk menghemat
+                ruang
+              </div>
+            </div>
+          </div>
+
           <button
             @click="saveSettings"
             class="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
@@ -349,7 +574,7 @@ const handleLogout = () => {
               >
                 <div class="flex items-center gap-4">
                   <div
-                    class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                    class="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
                     :class="
                       enabledPaymentMethods.includes(method.value)
                         ? 'bg-emerald-100 text-emerald-600'
@@ -369,7 +594,7 @@ const handleLogout = () => {
                       ? 'i-heroicons-check-circle-solid'
                       : 'i-heroicons-x-circle'
                   "
-                  class="w-6 h-6 flex-shrink-0"
+                  class="w-6 h-6 shrink-0"
                   :class="
                     enabledPaymentMethods.includes(method.value)
                       ? 'text-emerald-600'
@@ -378,7 +603,151 @@ const handleLogout = () => {
                 />
               </div>
             </div>
+
+            <!-- Bank Accounts Section (Show when card is enabled) -->
+            <div
+              v-if="enabledPaymentMethods.includes('card')"
+              class="mt-8 pt-8 border-t border-gray-200"
+            >
+              <h3 class="text-lg font-bold text-gray-900 mb-4">
+                Rekening Bank Kartu
+              </h3>
+
+              <!-- Existing Bank Accounts -->
+              <div v-if="bankAccounts.length > 0" class="mb-6 space-y-2">
+                <div
+                  v-for="account in bankAccounts"
+                  :key="account.id"
+                  class="p-4 bg-gray-50 rounded-xl"
+                >
+                  <!-- Display mode -->
+                  <div
+                    v-if="editingAccountId !== account.id"
+                    class="flex items-center justify-between"
+                  >
+                    <div>
+                      <p class="font-semibold text-gray-900">
+                        {{ account.accountName }}
+                      </p>
+                      <p class="text-sm text-gray-500">
+                        {{ account.bank }} - {{ account.accountNumber }}
+                      </p>
+                    </div>
+                    <div class="flex gap-2">
+                      <button
+                        @click="startEditBankAccount(account)"
+                        class="text-blue-600 hover:text-blue-700"
+                        title="Edit"
+                      >
+                        <UIcon name="i-heroicons-pencil" class="w-5 h-5" />
+                      </button>
+                      <button
+                        @click="removeBankAccount(account.id)"
+                        class="text-red-600 hover:text-red-700"
+                        title="Delete"
+                      >
+                        <UIcon name="i-heroicons-trash" class="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Edit mode -->
+                  <div v-else class="space-y-3">
+                    <div>
+                      <label class="block text-xs font-bold text-gray-600 mb-1"
+                        >Nama Rekening</label
+                      >
+                      <input
+                        v-model="editingBankAccount.accountName"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-bold text-gray-600 mb-1"
+                        >Nama Bank</label
+                      >
+                      <input
+                        v-model="editingBankAccount.bank"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-bold text-gray-600 mb-1"
+                        >Nomor Rekening</label
+                      >
+                      <input
+                        v-model="editingBankAccount.accountNumber"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div class="flex gap-2">
+                      <button
+                        @click="saveEditBankAccount"
+                        class="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-sm"
+                      >
+                        Simpan Perubahan
+                      </button>
+                      <button
+                        @click="cancelEditBankAccount"
+                        class="flex-1 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold rounded-lg text-sm"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Add New Bank Account Form -->
+              <div class="bg-gray-50 p-4 rounded-xl space-y-3">
+                <div>
+                  <label class="block text-xs font-bold text-gray-600 mb-1"
+                    >Nama Rekening</label
+                  >
+                  <input
+                    v-model="newBankAccount.accountName"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Misal: Rekening Pribadi"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-gray-600 mb-1"
+                    >Nama Bank</label
+                  >
+                  <input
+                    v-model="newBankAccount.bank"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Misal: BCA, BNI, Mandiri"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-gray-600 mb-1"
+                    >Nomor Rekening</label
+                  >
+                  <input
+                    v-model="newBankAccount.accountNumber"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Misal: 1234567890"
+                  />
+                </div>
+                <button
+                  @click="addBankAccount"
+                  class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  <UIcon name="i-heroicons-plus" class="w-4 h-4" />
+                  Tambah Rekening
+                </button>
+              </div>
+            </div>
           </div>
+
+          <button
+            @click="saveSettings"
+            class="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <UIcon name="i-heroicons-check" class="w-5 h-5" />
+            Simpan Perubahan
+          </button>
         </div>
 
         <!-- Account -->
@@ -392,7 +761,7 @@ const handleLogout = () => {
               class="flex flex-col sm:flex-row items-center sm:items-start gap-6 mb-8 pb-8 border-b border-gray-100"
             >
               <div
-                class="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 flex-shrink-0"
+                class="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shrink-0"
               >
                 <UIcon name="i-heroicons-user" class="w-10 h-10" />
               </div>

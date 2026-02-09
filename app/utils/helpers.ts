@@ -108,11 +108,9 @@ export const categoryColors = [
 
 // Payment methods
 export const paymentMethods = [
-    { value: 'cash', label: 'Tunai', icon: 'i-heroicons-banknotes' },
-    { value: 'transfer', label: 'Transfer Bank', icon: 'i-heroicons-building-library' },
-    { value: 'qris', label: 'QRIS', icon: 'i-heroicons-qr-code' },
-    { value: 'debit', label: 'Kartu Debit', icon: 'i-heroicons-credit-card' },
-    { value: 'credit', label: 'Kartu Kredit', icon: 'i-heroicons-credit-card' },
+    { value: 'cash', label: 'Tunai', icon: 'i-heroicons-banknotes', isToggleable: false },
+    { value: 'qris', label: 'QRIS', icon: 'i-heroicons-qr-code', isToggleable: false },
+    { value: 'card', label: 'Kartu Bank', icon: 'i-heroicons-credit-card', isToggleable: true },
 ]
 
 // Business types

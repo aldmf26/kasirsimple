@@ -21,6 +21,9 @@ export interface Database {
                     currency: string
                     timezone: string
                     is_active: boolean
+                    enabled_payment_methods: string | null
+                    bank_accounts: string | null
+                    show_product_images: boolean
                     created_at: string
                     updated_at: string
                 }
@@ -35,6 +38,9 @@ export interface Database {
                     currency?: string
                     timezone?: string
                     is_active?: boolean
+                    enabled_payment_methods?: string | null
+                    bank_accounts?: string | null
+                    show_product_images?: boolean
                     created_at?: string
                     updated_at?: string
                 }
@@ -49,6 +55,9 @@ export interface Database {
                     currency?: string
                     timezone?: string
                     is_active?: boolean
+                    enabled_payment_methods?: string | null
+                    bank_accounts?: string | null
+                    show_product_images?: boolean
                     created_at?: string
                     updated_at?: string
                 }
