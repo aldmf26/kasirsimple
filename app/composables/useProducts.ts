@@ -189,25 +189,25 @@ export const useProducts = () => {
         }
     }
 
-    // Delete product (soft delete)
-    const deleteProduct = async (productId: string) => {
+    const deleteProduct = async (id: string) => {
+        if (!store.value) return
+
         loading.value = true
         error.value = null
 
         try {
-            console.log('🗑️ Deleting product:', productId)
-
+            // @ts-ignore
             const { error: deleteError } = await supabase
                 .from('products')
-                .update({ is_active: false, updated_at: new Date().toISOString() })
-                .eq('id', productId)
+                .update({ is_active: false })
+                .eq('id', id)
+                .eq('store_id', store.value.id)
 
             if (deleteError) throw deleteError
 
-            products.value = products.value.filter(p => p.id !== productId)
-            console.log('✅ Product deleted')
+            // Remove from local state
+            products.value = products.value.filter(p => p.id !== id)
         } catch (e: any) {
-            console.error('❌ Error:', e)
             error.value = e.message
             throw e
         } finally {
@@ -215,52 +215,60 @@ export const useProducts = () => {
         }
     }
 
-    // Update stock
-    const updateStock = async (productId: string, quantity: number, notes?: string) => {
+    // Update Stock
+    const updateStock = async (productId: string, type: 'in' | 'out' | 'adjustment', quantity: number, notes?: string) => {
+        if (!store.value) return
+
+        loading.value = true
         try {
-            console.log('📦 Updating stock for product:', productId, 'quantity:', quantity)
-
             const product = products.value.find(p => p.id === productId)
-            if (!product) throw new Error('Product not found')
+            if (!product) throw new Error('Produk tidak ditemukan')
 
-            const newStock = (product.stock || 0) + quantity
-            if (newStock < 0) throw new Error('Stock tidak boleh negatif')
+            const currentStock = product.stock || 0
+            let newStock = currentStock
+            let movementType = type
 
-            // Update product stock
+            if (type === 'in') {
+                newStock += quantity
+            } else if (type === 'out') {
+                newStock -= quantity
+            } else if (type === 'adjustment') {
+                newStock = quantity
+                if (newStock > currentStock) movementType = 'in'
+                else if (newStock < currentStock) movementType = 'out'
+                else movementType = 'adjustment'
+            }
+
+            if (newStock < 0) throw new Error('Stok tidak boleh kurang dari 0')
+
+            // Update Product
+            // @ts-ignore
             const { error: updateError } = await supabase
                 .from('products')
-                .update({
-                    stock: newStock,
-                    updated_at: new Date().toISOString()
-                })
+                .update({ stock: newStock })
                 .eq('id', productId)
 
             if (updateError) throw updateError
 
-            // Log stock movement
-            const { error: logError } = await supabase
-                .from('stock_movements')
-                .insert({
-                    product_id: productId,
-                    type: quantity > 0 ? 'in' : 'out',
-                    quantity: Math.abs(quantity),
-                    stock_before: product.stock || 0,
-                    stock_after: newStock,
-                    notes: notes || null
-                })
+            // Record Movement
+            // @ts-ignore
+            await supabase.from('stock_movements').insert({
+                product_id: productId,
+                type: type === 'adjustment' ? 'adjustment' : movementType,
+                quantity: type === 'adjustment' ? Math.abs(newStock - currentStock) : quantity,
+                stock_before: currentStock,
+                stock_after: newStock,
+                notes: notes,
+            })
 
-            if (logError) console.error('⚠️ Warning: Could not log stock movement:', logError)
+            // Update Local
+            product.stock = newStock
 
-            // Update local state
-            const productIndex = products.value.findIndex(p => p.id === productId)
-            if (productIndex !== -1) {
-                products.value[productIndex].stock = newStock
-            }
-
-            console.log('✅ Stock updated. Old:', product.stock || 0, 'New:', newStock)
         } catch (e: any) {
-            console.error('❌ Error:', e)
+            error.value = e.message
             throw e
+        } finally {
+            loading.value = false
         }
     }
 

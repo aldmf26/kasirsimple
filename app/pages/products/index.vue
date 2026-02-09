@@ -13,6 +13,7 @@ const {
   updateProduct,
   deleteProduct,
   toggleFavorite,
+  updateStock,
 } = useProducts();
 const { categories, fetchCategories, createCategory, updateCategory, deleteCategory } = useCategories();
 const { store } = useStore();
@@ -38,6 +39,41 @@ const deleteModal = reactive({
   name: "",
   loading: false,
 });
+
+const stockModal = reactive({
+  open: false,
+  product: null as any,
+  type: 'in' as 'in' | 'out' | 'adjustment',
+  quantity: 0,
+  notes: '',
+  loading: false
+});
+
+const openStockModal = (product: any) => {
+  stockModal.product = product;
+  stockModal.type = 'in'; // default
+  stockModal.quantity = 0;
+  stockModal.notes = '';
+  stockModal.open = true;
+};
+
+const saveStock = async () => {
+    if (!stockModal.product || stockModal.quantity <= 0) {
+        showAlert('error', 'Jumlah harus lebih dari 0');
+        return;
+    }
+    
+    stockModal.loading = true;
+    try {
+        await updateStock(stockModal.product.id, stockModal.type, stockModal.quantity, stockModal.notes);
+        showAlert('success', 'Stok berhasil diperbarui');
+        stockModal.open = false;
+    } catch (e: any) {
+        showAlert('error', e.message || 'Gagal update stok');
+    } finally {
+        stockModal.loading = false;
+    }
+};
 
 const categoryModal = reactive({
   open: false,
@@ -541,6 +577,13 @@ watch(
               </td>
               <td class="p-4 text-right">
                 <button
+                  @click="openStockModal(product)"
+                  class="px-3 py-1 bg-purple-600 text-white rounded font-bold mr-2 hover:bg-purple-700 text-xs transition-colors"
+                  title="Kelola Stok"
+                >
+                  STOK
+                </button>
+                <button
                   @click="openEdit(product)"
                   class="px-3 py-1 bg-blue-600 text-white rounded font-bold mr-2 hover:bg-blue-700 text-xs transition-colors"
                 >
@@ -658,6 +701,12 @@ watch(
               class="flex-1 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 text-xs transition-colors"
             >
               EDIT
+            </button>
+            <button
+              @click="openStockModal(product)"
+              class="flex-1 py-2 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 text-xs transition-colors"
+            >
+              STOK
             </button>
             <button
               @click="openDeleteConfirm(product)"
@@ -917,6 +966,99 @@ watch(
                 </div>
             </div>
        </div>
+    </div>
+
+    <!-- Modal Stok -->
+    <div 
+      v-if="stockModal.open" 
+      class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      @click.self="stockModal.open = false"
+    >
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-[scale-in_0.2s_ease-out]">
+            <div class="p-6">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-lg font-bold text-gray-900">Kelola Stok</h3>
+                    <button @click="stockModal.open = false" class="text-gray-400 hover:text-gray-600">
+                        <UIcon name="i-heroicons-x-mark" class="w-6 h-6" />
+                    </button>
+                </div>
+                
+                <div class="mb-4">
+                    <p class="text-sm text-gray-500">Produk:<span class="font-bold text-gray-900 ml-1">{{ stockModal.product?.name }}</span></p>
+                    <p class="text-sm text-gray-500">Stok Saat Ini:<span class="font-bold text-gray-900 ml-1">{{ stockModal.product?.stock || 0 }}</span></p>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Tipe Aksi -->
+                    <div class="grid grid-cols-3 gap-2 p-1 bg-gray-100 rounded-xl">
+                        <button 
+                            @click="stockModal.type = 'in'"
+                            class="py-2 text-sm font-bold rounded-lg transition-all"
+                            :class="stockModal.type === 'in' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                        >
+                            TAMBAH
+                        </button>
+                        <button 
+                            @click="stockModal.type = 'out'"
+                            class="py-2 text-sm font-bold rounded-lg transition-all"
+                            :class="stockModal.type === 'out' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                        >
+                            KURANG
+                        </button>
+                        <button 
+                            @click="stockModal.type = 'adjustment'"
+                            class="py-2 text-sm font-bold rounded-lg transition-all"
+                            :class="stockModal.type === 'adjustment' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                        >
+                            SETEL
+                        </button>
+                    </div>
+
+                    <!-- Input Jumlah -->
+                    <div>
+                         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Jumlah</label>
+                         <input 
+                            type="number" 
+                            v-model.number="stockModal.quantity" 
+                            class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-lg font-bold focus:outline-none focus:border-purple-500 focus:ring-0"
+                            min="1"
+                            placeholder="0"
+                            @keyup.enter="saveStock"
+                         />
+                    </div>
+                    
+                    <!-- Input Catatan -->
+                    <div>
+                         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Catatan (Opsional)</label>
+                         <input 
+                            v-model="stockModal.notes"
+                            class="w-full px-4 py-2 border-2 border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-purple-500 focus:ring-0 placeholder-gray-400"
+                            placeholder="Alasan (opsional, misal: Stok opname)"
+                            @keyup.enter="saveStock"
+                         />
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="flex gap-3 mt-6">
+                        <button 
+                            @click="stockModal.open = false"
+                            class="flex-1 py-3 bg-white border-2 border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition-colors"
+                        >
+                            BATAL
+                        </button>
+                        <button 
+                            @click="saveStock"
+                            :disabled="stockModal.loading"
+                            class="flex-1 py-3 text-white font-bold rounded-xl transition-colors shadow-lg shadow-purple-200 flex items-center justify-center border-2 border-transparent"
+                            :class="stockModal.type === 'in' ? 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600' : stockModal.type === 'out' ? 'bg-red-600 hover:bg-red-700 border-red-600' : 'bg-blue-600 hover:bg-blue-700 border-blue-600'"
+                        >
+                            <span v-if="stockModal.loading" class="animate-spin mr-2">⏳</span>
+                            {{ stockModal.type === 'in' ? 'TAMBAH' : stockModal.type === 'out' ? 'KURANGI' : 'SETEL' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
   </div>
 </template>

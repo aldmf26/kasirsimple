@@ -266,8 +266,8 @@ export const useTransactions = () => {
     }
 
     // Fetch transactions
-    const fetchTransactions = async (dateFrom?: string, dateTo?: string) => {
-        if (!store.value) return []
+    const fetchTransactions = async (filters?: { startDate?: string, endDate?: string, paymentMethod?: string }) => {
+        if (!store.value) return
 
         loading.value = true
         error.value = null
@@ -281,13 +281,16 @@ export const useTransactions = () => {
         `)
                 .eq('store_id', store.value.id)
                 .order('created_at', { ascending: false })
-                .limit(100)
 
-            if (dateFrom) {
-                query = query.gte('created_at', dateFrom)
+            // Apply Filters
+            if (filters?.startDate) {
+                query = query.gte('created_at', `${filters.startDate}T00:00:00`)
             }
-            if (dateTo) {
-                query = query.lte('created_at', dateTo)
+            if (filters?.endDate) {
+                query = query.lte('created_at', `${filters.endDate}T23:59:59`)
+            }
+            if (filters?.paymentMethod && filters.paymentMethod !== 'all') {
+                query = query.eq('payment_method', filters.paymentMethod) // asumsikan value di db 'cash'/'transfer'
             }
 
             const { data, error: fetchError } = await query
@@ -342,8 +345,6 @@ export const useTransactions = () => {
 
     // Delete transaction
     const deleteTransaction = async (transactionId: string) => {
-        if (!confirm('Apakah Anda yakin ingin menghapus transaksi ini? Data tidak dapat dikembalikan.')) return
-
         loading.value = true
         try {
             // Restore stock first (optional, but good practice)

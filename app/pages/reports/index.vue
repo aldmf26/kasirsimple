@@ -77,21 +77,54 @@ const printReceipt = () => {
     }
 }
 
-onMounted(async () => {
+// Filters
+const filters = reactive({
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+    paymentMethod: 'all'
+})
+const activeFilter = ref('today')
+
+const setFilter = (type: string) => {
+    activeFilter.value = type
+    const end = new Date()
+    const start = new Date()
+    
+    if (type === 'today') {
+        // start stays today
+    } else if (type === 'week') {
+        start.setDate(end.getDate() - 7)
+    } else if (type === 'month') {
+        start.setDate(end.getDate() - 30)
+    } else if (type === 'year') {
+        start.setMonth(0, 1) // Jan 1st
+    }
+    
+    filters.startDate = start.toISOString().split('T')[0]
+    filters.endDate = end.toISOString().split('T')[0]
+    loadData()
+}
+
+const loadData = async () => {
     if (store.value) {
         await Promise.all([
-            fetchTransactions(),
+            fetchTransactions({
+                startDate: filters.startDate,
+                endDate: filters.endDate,
+                paymentMethod: filters.paymentMethod
+            }),
             fetchProducts()
         ])
     }
+}
+
+onMounted(() => {
+    loadData()
 })
 
 watch(() => store.value, async (newStore) => {
     if (newStore) {
-        await Promise.all([
-            fetchTransactions(),
-            fetchProducts()
-        ])
+        loadData()
     }
 })
 </script>
@@ -102,6 +135,56 @@ watch(() => store.value, async (newStore) => {
     <div class="px-8 py-6 border-b border-gray-200 bg-white shadow-sm shrink-0">
         <h1 class="text-2xl font-bold text-gray-900">Laporan Penjualan</h1>
         <p class="text-sm text-gray-500">Ringkasan performa toko anda</p>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="px-8 py-4 bg-white border-b border-gray-200">
+        <div class="flex flex-col md:flex-row gap-4 items-end md:items-center justify-between">
+            <!-- Shortcuts -->
+            <div class="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
+                <UButton size="xs" :color="activeFilter === 'today' ? 'primary' : 'gray'" variant="soft" @click="setFilter('today')">Hari Ini</UButton>
+                <UButton size="xs" :color="activeFilter === 'week' ? 'primary' : 'gray'" variant="soft" @click="setFilter('week')">7 Hari</UButton>
+                <UButton size="xs" :color="activeFilter === 'month' ? 'primary' : 'gray'" variant="soft" @click="setFilter('month')">30 Hari</UButton>
+                <UButton size="xs" :color="activeFilter === 'year' ? 'primary' : 'gray'" variant="soft" @click="setFilter('year')">Tahun Ini</UButton>
+            </div>
+
+            <!-- Manual Filter -->
+            <div class="flex flex-wrap items-end gap-3 w-full md:w-auto p-2 bg-gray-50 rounded-xl border border-gray-200">
+                <div class="flex flex-col gap-1">
+                    <span class="text-xs font-semibold text-gray-500 ml-1">Dari Tanggal</span>
+                    <input 
+                        type="date" 
+                        v-model="filters.startDate" 
+                        class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-700 shadow-sm"
+                    >
+                </div>
+
+                <div class="flex flex-col gap-1">
+                    <span class="text-xs font-semibold text-gray-500 ml-1">Sampai Tanggal</span>
+                    <input 
+                        type="date" 
+                        v-model="filters.endDate" 
+                        class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-700 shadow-sm"
+                    >
+                </div>
+
+                <div class="flex flex-col gap-1">
+                    <span class="text-xs font-semibold text-gray-500 ml-1">Metode Bayar</span>
+                    <select 
+                        v-model="filters.paymentMethod" 
+                        class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-700 shadow-sm min-w-[120px]"
+                    >
+                        <option value="all">Semua</option>
+                        <option value="cash">Tunai</option>
+                        <option value="transfer">Transfer</option>
+                    </select>
+                </div>
+                
+                <UButton icon="i-heroicons-funnel" size="sm" color="primary" @click="loadData" :loading="loading" class="mb-0.5 shadow-sm">
+                    Terapkan
+                </UButton>
+            </div>
+        </div>
     </div>
 
     <div class="p-8 space-y-8">
@@ -139,45 +222,47 @@ watch(() => store.value, async (newStore) => {
         </div>
 
         <!-- Recent Transactions -->
-         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
             <h3 class="text-lg font-bold text-gray-900 mb-4">Transaksi Terakhir</h3>
             <div v-if="transactions.length > 0" class="divide-y divide-gray-100">
-                <div v-for="t in transactions" :key="t.id" class="py-3 flex justify-between items-center group hover:bg-gray-50 px-3 -mx-3 rounded-lg transition-colors">
+                <div v-for="t in transactions" :key="t.id" class="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group hover:bg-gray-50 px-3 -mx-3 rounded-xl transition-colors">
                     <div class="flex items-center gap-3">
-                         <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
-                             <UIcon name="i-heroicons-receipt-percent" />
+                         <div class="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 shrink-0">
+                             <UIcon name="i-heroicons-receipt-percent" class="w-6 h-6" />
                          </div>
-                         <div>
-                             <p class="font-medium text-gray-900">{{ t.payment_method === 'cash' ? 'Pembayaran Tunai' : 'Transfer' }}</p>
+                         <div class="min-w-0">
+                             <p class="font-semibold text-gray-900 truncate">{{ t.payment_method === 'cash' ? 'Pembayaran Tunai' : 'Transfer' }}</p>
                              <p class="text-xs text-gray-500">{{ formatDateTime(t.created_at) }}</p>
                          </div>
                     </div>
-                    <div class="flex items-center gap-3">
-                        <span class="font-bold text-gray-900">{{ formatCurrency(t.total) }}</span>
+                    <div class="flex items-center justify-between sm:justify-end gap-4">
+                        <span class="text-lg font-bold text-gray-900">{{ formatCurrency(t.total) }}</span>
                         <div class="flex items-center gap-2">
                             <UButton
                                 icon="i-heroicons-eye"
-                                size="sm"
+                                size="md"
                                 color="primary"
                                 variant="soft"
                                 @click="viewReceipt(t)"
+                                class="rounded-xl"
                                 title="Lihat Struk"
                             />
                             <UButton
                                 icon="i-heroicons-trash"
-                                size="sm"
+                                size="md"
                                 color="error"
                                 variant="soft"
                                 @click="confirmDelete(t)"
+                                class="rounded-xl"
                                 title="Hapus"
                             />
                         </div>
                     </div>
                 </div>
             </div>
-            <div v-else class="text-center py-10 text-gray-400">
-                <UIcon name="i-heroicons-document" class="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>Belum ada transaksi</p>
+            <div v-else class="text-center py-12 text-gray-400">
+                <UIcon name="i-heroicons-document-text" class="w-12 h-12 mx-auto mb-2 opacity-20" />
+                <p class="font-medium">Belum ada transaksi</p>
             </div>
         </div>
     </div>
