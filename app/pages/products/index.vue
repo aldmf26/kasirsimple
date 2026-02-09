@@ -507,7 +507,7 @@ watch(
         <table class="w-full text-left text-sm">
           <thead class="bg-gray-900 text-white">
             <tr>
-              <th class="p-4 font-bold w-12 text-center">No</th>
+              <th class="p-4 font-bold text-center">No</th>
               <th class="p-4 font-bold">Nama Produk</th>
               <th class="p-4 font-bold">Kategori</th>
               <th class="p-4 font-bold">Harga Beli</th>
@@ -516,7 +516,7 @@ watch(
               <th class="p-4 font-bold">Stok</th>
               <th class="p-4 font-bold">Satuan</th>
               <th class="p-4 font-bold text-center">Favorit</th>
-              <th class="p-4 font-bold text-right">Aksi</th>
+              <th class="p-4 font-bold text-center">Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -575,7 +575,7 @@ watch(
                   {{ product.is_favorite ? '★' : '☆' }}
                 </button>
               </td>
-              <td class="p-4 text-right">
+              <td class="p-4 text-center flex justify-center gap-2">
                 <button
                   @click="openStockModal(product)"
                   class="px-3 py-1 bg-purple-600 text-white rounded font-bold mr-2 hover:bg-purple-700 text-xs transition-colors"
@@ -723,7 +723,7 @@ watch(
     <div
       v-if="modalOpen"
       @click.self="modalOpen = false"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-opacity"
+      class="fixed inset-0 z-50 mb-20 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-opacity"
     >
       <div
         class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-gray-100 transform transition-all scale-100"

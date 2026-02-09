@@ -780,6 +780,7 @@ watch(
                   <p v-if="store?.phone">{{ store.phone }}</p>
                   <p class="mt-2">{{ lastTransaction.date }}</p>
                   <p>No: {{ lastTransaction.receipt_no }}</p>
+<p v-if="lastTransaction.customer_name">Customer: {{ lastTransaction.customer_name }}</p>
               </div>
 
               <hr class="border-t border-dashed border-gray-400 my-2" />

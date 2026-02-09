@@ -25,14 +25,14 @@ const links = [
     to: "/pos",
   },
   {
-    label: "Barang",
-    icon: "i-heroicons-cube",
-    to: "/products",
-  },
-  {
     label: "Laporan",
     icon: "i-heroicons-document-chart-bar",
     to: "/reports",
+  },
+  {
+    label: "Barang",
+    icon: "i-heroicons-cube",
+    to: "/products",
   },
   {
     label: "Pengaturan",

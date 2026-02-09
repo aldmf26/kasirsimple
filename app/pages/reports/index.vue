@@ -283,7 +283,8 @@ watch(() => store.value, async (newStore) => {
                   <p v-if="store?.address">{{ store.address }}</p>
                   <p v-if="store?.phone">{{ store.phone }}</p>
                   <p class="mt-2">{{ formatDateTime(selectedTransaction.created_at) }}</p>
-                  <p>No: {{ selectedTransaction.transaction_number || selectedTransaction.id }}</p>
+                  <p>No: {{ selectedTransaction.transaction_number || selectedTransaction.id }} </p>
+                  <p v-if="selectedTransaction.customer_name">Customer: {{ selectedTransaction.customer_name }}</p>
               </div>
 
               <hr class="border-t border-dashed border-gray-400 my-2" />
