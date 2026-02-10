@@ -885,12 +885,12 @@ const handleLogout = () => {
                 </div>
               </div>
 
-              <!-- Diskon Berdasarkan Nominal -->
+              <!-- Diskon Minimum Belanja -->
               <div class="border-b border-gray-200 pb-6">
                 <div class="flex items-center justify-between mb-4">
                   <div>
                     <p class="font-bold text-gray-900">
-                      Diskon Berdasarkan Nominal
+                      Diskon Minimum Belanja
                     </p>
                     <p class="text-xs text-gray-500 mt-1">
                       Diskon jika total belanja mencapai nominal tertentu.

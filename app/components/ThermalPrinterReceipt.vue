@@ -11,7 +11,7 @@
         class="w-16 h-16 object-contain mx-auto mb-2 grayscale"
       />
       <h2 class="font-bold text-base uppercase">
-        {{ store?.name || "Kasir Simple" }} 
+        {{ store?.name || "Kasir Simple" }}
       </h2>
       <p v-if="store?.address">{{ store.address }}</p>
       <p v-if="store?.phone">{{ store.phone }}</p>
@@ -81,14 +81,14 @@
       </div>
 
       <!-- Subtotal after discount (hanya tampil kalau ada diskon) -->
-      <div
+      <!-- <div
         v-if="
           (transaction.discount || 0) > 0 ||
           (transaction.discount_from_settings || 0) > 0
         "
         class="flex justify-between bg-gray-100 px-2 py-1"
       >
-        <span>SUBTOTAL NETTO</span>
+        <span>Setelah Diskon</span>
         <span>{{
           formatCurrency(
             transaction.subtotal -
@@ -96,7 +96,7 @@
               (transaction.discount_from_settings || 0),
           )
         }}</span>
-      </div>
+      </div> -->
 
       <!-- Tax (hanya tampil kalau ada) -->
       <div
