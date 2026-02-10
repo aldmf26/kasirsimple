@@ -267,6 +267,286 @@ const loadData = async () => {
   }
 };
 
+// Export to Excel
+const exportToExcel = () => {
+  try {
+    // Format values first
+    const formattedTotalSales = formatCurrency(totalSales.value);
+    const formattedAverage = formatCurrency(averageTransaction.value);
+
+    // Create HTML table for Excel
+    let htmlContent = `
+      <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; font-family: Arial;">
+        <tr>
+          <td colspan="2" style="text-align: center; font-weight: bold; font-size: 14px; background: #f0f0f0;">LAPORAN PENJUALAN</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Toko</td>
+          <td>${store.value?.name || "Kasir Simple"}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Periode</td>
+          <td>${filters.startDate} hingga ${filters.endDate}</td>
+        </tr>
+        <tr>
+          <td colspan="2"></td>
+        </tr>
+        <tr style="background: #f0f0f0;">
+          <td colspan="2" style="font-weight: bold; font-size: 12px;">RINGKASAN</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Total Penjualan</td>
+          <td>${formattedTotalSales}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Total Transaksi</td>
+          <td>${totalTransactions.value}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Rata-rata Keranjang</td>
+          <td>${formattedAverage}</td>
+        </tr>
+        <tr>
+          <td colspan="2"></td>
+        </tr>
+        <tr style="background: #f0f0f0;">
+          <td colspan="10" style="font-weight: bold; font-size: 12px;">DETAIL TRANSAKSI</td>
+        </tr>
+        <tr style="background: #333; color: white;">
+          <td style="font-weight: bold;">No</td>
+          <td style="font-weight: bold;">No. Transaksi</td>
+          <td style="font-weight: bold;">Tanggal</td>
+          <td style="font-weight: bold;">Metode</td>
+          <td style="font-weight: bold; text-align: right;">Subtotal</td>
+          <td style="font-weight: bold; text-align: right;">Diskon Manual</td>
+          <td style="font-weight: bold; text-align: right;">Diskon Sistem</td>
+          <td style="font-weight: bold; text-align: right;">Pajak</td>
+          <td style="font-weight: bold; text-align: right;">PPN</td>
+          <td style="font-weight: bold; text-align: right;">Total</td>
+        </tr>
+    `;
+
+    // Add transaction rows
+    transactions.value.forEach((t, idx) => {
+      htmlContent += `
+        <tr>
+          <td>${idx + 1}</td>
+          <td>${t.transaction_number}</td>
+          <td>${formatDateTime(t.created_at)}</td>
+          <td>${t.payment_method === "cash" ? "Tunai" : "Transfer"}</td>
+          <td style="text-align: right;">${formatCurrency(t.subtotal)}</td>
+          <td style="text-align: right;">${formatCurrency(t.discount || 0)}</td>
+          <td style="text-align: right;">${formatCurrency(t.discount_from_settings || 0)}</td>
+          <td style="text-align: right;">${formatCurrency(t.tax || 0)}</td>
+          <td style="text-align: right;">${formatCurrency(t.ppn || 0)}</td>
+          <td style="text-align: right;">${formatCurrency(t.total)}</td>
+        </tr>
+      `;
+    });
+
+    // Add item sold section
+    if (allItemsSold.products && allItemsSold.products.length > 0) {
+      htmlContent += `
+        <tr>
+          <td colspan="10"></td>
+        </tr>
+        <tr style="background: #f0f0f0;">
+          <td colspan="4" style="font-weight: bold; font-size: 12px;">ITEM TERJUAL</td>
+        </tr>
+        <tr style="background: #333; color: white;">
+          <td style="font-weight: bold;">No</td>
+          <td style="font-weight: bold;">Nama Produk</td>
+          <td style="font-weight: bold; text-align: right;">Jumlah Terjual</td>
+          <td style="font-weight: bold; text-align: right;">Total Penjualan</td>
+        </tr>
+      `;
+
+      allItemsSold.products.forEach((product, idx) => {
+        htmlContent += `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${product}</td>
+            <td style="text-align: right;">${allItemsSold.quantities[idx]} unit</td>
+            <td style="text-align: right;">${formatCurrency(allItemsSold.sales?.[idx] || 0)}</td>
+          </tr>
+        `;
+      });
+    }
+
+    htmlContent += `</table>`;
+
+    // Download as Excel-compatible HTML
+    const element = document.createElement("a");
+    element.setAttribute(
+      "href",
+      `data:application/vnd.ms-excel;charset=utf-8,${encodeURIComponent(htmlContent)}`,
+    );
+    element.setAttribute(
+      "download",
+      `Laporan_Penjualan_${filters.startDate}_${filters.endDate}.xls`,
+    );
+    element.style.display = "none";
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+
+    toast.add({
+      title: "Berhasil",
+      description: "Laporan berhasil diekspor ke Excel",
+      color: "success",
+      icon: "i-heroicons-check-circle",
+    });
+  } catch (error: any) {
+    toast.add({
+      title: "Gagal",
+      description: error.message || "Gagal mengekspor laporan",
+      color: "error",
+      icon: "i-heroicons-x-circle",
+    });
+  }
+};
+
+// Export to PDF
+const exportToPDF = () => {
+  try {
+    // Format values first
+    const formattedTotalSales = formatCurrency(totalSales.value);
+    const formattedAverage = formatCurrency(averageTransaction.value);
+
+    // Build transaction rows HTML
+    const transactionRows = transactions.value
+      .map(
+        (t, idx) => `
+        <tr>
+          <td style="padding: 6px; border: 1px solid #ddd;">${idx + 1}</td>
+          <td style="padding: 6px; border: 1px solid #ddd;">${t.transaction_number}</td>
+          <td style="padding: 6px; border: 1px solid #ddd;">${formatDateTime(t.created_at)}</td>
+          <td style="padding: 6px; border: 1px solid #ddd;">${t.payment_method === "cash" ? "Tunai" : "Transfer"}</td>
+          <td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${formatCurrency(t.subtotal)}</td>
+          <td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${formatCurrency(t.discount || 0)}</td>
+          <td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${formatCurrency(t.discount_from_settings || 0)}</td>
+          <td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${formatCurrency(t.tax || 0)}</td>
+          <td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${formatCurrency(t.ppn || 0)}</td>
+          <td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${formatCurrency(t.total)}</td>
+        </tr>
+      `,
+      )
+      .join("");
+
+    const pdfContent = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; font-size: 12px; line-height: 1.6;">
+        <h1 style="text-align: center; margin-bottom: 10px;">LAPORAN PENJUALAN</h1>
+        <p style="text-align: center; margin-bottom: 5px;"><strong>Toko: ${store.value?.name || "Kasir Simple"}</strong></p>
+        <p style="text-align: center; margin-bottom: 20px;">Periode: ${filters.startDate} hingga ${filters.endDate}</p>
+        
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 8px;">RINGKASAN</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <tr style="background: #f0f0f0;">
+            <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Total Penjualan</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${formattedTotalSales}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Total Transaksi</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${totalTransactions.value}</td>
+          </tr>
+          <tr style="background: #f0f0f0;">
+            <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Rata-rata Keranjang</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${formattedAverage}</td>
+          </tr>
+        </table>
+
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 8px; page-break-before: always; margin-top: 20px;">DETAIL TRANSAKSI</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px;">
+          <tr style="background: #333; color: white;">
+            <td style="padding: 6px; border: 1px solid #ddd; font-weight: bold;">No</td>
+            <td style="padding: 6px; border: 1px solid #ddd; font-weight: bold;">No. Transaksi</td>
+            <td style="padding: 6px; border: 1px solid #ddd; font-weight: bold;">Tanggal</td>
+            <td style="padding: 6px; border: 1px solid #ddd; font-weight: bold;">Metode</td>
+            <td style="padding: 6px; border: 1px solid #ddd; font-weight: bold; text-align: right;">Subtotal</td>
+            <td style="padding: 6px; border: 1px solid #ddd; font-weight: bold; text-align: right;">Diskon Manual</td>
+            <td style="padding: 6px; border: 1px solid #ddd; font-weight: bold; text-align: right;">Diskon Sistem</td>
+            <td style="padding: 6px; border: 1px solid #ddd; font-weight: bold; text-align: right;">Pajak</td>
+            <td style="padding: 6px; border: 1px solid #ddd; font-weight: bold; text-align: right;">PPN</td>
+            <td style="padding: 6px; border: 1px solid #ddd; font-weight: bold; text-align: right;">Total</td>
+          </tr>
+          ${transactionRows}
+        </table>
+      </div>
+    `;
+
+    const printWindow = window.open("", "", "height=800,width=1200");
+    if (printWindow) {
+      printWindow.document.write("<html><head><title>Laporan Penjualan</title>");
+      printWindow.document.write(
+        "<style>@media print { body { margin: 0; } table { page-break-inside: avoid; } }</style>",
+      );
+      printWindow.document.write("</head><body>");
+      printWindow.document.write(pdfContent);
+      printWindow.document.write("</body></html>");
+      printWindow.document.close();
+      printWindow.print();
+    }
+
+    toast.add({
+      title: "Berhasil",
+      description: "Laporan siap untuk dicetak ke PDF",
+      color: "success",
+      icon: "i-heroicons-check-circle",
+    });
+  } catch (error: any) {
+    toast.add({
+      title: "Gagal",
+      description: error.message || "Gagal mengekspor ke PDF",
+      color: "error",
+      icon: "i-heroicons-x-circle",
+    });
+  }
+};
+
+// Backup Data
+const backupData = () => {
+  try {
+    const backupData = {
+      store: store.value,
+      transactions: transactions.value,
+      products: products.value,
+      exportedAt: new Date().toISOString(),
+      filters: {
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+      },
+    };
+
+    const element = document.createElement("a");
+    element.setAttribute(
+      "href",
+      `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(backupData, null, 2))}`,
+    );
+    element.setAttribute(
+      "download",
+      `Backup_Data_${new Date().toISOString().split("T")[0]}.json`,
+    );
+    element.style.display = "none";
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+
+    toast.add({
+      title: "Berhasil",
+      description: "Data berhasil dibackup",
+      color: "success",
+      icon: "i-heroicons-check-circle",
+    });
+  } catch (error: any) {
+    toast.add({
+      title: "Gagal",
+      description: error.message || "Gagal membackup data",
+      color: "error",
+      icon: "i-heroicons-x-circle",
+    });
+  }
+};
+
 onMounted(() => {
   loadData();
 });
@@ -285,8 +565,41 @@ watch(
   <div class="h-full flex flex-col bg-gray-50 overflow-auto">
     <!-- Header -->
     <div class="px-8 py-6 border-b border-gray-200 bg-white shadow-sm shrink-0">
-      <h1 class="text-2xl font-bold text-gray-900">Laporan Penjualan</h1>
-      <p class="text-sm text-gray-500">Ringkasan performa toko anda</p>
+      <div class="flex justify-between items-start">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900">Laporan Penjualan</h1>
+          <p class="text-sm text-gray-500">Ringkasan performa toko anda</p>
+        </div>
+        <div class="flex gap-2">
+          <UButton
+            color="blue"
+            variant="soft"
+            icon="i-heroicons-arrow-down-tray"
+            @click="exportToExcel"
+            title="Export ke Excel/CSV"
+          >
+            Export Excel
+          </UButton>
+          <UButton
+            color="red"
+            variant="soft"
+            icon="i-heroicons-document-text"
+            @click="exportToPDF"
+            title="Export ke PDF"
+          >
+            Export PDF
+          </UButton>
+          <UButton
+            color="green"
+            variant="soft"
+            icon="i-heroicons-cloud-arrow-down"
+            @click="backupData"
+            title="Backup semua data"
+          >
+            Backup Data
+          </UButton>
+        </div>
+      </div>
     </div>
 
     <!-- Filter Bar -->
