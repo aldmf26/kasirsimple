@@ -12,7 +12,7 @@ export const useStore = () => {
     const store = useState<Store | null>('current_store', () => null)
     const loading = useState('store_loading', () => false)
     const error = useState<string | null>('store_error', () => null)
-    
+
     // Prevent concurrent fetches
     let fetchInProgress = false
 
@@ -42,29 +42,42 @@ export const useStore = () => {
 
         // Get user ID from parameter OR from reactive user object
         const targetUserId = userId || user.value?.id
-        
+
         if (!targetUserId) {
             store.value = null;
             return null;
         }
-
         fetchInProgress = true
         loading.value = true;
         error.value = null;
 
         try {
+            // Priority: Fetch active store for current user
+            const targetUserId = userId || user.value?.id;
+
+            if (!targetUserId) {
+                store.value = null;
+                return null;
+            }
+
             const { data, error: fetchError } = await supabase
                 .from('stores')
                 .select('*')
                 .eq('user_id', targetUserId)
-                .eq('is_active', true)
+                .limit(1)
                 .maybeSingle();
 
             if (fetchError) throw fetchError;
 
-            store.value = data;
+            if (data) {
+                store.value = data;
+            } else {
+                store.value = null;
+            }
+
             return data;
         } catch (e: any) {
+            console.error('Error fetching store:', e.message);
             error.value = e.message;
             return null;
         } finally {
@@ -81,8 +94,8 @@ export const useStore = () => {
         error.value = null
 
         try {
-            const { data, error: createError } = await supabase
-                .from('stores')
+            const { data, error: createError } = await (supabase
+                .from('stores') as any)
                 .insert({
                     ...storeData,
                     user_id: user.value.id
@@ -108,8 +121,8 @@ export const useStore = () => {
         error.value = null
 
         try {
-            const { data, error: updateError } = await supabase
-                .from('stores')
+            const { data, error: updateError } = await (supabase
+                .from('stores') as any)
                 .update({
                     ...storeData,
                     updated_at: new Date().toISOString()

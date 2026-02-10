@@ -9,9 +9,11 @@ useHead({
   title: "Beranda Toko - KasirOK",
 });
 
-const { store } = useStore();
+const { store, fetchStore, createStore } = useStore();
 const { products, fetchProducts, getLowStockProducts } = useProducts();
 const { transactions, fetchTransactions, getTodaySummary } = useTransactions();
+const user = useSupabaseUser();
+const toast = useToast();
 
 const dashboardStats = ref({
   totalSales: 0,
@@ -22,6 +24,57 @@ const dashboardStats = ref({
 const recentTransactions = ref<any[]>([]);
 const lowStockItems = ref<any[]>([]);
 const loading = ref(true);
+
+// Setup Store Modal State
+const setupModal = reactive({
+  open: false,
+  loading: false,
+  error: null as string | null,
+  form: {
+    name: "",
+    business_type: "retail",
+    address: "",
+    phone: "",
+  }
+});
+
+const businessTypes = [
+  { value: "retail", label: "Toko Eceran (Retail)", icon: "🏪" },
+  { value: "fnb", label: "Makanan & Minuman", icon: "🍽️" },
+  { value: "service", label: "Jasa / Service", icon: "🛠️" },
+];
+
+const handleSetupStore = async () => {
+    if (!setupModal.form.name) {
+        setupModal.error = "Nama toko wajib diisi";
+        return;
+    }
+    
+    setupModal.loading = true;
+    setupModal.error = null;
+    
+    try {
+         // Create store
+         await createStore({
+            name: setupModal.form.name,
+            business_type: setupModal.form.business_type,
+            address: setupModal.form.address,
+            phone: setupModal.form.phone,
+            is_active: true
+        });
+        
+        setupModal.open = false;
+        toast.add({ title: 'Toko Berhasil Dibuat!', description: 'Selamat datang di dashboard Anda.', color: 'success' });
+        
+        // Refresh data
+        refreshDashboard();
+    } catch (e: any) {
+        console.error(e);
+        setupModal.error = e.message || "Gagal membuat toko";
+    } finally {
+        setupModal.loading = false;
+    }
+}
 
 const refreshDashboard = async () => {
   if (!store.value) {
@@ -54,10 +107,23 @@ const refreshDashboard = async () => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
+  // Check store
+  if (!store.value) {
+      await fetchStore();
+  }
+  
   if (store.value) {
     refreshDashboard();
   } else {
+    // If user is logged in but no store -> Show Setup Modal
+    if (user.value) {
+        // Pre-fill name
+        if (user.value.user_metadata?.full_name) {
+            setupModal.form.name = `Toko ${user.value.user_metadata.full_name}`;
+        }
+        setupModal.open = true;
+    }
     loading.value = false;
   }
 });
@@ -316,6 +382,70 @@ const greeting = computed(() => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Setup Store Modal -->
+    <div v-if="setupModal.open" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+      <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
+        <div class="p-6 border-b border-gray-100 bg-gray-50/50">
+          <div class="flex items-center gap-3">
+             <div class="w-12 h-12 bg-gradient-to-tr from-violet-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-violet-200">
+                <UIcon name="i-heroicons-building-storefront" class="w-7 h-7" />
+             </div>
+             <div>
+                <h3 class="text-lg font-bold text-gray-900">Halo, Selamat Datang! 👋</h3>
+                <p class="text-sm text-gray-500">Yuk isi data tokomu dulu biar bisa jualan.</p>
+             </div>
+          </div>
+        </div>
+        
+        <div class="p-6 space-y-5">
+           <!-- Error Alert -->
+          <div v-if="setupModal.error" class="bg-red-50 text-red-600 p-3 rounded-xl text-xs font-bold flex gap-2 items-center">
+            <UIcon name="i-heroicons-exclamation-circle" class="w-4 h-4 shrink-0" />
+            {{ setupModal.error }}
+          </div>
+
+           <div class="space-y-1.5">
+             <label class="text-sm font-bold text-gray-700 ml-1">Nama Toko <span class="text-red-500">*</span></label>
+             <input v-model="setupModal.form.name" type="text" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all outline-none text-sm font-medium placeholder-gray-400" placeholder="Contoh: Toko Berkah" />
+           </div>
+
+           <div class="space-y-1.5">
+             <label class="text-sm font-bold text-gray-700 ml-1">Jenis Usaha</label>
+             <div class="grid grid-cols-1 gap-2">
+                <button v-for="type in businessTypes" :key="type.value" 
+                  @click="setupModal.form.business_type = type.value"
+                  class="flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all text-left"
+                  :class="setupModal.form.business_type === type.value ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-gray-200 hover:border-gray-300 text-gray-600'"
+                >
+                  <span class="text-xl">{{ type.icon }}</span>
+                  <span class="text-sm font-medium">{{ type.label }}</span>
+                  <UIcon v-if="setupModal.form.business_type === type.value" name="i-heroicons-check-circle-solid" class="ml-auto w-5 h-5 text-violet-600" />
+                </button>
+             </div>
+           </div>
+           
+           <div class="space-y-1.5">
+             <label class="text-sm font-bold text-gray-700 ml-1">Alamat (Opsional)</label>
+             <textarea v-model="setupModal.form.address" rows="2" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all outline-none text-sm font-medium placeholder-gray-400" placeholder="Dimana lokasi tokomu?"></textarea>
+           </div>
+        </div>
+
+        <div class="p-6 border-t border-gray-100 bg-gray-50/50 flex flex-col gap-3">
+           <button 
+             @click="handleSetupStore" 
+             :disabled="setupModal.loading"
+             class="w-full py-3.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-violet-200 transform transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+           >
+             <svg v-if="setupModal.loading" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+             </svg>
+             {{ setupModal.loading ? 'Menyiapkan Toko...' : 'Simpan & Mulai Jualan 🚀' }}
+           </button>
         </div>
       </div>
     </div>

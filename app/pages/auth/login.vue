@@ -10,254 +10,131 @@ const toast = useToast();
 const email = ref("");
 const password = ref("");
 const loading = ref(false);
+const error = ref<string | null>(null);
 
-// Validation errors
-const emailError = ref("");
-const passwordError = ref("");
-const loginError = ref("");
-
-// Redirect if already logged in
+// Redirect is handled by middleware usually, but just in case
 watchEffect(() => {
   if (user.value) {
     navigateTo("/dashboard");
   }
 });
 
-// Email validation
-const validateEmail = () => {
-  emailError.value = "";
-  loginError.value = "";
-  
-  if (!email.value) {
-    emailError.value = "Email harus diisi";
-    return false;
-  }
-  
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email.value)) {
-    emailError.value = "Format email tidak valid";
-    return false;
-  }
-  
-  return true;
-};
-
-// Password validation
-const validatePassword = () => {
-  passwordError.value = "";
-  loginError.value = "";
-  
-  if (!password.value) {
-    passwordError.value = "Password harus diisi";
-    return false;
-  }
-  
-  if (password.value.length < 6) {
-    passwordError.value = "Password minimal 6 karakter";
-    return false;
-  }
-  
-  return true;
-};
-
-// Clear errors when typing
-watch(email, () => {
-  if (emailError.value) emailError.value = "";
-  if (loginError.value) loginError.value = "";
-});
-
-watch(password, () => {
-  if (passwordError.value) passwordError.value = "";
-  if (loginError.value) loginError.value = "";
-});
-
 const handleLogin = async () => {
-  // Validate form
-  const isEmailValid = validateEmail();
-  const isPasswordValid = validatePassword();
-  
-  if (!isEmailValid || !isPasswordValid) {
+  if (!email.value || !password.value) {
+    error.value = "Mohon isi email dan password";
     return;
   }
 
   loading.value = true;
-  loginError.value = "";
+  error.value = null;
 
   try {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error: err } = await supabase.auth.signInWithPassword({
       email: email.value,
       password: password.value,
     });
 
-    if (error) {
-      // Handle specific Supabase errors
-      if (error.message.includes("Invalid login credentials")) {
-        loginError.value = "Email atau password salah. Silakan coba lagi.";
-      } else if (error.message.includes("Email not confirmed")) {
-        loginError.value = "Email belum diverifikasi. Silakan cek email Anda.";
-      } else if (error.message.includes("User not found")) {
-        loginError.value = "Akun tidak ditemukan. Silakan daftar terlebih dahulu.";
-      } else {
-        loginError.value = error.message;
-      }
-      
-      toast.add({
-        title: "Login Gagal",
-        description: loginError.value,
-        color: "error",
-        icon: "i-heroicons-x-circle",
-      });
-      
-      throw error;
-    }
-
-    // Brief wait untuk ensure session settled on client
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    if (err) throw err;
 
     toast.add({
-      title: "Login Berhasil",
-      description: "Selamat datang kembali!",
+      title: "Berhasil login",
+      description: "Mengalihkan ke dashboard...",
       color: "success",
-      icon: "i-heroicons-check-circle",
     });
 
     navigateTo("/dashboard");
-  } catch (error: any) {
-    // Error already handled above
+  } catch (e: any) {
+    error.value = e.message === "Invalid login credentials" 
+      ? "Email atau password salah" 
+      : e.message;
   } finally {
     loading.value = false;
   }
 };
-
-// Demo Login Shortcut
-const loginDemo = () => {
-  email.value = "demo@kasirok.com";
-  password.value = "password123";
-  emailError.value = "";
-  passwordError.value = "";
-  loginError.value = "";
-};
 </script>
 
 <template>
-  <UCard class="bg-white shadow-xl rounded-2xl ring-1 ring-gray-200">
-    <div class="space-y-6">
-      <div>
-        <h2
-          class="text-xl font-bold text-gray-900 border-l-4 border-primary-600 pl-3"
-        >
-          Masuk ke Akun
-        </h2>
-        <p class="mt-2 text-sm text-gray-500">
-          Silakan masukkan email dan password anda
-        </p>
-      </div>
-
-      <!-- General Login Error Alert -->
-      <div
-        v-if="loginError"
-        class="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3"
-      >
-        <UIcon name="i-heroicons-exclamation-circle" class="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-        <div class="flex-1">
-          <p class="text-sm font-medium text-red-800">{{ loginError }}</p>
+  <div class="w-full max-w-md mx-auto">
+    <!-- Brand Header -->
+    <div class="text-center mb-8">
+      <div class="flex justify-center mb-4">
+        <!-- Logo Icon Placeholder -->
+        <div class="w-12 h-12 bg-gradient-to-tr from-violet-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-200">
+          <UIcon name="i-heroicons-shopping-bag" class="w-7 h-7 text-white" />
         </div>
       </div>
+      <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Selamat Datang Kembali</h1>
+      <p class="text-gray-500 mt-2 text-sm">Kelola bisnismu dengan lebih mudah</p>
+    </div>
 
-      <form @submit.prevent="handleLogin" class="space-y-6">
-        <!-- Email Field -->
-        <div>
-          <label for="email" class="block text-sm font-medium text-gray-700"
-            >Email</label
-          >
-          <UInput
-            id="email"
-            v-model="email"
-            type="email"
-            placeholder="nama@email.com"
-            icon="i-heroicons-envelope"
-            size="lg"
-            class="mt-1 w-full"
-            :class="{ 'ring-2 ring-red-500': emailError }"
-            required
-            autofocus
-            @blur="validateEmail"
-          />
-          <p v-if="emailError" class="mt-2 text-sm text-red-600 flex items-center gap-1">
-            <UIcon name="i-heroicons-exclamation-circle" class="w-4 h-4" />
-            {{ emailError }}
-          </p>
-        </div>
-
-        <!-- Password Field -->
-        <div>
-          <div class="flex items-center justify-between">
-            <label
-              for="password"
-              class="block text-sm font-medium text-gray-700"
-              >Password</label
-            >
-            <NuxtLink
-              to="/auth/forgot-password"
-              class="text-xs text-primary-600 hover:underline"
-              >Lupa password?</NuxtLink
-            >
+    <!-- Login Card -->
+    <div class="bg-white rounded-3xl shadow-xl shadow-gray-200/50 border border-gray-100 overflow-hidden">
+      <div class="p-8">
+        <form @submit.prevent="handleLogin" class="space-y-5">
+          <!-- Error Alert -->
+          <div v-if="error" class="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium flex gap-3 items-center animate-in slide-in-from-top-2">
+            <UIcon name="i-heroicons-exclamation-circle" class="w-5 h-5 shrink-0" />
+            {{ error }}
           </div>
-          <UInput
-            id="password"
-            v-model="password"
-            type="password"
-            placeholder="••••••••"
-            icon="i-heroicons-lock-closed"
-            size="lg"
-            class="mt-1 w-full"
-            :class="{ 'ring-2 ring-red-500': passwordError }"
-            required
-            @blur="validatePassword"
-          />
-          <p v-if="passwordError" class="mt-2 text-sm text-red-600 flex items-center gap-1">
-            <UIcon name="i-heroicons-exclamation-circle" class="w-4 h-4" />
-            {{ passwordError }}
-          </p>
-        </div>
 
-        <UButton
-          type="submit"
-          block
-          size="lg"
-          color="primary"
-          :loading="loading"
-          :disabled="loading"
-          class="font-bold"
-        >
-          {{ loading ? 'Memproses...' : 'Masuk' }}
-        </UButton>
-      </form>
+          <!-- Email -->
+          <div class="space-y-1.5">
+            <label class="text-sm font-semibold text-gray-700 ml-1">Email</label>
+            <div class="relative group">
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <UIcon name="i-heroicons-envelope" class="w-5 h-5 text-gray-400 group-focus-within:text-violet-500 transition-colors" />
+              </div>
+              <input 
+                v-model="email"
+                type="email" 
+                class="block w-full pl-11 pr-4 py-3 bg-gray-50 border-gray-200 text-gray-900 rounded-xl focus:bg-white focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all outline-none text-sm font-medium" 
+                placeholder="nama@toko.com"
+                required
+              />
+            </div>
+          </div>
 
-      <div class="relative">
-        <div class="absolute inset-0 flex items-center" aria-hidden="true">
-          <div class="w-full border-t border-gray-200"></div>
-        </div>
-        <div class="relative flex justify-center text-sm">
-          <span class="bg-white px-2 text-gray-500">Atau</span>
-        </div>
-      </div>
+          <!-- Password -->
+          <div class="space-y-1.5">
+            <div class="flex justify-between items-center ml-1">
+              <label class="text-sm font-semibold text-gray-700">Password</label>
+              <NuxtLink to="/auth/forgot-password" class="text-xs font-semibold text-violet-600 hover:text-violet-700 hover:underline">
+                Lupa password?
+              </NuxtLink>
+            </div>
+            <div class="relative group">
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <UIcon name="i-heroicons-lock-closed" class="w-5 h-5 text-gray-400 group-focus-within:text-violet-500 transition-colors" />
+              </div>
+              <input 
+                v-model="password"
+                type="password" 
+                class="block w-full pl-11 pr-4 py-3 bg-gray-50 border-gray-200 text-gray-900 rounded-xl focus:bg-white focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all outline-none text-sm font-medium" 
+                placeholder="••••••••"
+                required
+              />
+            </div>
+          </div>
 
-      <UButton block variant="soft" color="neutral" @click="loginDemo">
-        Gunakan Akun Demo
-      </UButton>
-
-      <div class="border-t border-gray-200 pt-4 text-center">
-        <p class="text-sm text-gray-600">
-          Belum punya akun?
-          <NuxtLink
-            to="/auth/register"
-            class="font-medium text-primary-600 hover:text-primary-500 hover:underline"
+          <!-- Button -->
+          <button 
+            type="submit" 
+            :disabled="loading"
+            class="w-full py-3.5 px-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-violet-200 transform transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center gap-2"
           >
-            Daftar Gratis
-          </NuxtLink>
+            <UIcon v-if="loading" name="i-heroicons-arrow-path" class="w-5 h-5 animate-spin" />
+            {{ loading ? 'Masuk...' : 'Masuk sekarang' }}
+          </button>
+        </form>
+      </div>
+      
+      <!-- Footer -->
+      <div class="bg-gray-50 p-6 text-center border-t border-gray-100">
+        <p class="text-sm text-gray-600">
+          Belum punya akun? 
+          <NuxtLink to="/auth/register" class="font-bold text-violet-600 hover:text-violet-700">Daftar sekarang</NuxtLink>
         </p>
       </div>
     </div>
-  </UCard>
+  </div>
 </template>

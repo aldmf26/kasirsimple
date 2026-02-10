@@ -302,3 +302,33 @@ CREATE POLICY "Users can manage expenses for their store." ON expenses
 CREATE TRIGGER update_expenses_modtime
     BEFORE UPDATE ON expenses
     FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+-- Ensure RLS is enabled
+ALTER TABLE stores ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies to be safe
+DROP POLICY IF EXISTS "Users can create own stores" ON stores;
+DROP POLICY IF EXISTS "Users can view own stores" ON stores;
+DROP POLICY IF EXISTS "Users can update own stores" ON stores;
+DROP POLICY IF EXISTS "Users can delete own stores" ON stores;
+
+-- Recreate policies with explicit roles
+CREATE POLICY "Enable insert for authenticated users only" ON stores
+    FOR INSERT 
+    TO authenticated 
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Enable select for users based on user_id" ON stores
+    FOR SELECT 
+    TO authenticated 
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Enable update for users based on user_id" ON stores
+    FOR UPDATE 
+    TO authenticated 
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Enable delete for users based on user_id" ON stores
+    FOR DELETE 
+    TO authenticated 
+    USING (auth.uid() = user_id);
