@@ -41,6 +41,14 @@ const {
   getTransactionCountByMethod,
   getAllItemsSold,
 } = useCharts();
+// Initialize expenses composable
+const { 
+  expenses, 
+  fetchExpenses, 
+  addExpense, 
+  deleteExpense, 
+  loading: expenseLoading 
+} = useExpenses();
 const toast = useToast();
 
 // Modal states
@@ -48,6 +56,17 @@ const selectedTransaction = ref(null);
 const showReceiptModal = ref(false);
 const showDeleteModal = ref(false);
 const deleteLoading = ref(false);
+const showAddExpenseModal = ref(false);
+const submitExpenseLoading = ref(false);
+
+const expenseForm = reactive({
+  category: "Lainnya",
+  amount: "",
+  date: new Date().toISOString().split("T")[0],
+  note: "",
+});
+
+const expenseCategories = ["Gaji", "Sewa", "Listrik & Air", "Bahan Baku", "Peralatan", "Maintenance", "Pemasaran", "Lainnya"];
 
 // Search state
 const searchQuery = ref("");
@@ -250,8 +269,11 @@ const profitByProduct = computed(() => {
 
 const totalRevenue = computed(() => profitByProduct.value.reduce((s: number, p: any) => s + p.revenue, 0));
 const totalCost = computed(() => profitByProduct.value.reduce((s: number, p: any) => s + p.cost, 0));
-const totalProfit = computed(() => totalRevenue.value - totalCost.value);
-const profitMargin = computed(() => totalRevenue.value > 0 ? (totalProfit.value / totalRevenue.value * 100) : 0);
+const grossProfit = computed(() => totalRevenue.value - totalCost.value);
+const totalExpenses = computed(() => expenses.value.reduce((sum, e) => sum + (Number(e.amount) || 0), 0));
+const netProfit = computed(() => grossProfit.value - totalExpenses.value);
+const profitMargin = computed(() => totalRevenue.value > 0 ? (grossProfit.value / totalRevenue.value * 100) : 0);
+const netProfitMargin = computed(() => totalRevenue.value > 0 ? (netProfit.value / totalRevenue.value * 100) : 0);
 
 // Check if any product has buy_price set
 const hasBuyPriceData = computed(() => {
@@ -384,9 +406,54 @@ const loadData = async () => {
         paymentMethod: filters.paymentMethod,
       }),
       fetchProducts(),
+      fetchExpenses({
+        startDate: filters.startDate,
+        endDate: filters.endDate
+      }),
     ]);
   }
 };
+
+// Expenses Actions
+const submitExpense = async () => {
+  if (!expenseForm.amount || Number(expenseForm.amount) <= 0) {
+    toast.add({ title: "Gagal", description: "Jumlah pengeluaran harus diisi", color: "error" });
+    return;
+  }
+  
+  submitExpenseLoading.value = true;
+  try {
+    await addExpense({
+      category: expenseForm.category,
+      amount: Number(expenseForm.amount),
+      date: expenseForm.date,
+      note: expenseForm.note
+    });
+    
+    toast.add({ title: "Berhasil", description: "Pengeluaran berhasil dicatat", color: "success" });
+    showAddExpenseModal.value = false;
+    // Reset form
+    expenseForm.amount = "";
+    expenseForm.note = "";
+    expenseForm.category = "Lainnya";
+  } catch (e: any) {
+    toast.add({ title: "Gagal", description: e.message || "Gagal menambah pengeluaran", color: "error" });
+  } finally {
+    submitExpenseLoading.value = false;
+  }
+};
+
+const removeExpense = async (id: string) => {
+  if (!confirm('Hapus data pengeluaran ini?')) return;
+  try {
+    await deleteExpense(id);
+    toast.add({ title: "Berhasil", description: "Pengeluaran dihapus", color: "success" });
+  } catch (e: any) {
+    toast.add({ title: "Gagal", description: "Gagal menghapus data", color: "error" });
+  }
+};
+
+// Export to Excel
 
 // Export to Excel
 const exportToExcel = () => {
@@ -841,6 +908,14 @@ watch(
           <UIcon name="i-heroicons-calendar-days" class="w-4 h-4" />
           Laporan Harian
         </button>
+        <button
+          @click="activeTab = 'expenses'"
+          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-1 md:flex-none justify-center"
+          :class="activeTab === 'expenses' ? 'bg-white text-rose-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+        >
+          <UIcon name="i-heroicons-banknotes" class="w-4 h-4" />
+          Pengeluaran
+        </button>
       </div>
     </div>
 
@@ -1211,61 +1286,81 @@ watch(
       </div>
 
       <!-- Profit Stats Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
           <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Total Omset</p>
-          <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(totalRevenue) }}</p>
+          <p class="text-xl font-bold text-gray-900">{{ formatCurrency(totalRevenue) }}</p>
         </div>
         <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
           <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Total Modal (HPP)</p>
-          <p class="text-2xl font-bold text-red-600">{{ formatCurrency(totalCost) }}</p>
-        </div>
-        <div class="bg-white p-5 rounded-2xl shadow-sm border" :class="totalProfit >= 0 ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'">
-          <p class="text-xs font-semibold uppercase tracking-wider mb-1" :class="totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600'">Laba Kotor</p>
-          <p class="text-2xl font-bold" :class="totalProfit >= 0 ? 'text-emerald-700' : 'text-red-700'">{{ formatCurrency(totalProfit) }}</p>
+          <p class="text-xl font-bold text-red-600">{{ formatCurrency(totalCost) }}</p>
         </div>
         <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Margin</p>
-          <p class="text-2xl font-bold" :class="profitMargin >= 0 ? 'text-emerald-700' : 'text-red-700'">{{ profitMargin.toFixed(1) }}%</p>
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Laba Kotor</p>
+          <p class="text-xl font-bold text-emerald-600">{{ formatCurrency(grossProfit) }}</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Pengeluaran</p>
+          <p class="text-xl font-bold text-orange-600">{{ formatCurrency(totalExpenses) }}</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border" :class="netProfit >= 0 ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'">
+          <p class="text-xs font-semibold uppercase tracking-wider mb-1" :class="netProfit >= 0 ? 'text-emerald-600' : 'text-red-600'">Laba Bersih</p>
+          <p class="text-xl font-bold" :class="netProfit >= 0 ? 'text-emerald-700' : 'text-red-700'">{{ formatCurrency(netProfit) }}</p>
         </div>
       </div>
 
       <!-- Profit Visual Bar -->
       <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <h3 class="text-lg font-bold text-gray-900 mb-4">Komposisi Omset</h3>
+        <h3 class="text-lg font-bold text-gray-900 mb-4">Komposisi Keuangan</h3>
         <div class="flex items-center gap-4 mb-3">
-          <div class="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden flex">
-            <div
-              class="h-full bg-emerald-500 rounded-l-full flex items-center justify-center text-xs font-bold text-white transition-all duration-500"
-              :style="{ width: `${totalRevenue > 0 ? Math.max((totalProfit / totalRevenue) * 100, 0) : 0}%` }"
-            >
-              <span v-if="totalRevenue > 0 && (totalProfit / totalRevenue) * 100 > 15">Laba</span>
-            </div>
+          <div class="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden flex relative">
+            <!-- Omset Bar is the base 100% -->
+             
+            <!-- Cost Bar (Red) -->
             <div
               class="h-full bg-red-400 flex items-center justify-center text-xs font-bold text-white transition-all duration-500"
               :style="{ width: `${totalRevenue > 0 ? Math.min((totalCost / totalRevenue) * 100, 100) : 0}%` }"
+              title="Modal"
             >
-              <span v-if="totalRevenue > 0 && (totalCost / totalRevenue) * 100 > 15">Modal</span>
+            </div>
+
+            <!-- Expenses Bar (Orange) -->
+            <div
+              class="h-full bg-orange-400 flex items-center justify-center text-xs font-bold text-white transition-all duration-500"
+              :style="{ width: `${totalRevenue > 0 ? Math.min((totalExpenses / totalRevenue) * 100, 100) : 0}%` }"
+              title="Pengeluaran"
+            >
+            </div>
+
+            <!-- Net Profit Bar (Green) -->
+             <div
+              class="h-full bg-emerald-500 flex items-center justify-center text-xs font-bold text-white transition-all duration-500"
+              :style="{ width: `${totalRevenue > 0 && netProfit > 0 ? Math.min((netProfit / totalRevenue) * 100, 100) : 0}%` }"
+              title="Laba Bersih"
+            >
             </div>
           </div>
         </div>
-        <div class="flex gap-6 text-sm">
+        <div class="flex flex-wrap gap-6 text-sm">
           <div class="flex items-center gap-2">
             <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
-            <span class="text-gray-600">Laba: {{ formatCurrency(totalProfit) }}</span>
+            <span class="text-gray-600">Laba Bersih: {{ formatCurrency(netProfit) }} ({{ netProfitMargin.toFixed(1) }}%)</span>
           </div>
           <div class="flex items-center gap-2">
             <div class="w-3 h-3 rounded-full bg-red-400"></div>
             <span class="text-gray-600">Modal: {{ formatCurrency(totalCost) }}</span>
           </div>
+           <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-orange-400"></div>
+            <span class="text-gray-600">Pengeluaran: {{ formatCurrency(totalExpenses) }}</span>
+          </div>
         </div>
       </div>
-
-      <!-- Profit by Product Table -->
+     <!-- Profit by Product Table -->
       <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div class="p-5 border-b border-gray-100">
-          <h3 class="text-lg font-bold text-gray-900">Laba per Produk</h3>
-          <p class="text-sm text-gray-500">Produk diurutkan dari yang paling menguntungkan</p>
+          <h3 class="text-lg font-bold text-gray-900">Laba Kotor per Produk</h3>
+          <p class="text-sm text-gray-500">Produk diurutkan dari yang paling menguntungkan (sebelum dikurangi pengeluaran operasional)</p>
         </div>
         <div v-if="profitByProduct.length > 0" class="overflow-x-auto">
           <table class="w-full">
@@ -1276,7 +1371,7 @@ watch(
                 <th class="text-right py-3 px-5 font-semibold text-gray-600 text-sm">Terjual</th>
                 <th class="text-right py-3 px-5 font-semibold text-gray-600 text-sm">Omset</th>
                 <th class="text-right py-3 px-5 font-semibold text-gray-600 text-sm">Modal</th>
-                <th class="text-right py-3 px-5 font-semibold text-gray-600 text-sm">Laba</th>
+                <th class="text-right py-3 px-5 font-semibold text-gray-600 text-sm">Laba Kotor</th>
                 <th class="text-right py-3 px-5 font-semibold text-gray-600 text-sm">Margin</th>
               </tr>
             </thead>
@@ -1309,7 +1404,7 @@ watch(
                 <td class="py-3 px-5 text-right text-sm">{{ profitByProduct.reduce((s, p) => s + p.qty, 0) }}</td>
                 <td class="py-3 px-5 text-right text-sm">{{ formatCurrency(totalRevenue) }}</td>
                 <td class="py-3 px-5 text-right text-red-600 text-sm">{{ formatCurrency(totalCost) }}</td>
-                <td class="py-3 px-5 text-right text-sm" :class="totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600'">{{ formatCurrency(totalProfit) }}</td>
+                <td class="py-3 px-5 text-right text-sm" :class="grossProfit >= 0 ? 'text-emerald-600' : 'text-red-600'">{{ formatCurrency(grossProfit) }}</td>
                 <td class="py-3 px-5 text-right text-sm">{{ profitMargin.toFixed(1) }}%</td>
               </tr>
             </tfoot>
@@ -1413,6 +1508,77 @@ watch(
         <p class="text-sm mt-1">Data akan muncul setelah ada transaksi</p>
       </div>
     </div>
+
+    <!-- ============ TAB: PENGELUARAN ============ -->
+    <div v-if="activeTab === 'expenses'" class="p-8 space-y-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-lg font-bold text-gray-900">Riwayat Pengeluaran</h2>
+          <p class="text-sm text-gray-500">Catat biaya operasional toko</p>
+        </div>
+        <UButton
+          color="rose"
+          icon="i-heroicons-plus"
+          @click="showAddExpenseModal = true"
+        >
+          Catat Pengeluaran
+        </UButton>
+      </div>
+
+       <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div v-if="expenses.length > 0" class="overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="text-left py-3 px-5 font-semibold text-gray-600 text-sm">Tanggal</th>
+                <th class="text-left py-3 px-5 font-semibold text-gray-600 text-sm">Kategori</th>
+                <th class="text-left py-3 px-5 font-semibold text-gray-600 text-sm">Keterangan</th>
+                <th class="text-right py-3 px-5 font-semibold text-gray-600 text-sm">Jumlah</th>
+                <th class="text-right py-3 px-5 font-semibold text-gray-600 text-sm">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="expense in expenses"
+                :key="expense.id"
+                class="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+              >
+                <td class="py-3 px-5 text-gray-900 text-sm">{{ formatDateTime(expense.date) }}</td>
+                <td class="py-3 px-5 text-gray-900 text-sm">
+                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                    {{ expense.category }}
+                  </span>
+                </td>
+                <td class="py-3 px-5 text-gray-600 text-sm">{{ expense.note || '-' }}</td>
+                <td class="py-3 px-5 text-right font-bold text-rose-600 text-sm">{{ formatCurrency(expense.amount) }}</td>
+                <td class="py-3 px-5 text-right text-sm">
+                  <UButton
+                    size="xs"
+                    color="red"
+                    variant="ghost"
+                    icon="i-heroicons-trash"
+                    @click="removeExpense(expense.id)"
+                  />
+                </td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="bg-gray-50 font-bold border-t-2 border-gray-200">
+                <td class="py-3 px-5" colspan="3">TOTAL PENGELUARAN</td>
+                <td class="py-3 px-5 text-right text-rose-600 text-sm">{{ formatCurrency(totalExpenses) }}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div v-else class="p-12 text-center text-gray-400">
+          <UIcon name="i-heroicons-banknotes" class="w-12 h-12 mx-auto mb-2 opacity-20" />
+          <p class="font-medium">Belum ada data pengeluaran</p>
+          <p class="text-sm mt-1">Klik tombol di atas untuk mencatat pengeluaran baru</p>
+        </div>
+      </div>
+    </div>
+
 
     <!-- Modal Struk (Thermal Printer Style) -->
     <Teleport to="body">
@@ -1551,6 +1717,101 @@ watch(
         </div>
       </div>
     </Teleport>
+
+    <!-- Modal Add Expense (Custom HTML to match Product Modal & fix Date bug) -->
+    <div
+      v-if="showAddExpenseModal"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-opacity"
+      @click.self="showAddExpenseModal = false"
+    >
+      <div
+        class="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-gray-100 transform transition-all scale-100"
+      >
+        <!-- Header -->
+        <div
+          class="p-6 border-b border-gray-100 bg-gray-50 rounded-t-2xl flex justify-between items-center"
+        >
+          <h2 class="text-xl font-bold text-gray-900">Catat Pengeluaran</h2>
+          <button
+            @click="showAddExpenseModal = false"
+            class="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <UIcon name="i-heroicons-x-mark" class="w-6 h-6" />
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-6 space-y-4">
+          <form @submit.prevent="submitExpense" id="expenseForm">
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">Tanggal</label>
+                <input
+                  v-model="expenseForm.date"
+                  type="date"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-shadow"
+                  required
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">Kategori</label>
+                <select
+                  v-model="expenseForm.category"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-shadow bg-white"
+                >
+                  <option v-for="cat in expenseCategories" :key="cat" :value="cat">
+                    {{ cat }}
+                  </option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">Jumlah (Rp)</label>
+                <input
+                  v-model="expenseForm.amount"
+                  type="number"
+                  min="0"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-shadow"
+                  placeholder="Contoh: 50000"
+                  required
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">Keterangan</label>
+                <textarea
+                  v-model="expenseForm.note"
+                  rows="3"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-shadow"
+                  placeholder="Contoh: Beli kertas struk 5 roll"
+                ></textarea>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-6 border-t border-gray-100 flex gap-3 bg-gray-50 rounded-b-2xl">
+          <button
+            type="button"
+            @click="showAddExpenseModal = false"
+            class="flex-1 py-3 bg-gray-200 border border-gray-300 rounded-xl font-bold hover:bg-gray-300 transition-colors text-gray-700"
+          >
+            BATAL
+          </button>
+          <button
+            type="submit"
+            form="expenseForm"
+            class="flex-1 py-3 bg-rose-600 text-white border border-rose-700 rounded-xl font-bold hover:bg-rose-700 transition-colors flex justify-center items-center gap-2"
+            :disabled="submitExpenseLoading"
+          >
+            <UIcon v-if="submitExpenseLoading" name="i-heroicons-arrow-path" class="w-5 h-5 animate-spin" />
+            {{ submitExpenseLoading ? 'MENYIMPAN...' : 'SIMPAN PENGELUARAN' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 

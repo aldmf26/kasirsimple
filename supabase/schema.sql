@@ -276,4 +276,29 @@ CREATE POLICY "Users can create stock movements for their products" ON stock_mov
 ALTER TABLE printer_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view printer settings of their stores" ON printer_settings FOR SELECT USING (store_id IN (SELECT id FROM stores WHERE user_id = auth.uid()));
 CREATE POLICY "Users can update printer settings of their stores" ON printer_settings FOR UPDATE USING (store_id IN (SELECT id FROM stores WHERE user_id = auth.uid())) WITH CHECK (store_id IN (SELECT id FROM stores WHERE user_id = auth.uid()));
-CREATE POLICY "Users can insert printer settings for their stores" ON printer_settings FOR INSERT WITH CHECK (store_id IN (SELECT id FROM stores WHERE user_id = auth.uid()));
+CREATE POLICY "Users can insert printer settings for their stores" ON printer_settings FOR INSERT WITH CHECK (store_id IN (SELECT id FROM stores WHERE user_id = auth.uid()));-- Create expenses table
+CREATE TABLE expenses (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+    category TEXT NOT NULL, -- 'gaji', 'listrik', 'sewa', 'bahan_baku', 'lainnya'
+    amount BIGINT NOT NULL CHECK (amount > 0),
+    date DATE DEFAULT CURRENT_DATE,
+    note TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+
+-- Create Policies
+CREATE POLICY "Users can manage expenses for their store." ON expenses
+    FOR ALL
+    USING (store_id IN (
+        SELECT id FROM stores WHERE user_id = auth.uid()
+    ));
+
+-- Create trigger for updated_at
+CREATE TRIGGER update_expenses_modtime
+    BEFORE UPDATE ON expenses
+    FOR EACH ROW EXECUTE FUNCTION update_modified_column();
