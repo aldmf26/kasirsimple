@@ -1,799 +1,343 @@
-# 🛒 Kasir Simple - Sistem POS Modern
-
-> Sistem Point of Sale (POS) yang sederhana, modern, dan flexible untuk berbagai jenis usaha kecil menengah. Didesain khusus untuk pemilik usaha yang tidak tech-savvy namun membutuhkan solusi digital yang praktis.
-
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Nuxt](https://img.shields.io/badge/Nuxt-3.x-00DC82.svg)
-![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E.svg)
-
----
-
-## 📖 Daftar Isi
-
-- [Tentang Aplikasi](#-tentang-aplikasi)
-- [Fitur Utama](#-fitur-utama)
-- [Tech Stack](#-tech-stack)
-- [Konsep & Arsitektur](#-konsep--arsitektur)
-- [Database Schema](#-database-schema-detail)
-- [Installation](#-installation)
-- [Configuration](#-configuration)
-- [Project Structure](#-project-structure)
-- [User Flow](#-user-flow)
-- [API & Composables](#-api--composables)
-- [Deployment](#-deployment)
-- [Development Guide](#-development-guide)
-- [FAQ](#-faq)
+<p align="center">
+  <h1 align="center">💰 KasirOK</h1>
+  <p align="center">Aplikasi Kasir (POS) Modern untuk UMKM Indonesia</p>
+  <p align="center">
+    <img src="https://img.shields.io/badge/Nuxt-3-00DC82?logo=nuxtdotjs&logoColor=white" alt="Nuxt 3" />
+    <img src="https://img.shields.io/badge/Supabase-Backend-3ECF8E?logo=supabase&logoColor=white" alt="Supabase" />
+    <img src="https://img.shields.io/badge/Nuxt_UI-v3-00DC82?logo=nuxtdotjs&logoColor=white" alt="Nuxt UI" />
+    <img src="https://img.shields.io/badge/TypeScript-Typed-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
+  </p>
+</p>
 
 ---
 
-## 🎯 Tentang Aplikasi
+## 📖 Tentang KasirOK
 
-### Problem yang Diselesaikan
+**KasirOK** adalah aplikasi kasir (Point of Sale) berbasis web yang dirancang khusus untuk pelaku UMKM di Indonesia. Cocok digunakan untuk:
 
-**Target User:** Ibu-ibu pemilik usaha kecil (toko kosmetik, laundry, barbershop, cafe, dll) yang:
-- ❌ Masih hitung manual → rentan salah
-- ❌ Tidak tech-savvy → butuh interface super simple
-- ❌ Tidak punya budget besar → butuh solusi affordable
-- ❌ Pakai HP lebih sering daripada komputer → butuh mobile-first
+- 🏪 **Toko Retail** — toko kelontong, toko baju, dll
+- ☕ **Cafe & Kedai Kopi**
+- 🍜 **Warung Makan & Resto**
+- ✂️ **Barbershop & Salon**
+- 👕 **Laundry**
+- 🛍️ **Bisnis UMKM lainnya**
 
-### Solusi yang Ditawarkan
-
-✅ **Interface Sederhana** - Design minimal, font besar, tombol besar untuk touchscreen
-✅ **Flexible** - Bisa untuk retail (produk + stok), jasa (tanpa stok), atau FnB
-✅ **Cloud-based** - Data aman di Supabase, bisa akses dari mana saja
-✅ **Mobile-First** - Responsive di HP, tablet, dan desktop
-✅ **Gratis** - Menggunakan free tier Supabase & Vercel
-✅ **Print & Share** - Struk bisa print thermal, WhatsApp, atau download PDF
+Dapat diakses dari **HP, Tablet, maupun Laptop** melalui browser tanpa perlu instalasi.
 
 ---
 
 ## ✨ Fitur Utama
 
-### 1. 🔐 Authentication & Multi-Store
-- Register/Login dengan email
-- 1 akun bisa kelola multiple toko (future-proof)
-- Row Level Security (RLS) - setiap user hanya akses data tokonya
-
-### 2. ⚙️ Setup Toko
-- **First-time Setup**: Wizard untuk setup toko pertama kali
-- **Business Type Selection**: 
-  - 🏪 Retail (toko dengan stok)
-  - ⚙️ Service/Jasa (tanpa stok)
-  - 🍽️ FnB/Resto/Cafe
-- Upload logo toko
-- Info kontak (alamat, telpon)
-
-### 3. 📦 Manajemen Produk/Jasa
-- **CRUD Operations**: Create, Read, Update, Delete (soft delete)
-- **Kategori**: Organize produk dengan kategori + warna label
-- **SKU**: Kode produk (optional)
-- **Harga**: Harga jual + harga modal (untuk profit calculation)
-- **Stok Management**: 
-  - Auto-tracking stok (untuk produk)
-  - Alert stok menipis
-  - History perubahan stok
-  - Manual adjustment stok
-- **Type Flexibility**:
-  - Product (dengan stok) → untuk retail
-  - Service (tanpa stok) → untuk jasa
-- **Search & Filter**: Cari produk by nama/SKU, filter by kategori
-
-### 4. 💳 POS/Kasir Interface
-- **Product Selection**: 
-  - Grid view dengan foto produk
-  - Search bar untuk cari cepat
-  - Filter by kategori
-- **Cart Management**:
-  - Add/remove items
-  - Adjust quantity
-  - Real-time price calculation
-- **Payment Processing**:
-  - Multiple payment methods (cash, transfer, QRIS, debit, credit)
-  - Auto-calculate kembalian
-  - Diskon (nominal atau persen)
-  - Customer info (optional)
-- **Transaction**: 
-  - Auto-generate transaction number (TRX-YYYYMMDD-XXX)
-  - Auto-update stok
-  - Log semua perubahan
-
-### 5. 🖨️ Print & Share Struk
-- **Thermal Printer**: Support 58mm dan 80mm paper
-- **WhatsApp Share**: Share struk langsung via WA link
-- **Download PDF**: Download struk untuk archive
-- **Customizable**:
-  - Include/exclude logo
-  - Custom footer text
-  - Auto-print setelah transaksi (optional)
-
-### 6. 📊 Dashboard & Reports
-- **Today's Summary**:
-  - Total penjualan hari ini
-  - Jumlah transaksi
-  - Produk terlaris
-  - Alert stok menipis
-- **Sales Reports**:
-  - Daily/Monthly sales
-  - Sales by category
-  - Sales by product
-  - Payment method breakdown
-- **Visual Charts**: Grafik penjualan (coming soon)
-
-### 7. 📱 Responsive & PWA-Ready
-- Mobile-first design
-- Installable as PWA (Progressive Web App)
-- Offline-capable (future)
-- Touch-friendly interface
+| Fitur | Deskripsi |
+|-------|-----------|
+| 🛒 **POS (Kasir)** | Antarmuka kasir modern dengan pencarian produk, kategori, keranjang belanja, dan kalkulasi otomatis |
+| 📦 **Manajemen Produk** | CRUD produk, kategori, SKU, gambar, satuan (pcs/kg/porsi), tipe produk/jasa, favorit |
+| 📊 **Manajemen Stok** | Stok masuk/keluar/adjustment, riwayat pergerakan stok, notifikasi stok menipis |
+| 💳 **Multi Pembayaran** | Tunai, QRIS, Kartu Bank — bisa diaktifkan/nonaktifkan sesuai kebutuhan |
+| 🧾 **Cetak Struk** | Struk thermal 58mm, bisa dicetak langsung atau preview di layar |
+| 📈 **Laporan & Grafik** | Grafik penjualan harian, produk terlaris, metode pembayaran, filter per periode |
+| 📤 **Export Data** | Export laporan ke Excel (.xlsx) dan PDF |
+| 💾 **Backup Data** | Backup seluruh data (produk, transaksi, stok) dalam format JSON |
+| 🏷️ **Diskon & Pajak** | Diskon manual (nominal/persen), diskon otomatis dari pengaturan, pajak & PPN |
+| 🏪 **Pengaturan Toko** | Profil toko, logo, alamat, rekening bank, pengaturan printer |
+| 📋 **Riwayat Aktivitas** | Log semua aktivitas (tambah produk, transaksi, perubahan stok, dll) |
+| 🔐 **Keamanan** | Autentikasi Supabase, Row Level Security (RLS) — data terjamin aman per user |
 
 ---
 
 ## 🛠️ Tech Stack
 
-### Frontend
-- **Framework**: [Nuxt 3](https://nuxt.com/) - Vue 3 framework dengan SSR/SSG
-- **UI Library**: [Nuxt UI](https://ui.nuxt.com/) - Tailwind CSS + Headless UI components
-- **State Management**: Vue 3 Composition API + Composables
-- **Icons**: Heroicons & Lucide via Iconify
-- **Utilities**: VueUse - Collection of Vue composition utilities
-
-### Backend & Database
-- **BaaS**: [Supabase](https://supabase.com/) - Backend as a Service
-  - **Database**: PostgreSQL (relational database)
-  - **Auth**: Supabase Auth (email/password, social login ready)
-  - **Storage**: Supabase Storage (untuk logo & foto produk)
-  - **Realtime**: Supabase Realtime (untuk future features)
-  - **RLS**: Row Level Security (data isolation per user)
-
-### Additional Libraries
-- **PDF Generation**: jsPDF - Generate PDF struk
-- **HTML to Canvas**: html2canvas - Convert HTML to image for print
-- **Date/Time**: Native JavaScript Date API
-- **Currency Format**: Custom utility functions
-
-### Development Tools
-- **TypeScript**: Type safety & better DX
-- **ESLint**: Code linting
-- **Prettier**: Code formatting (optional)
-
-### Deployment
-- **Frontend Hosting**: [Vercel](https://vercel.com/) - Automatic deployments
-- **Database Hosting**: Supabase Cloud (PostgreSQL)
-- **CDN**: Vercel Edge Network
+| Layer | Teknologi |
+|-------|-----------|
+| **Framework** | [Nuxt 3](https://nuxt.com/) (Vue 3 + TypeScript) |
+| **UI Library** | [Nuxt UI v3](https://ui.nuxt.com/) |
+| **Backend & Database** | [Supabase](https://supabase.com/) (PostgreSQL + Auth + Storage) |
+| **Grafik** | [Chart.js](https://www.chartjs.org/) via vue-chartjs |
+| **Export** | SheetJS (Excel), jsPDF + autoTable (PDF) |
 
 ---
 
-## 🏗️ Konsep & Arsitektur
+## 🚀 Cara Menjalankan
 
-### Arsitektur Aplikasi
+### Prasyarat
 
-```
-┌─────────────────────────────────────────────────────┐
-│                  USER INTERFACE                      │
-│         (Nuxt 3 + Nuxt UI + Tailwind CSS)           │
-│                                                      │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐         │
-│  │ Dashboard│  │   POS    │  │ Products │         │
-│  └──────────┘  └──────────┘  └──────────┘         │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐         │
-│  │ Reports  │  │ Settings │  │  Auth    │         │
-│  └──────────┘  └──────────┘  └──────────┘         │
-└────────────────────┬────────────────────────────────┘
-                     │
-                     │ Supabase Client
-                     │ (REST API / Realtime)
-                     │
-┌────────────────────▼────────────────────────────────┐
-│              SUPABASE (Backend)                      │
-│                                                      │
-│  ┌──────────────────────────────────────────────┐  │
-│  │         PostgreSQL Database                   │  │
-│  │  ┌────────┐ ┌────────┐ ┌────────┐           │  │
-│  │  │ Stores │ │Products│ │Transac-│           │  │
-│  │  │        │ │        │ │ tions  │           │  │
-│  │  └────────┘ └────────┘ └────────┘           │  │
-│  │         + 5 other tables                      │  │
-│  └──────────────────────────────────────────────┘  │
-│                                                      │
-│  ┌──────────────────────────────────────────────┐  │
-│  │         Authentication (Auth)                 │  │
-│  │  - Email/Password                             │  │
-│  │  - Social Login (future)                      │  │
-│  │  - Session Management                         │  │
-│  └──────────────────────────────────────────────┘  │
-│                                                      │
-│  ┌──────────────────────────────────────────────┐  │
-│  │         Storage (File Upload)                 │  │
-│  │  - Logo Toko                                  │  │
-│  │  - Foto Produk                                │  │
-│  └──────────────────────────────────────────────┘  │
-│                                                      │
-│  ┌──────────────────────────────────────────────┐  │
-│  │    Row Level Security (RLS Policies)          │  │
-│  │  - User hanya akses data toko sendiri         │  │
-│  │  - Automatic data isolation                   │  │
-│  └──────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
-                     │
-                     │ Deploy
-                     ▼
-┌─────────────────────────────────────────────────────┐
-│              VERCEL (Production)                     │
-│  - Static Site Generation (SSG)                      │
-│  - Edge Functions                                    │
-│  - CDN Global                                        │
-│  - Auto HTTPS                                        │
-└─────────────────────────────────────────────────────┘
+- [Node.js](https://nodejs.org/) v18+ 
+- Akun [Supabase](https://supabase.com/) (gratis)
+
+### 1. Clone & Install
+
+```bash
+git clone https://github.com/username/kasirsimple.git
+cd kasirsimple
+npm install
 ```
 
-### Data Flow - Contoh Transaksi
+### 2. Konfigurasi Environment
+
+Buat file `.env` di root folder:
+
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-anon-key
+```
+
+> Dapatkan URL dan Anon Key dari **Supabase Dashboard** → **Settings** → **API**.
+
+### 3. Setup Database Supabase
+
+1. Buka **Supabase Dashboard** → **SQL Editor**
+2. Copy-paste isi file `supabase/schema.sql`
+3. Jalankan query tersebut
+4. Pastikan semua tabel berhasil dibuat (7 tabel)
+
+### 4. Jalankan Aplikasi
+
+```bash
+npm run dev
+```
+
+Buka `http://localhost:3000` di browser.
+
+### 5. Registrasi & Mulai
+
+1. Buka halaman **Register** dan buat akun
+2. Isi nama toko, tipe bisnis, dan data lainnya
+3. Mulai tambahkan produk dan gunakan POS! 🎉
+
+---
+
+## 📁 Struktur Proyek
 
 ```
-1. User klik "Buka Kasir"
-   └─> pages/pos/index.vue
-
-2. User pilih produk
-   └─> components/pos/ProductGrid.vue
-       └─> composables/useProducts.ts
-           └─> Supabase: SELECT * FROM products WHERE store_id = ...
-
-3. Add to cart
-   └─> Local state (reactive cart object)
-       └─> Calculate subtotal, total, etc
-
-4. User klik "Bayar"
-   └─> components/pos/Payment.vue
-       └─> Validate input (paid >= total)
-
-5. Process payment
-   └─> composables/useTransactions.ts
-       └─> Supabase Transaction (BEGIN):
-           ├─> INSERT transaction (header)
-           ├─> INSERT transaction_items (detail)
-           ├─> UPDATE products SET stock = stock - qty (jika ada stok)
-           └─> INSERT stock_movements (log perubahan stok)
-       └─> Supabase Transaction (COMMIT)
-
-6. Generate & print struk
-   └─> utils/receipt.ts
-       ├─> Generate HTML struk
-       ├─> Print via browser API (thermal)
-       ├─> Generate PDF (jsPDF)
-       └─> Generate WA link with text struk
+kasirsimple/
+├── app/
+│   ├── components/          # Komponen reusable
+│   │   ├── AppAlert.vue              # Notifikasi alert global
+│   │   └── ThermalPrinterReceipt.vue # Template struk thermal
+│   │
+│   ├── composables/         # Logic & state management
+│   │   ├── useStore.ts               # Manajemen data toko
+│   │   ├── useProducts.ts            # CRUD produk & stok
+│   │   ├── useCategories.ts          # CRUD kategori
+│   │   ├── useTransactions.ts        # Transaksi & keranjang
+│   │   ├── useCharts.ts              # Data grafik untuk laporan
+│   │   ├── useActivityLog.ts         # Logging aktivitas
+│   │   ├── useToastNotification.ts   # Notifikasi toast
+│   │   ├── useDummyMode.ts           # Mode demo (tanpa Supabase)
+│   │   └── useDummyData.ts           # Data dummy untuk demo
+│   │
+│   ├── layouts/             # Layout halaman
+│   │   ├── default.vue               # Layout utama (dengan sidebar/navbar)
+│   │   ├── auth.vue                  # Layout halaman login/register
+│   │   └── landing.vue               # Layout landing page
+│   │
+│   ├── pages/               # Halaman-halaman aplikasi
+│   │   ├── index.vue                 # Landing page (marketing)
+│   │   ├── dashboard.vue             # Dashboard ringkasan toko
+│   │   ├── activity-history.vue      # Riwayat aktivitas
+│   │   ├── auth/
+│   │   │   ├── login.vue             # Halaman login
+│   │   │   ├── register.vue          # Halaman registrasi
+│   │   │   ├── forgot-password.vue   # Lupa password
+│   │   │   └── update-password.vue   # Update password
+│   │   ├── pos/
+│   │   │   └── index.vue             # Halaman kasir (POS)
+│   │   ├── products/
+│   │   │   └── index.vue             # Manajemen produk & kategori
+│   │   ├── transactions/
+│   │   │   └── index.vue             # Riwayat transaksi
+│   │   ├── reports/
+│   │   │   └── index.vue             # Laporan & grafik penjualan
+│   │   └── settings/
+│   │       └── index.vue             # Pengaturan toko
+│   │
+│   └── utils/
+│       ├── helpers.ts                # Utility functions (format currency, dll)
+│       └── activityLogger.ts         # Helper logging aktivitas
+│
+├── supabase/
+│   └── schema.sql                    # Database schema lengkap
+│
+├── nuxt.config.ts                    # Konfigurasi Nuxt
+├── package.json
+└── .env                              # Environment variables
 ```
 
 ---
 
-## 🗄️ Database Schema (Detail)
+## 🗄️ Database Schema
 
-### Overview
-
-Database menggunakan **PostgreSQL** dengan **8 tables utama** + **3 views** untuk reporting.
-
-### Entity Relationship Diagram (ERD)
+### Diagram Relasi Tabel
 
 ```
-┌─────────────┐
-│   users     │ (Supabase Auth - built-in)
-│ id (PK)     │
-│ email       │
-│ created_at  │
-└──────┬──────┘
+┌──────────────┐
+│  auth.users  │
+│──────────────│
+│  id (PK)     │
+└──────┬───────┘
        │ 1
        │
-       │ N
-┌──────▼──────────────┐
-│   stores            │ (Toko)
-│ id (PK)             │
-│ user_id (FK)        │◄────────┐
-│ name                │         │
-│ business_type       │         │ Referenced by
-│ address             │         │ all tables
-│ phone               │         │
-│ logo_url            │         │
-│ currency            │         │
-└──────┬──────────────┘         │
-       │ 1                      │
-       │                        │
-       │ N                      │
-┌──────▼──────────────┐         │
-│  categories         │         │
-│ id (PK)             │         │
-│ store_id (FK) ──────┼─────────┤
-│ name                │         │
-│ color               │         │
-│ icon                │         │
-│ sort_order          │         │
-└──────┬──────────────┘         │
-       │ 1                      │
-       │                        │
-       │ N                      │
-┌──────▼──────────────┐         │
-│   products          │         │
-│ id (PK)             │         │
-│ store_id (FK) ──────┼─────────┤
-│ category_id (FK)    │         │
-│ name                │         │
-│ sku                 │         │
-│ price               │         │
-│ cost                │         │
-│ type                │         │ (product/service)
-│ has_stock           │         │
-│ stock               │         │
-│ min_stock           │         │
-│ image_url           │         │
-└──────┬──────────────┘         │
-       │                        │
-       │ Referenced by          │
-       │                        │
-┌──────▼──────────────┐         │
-│ stock_movements     │         │
-│ id (PK)             │         │
-│ product_id (FK)     │         │
-│ transaction_id (FK) │         │
-│ type                │         │ (in/out/adjustment)
-│ quantity            │         │
-│ stock_before        │         │
-│ stock_after         │         │
-│ notes               │         │
-└─────────────────────┘         │
-                                │
-┌─────────────────────┐         │
-│  transactions       │         │
-│ id (PK)             │         │
-│ store_id (FK) ──────┼─────────┤
-│ transaction_number  │         │
-│ subtotal            │         │
-│ discount            │         │
-│ discount_type       │         │
-│ tax                 │         │
-│ total               │         │
-│ paid                │         │
-│ change              │         │
-│ payment_method      │         │
-│ customer_name       │         │
-│ customer_phone      │         │
-└──────┬──────────────┘         │
-       │ 1                      │
-       │                        │
-       │ N                      │
-┌──────▼──────────────┐         │
-│ transaction_items   │         │
-│ id (PK)             │         │
-│ transaction_id (FK) │         │
-│ product_id (FK)     │         │ (nullable - snapshot)
-│ product_name        │         │ (snapshot saat transaksi)
-│ product_sku         │         │
-│ product_price       │         │
-│ quantity            │         │
-│ subtotal            │         │
-└─────────────────────┘         │
-                                │
-┌─────────────────────┐         │
-│ printer_settings    │         │
-│ id (PK)             │         │
-│ store_id (FK) ──────┼─────────┘
-│ printer_type        │
-│ paper_width         │
-│ auto_print          │
-│ include_logo        │
-│ footer_text         │
-└─────────────────────┘
+       ▼ N
+┌──────────────────────┐        ┌───────────────────┐
+│       stores         │ 1    1 │  printer_settings  │
+│──────────────────────│───────▶│───────────────────│
+│  id (PK)             │        │  id (PK)          │
+│  user_id (FK→users)  │        │  store_id (FK)    │
+│  name                │        │  printer_type     │
+│  business_type       │        │  paper_width      │
+│  address, phone      │        │  auto_print       │
+│  logo_url            │        └───────────────────┘
+│  currency, timezone  │
+│  payment settings... │
+│  discount_tax...     │
+└──────┬───────────────┘
+       │ 1
+       │
+       ├─────────────────────────┐
+       │                         │
+       ▼ N                       ▼ N
+┌──────────────────┐      ┌────────────────────────┐
+│   categories     │      │     transactions        │
+│──────────────────│      │────────────────────────│
+│  id (PK)         │      │  id (PK)               │
+│  store_id (FK)   │      │  store_id (FK)         │
+│  name            │      │  transaction_number    │
+│  color           │      │  subtotal, total       │
+│  sort_order      │      │  discount, tax, ppn    │
+└──────┬───────────┘      │  paid, change          │
+       │ 1                │  payment_method        │
+       │                  │  customer_name/phone   │
+       ▼ N                │  created_by (FK→users) │
+┌──────────────────┐      └──────┬─────────────────┘
+│    products      │             │ 1
+│──────────────────│             │
+│  id (PK)         │             ├─────────────────┐
+│  store_id (FK)   │             │                 │
+│  category_id(FK) │             ▼ N               ▼ N
+│  name, sku       │      ┌───────────────┐  ┌─────────────────┐
+│  price, buy_price│      │ transaction   │  │ stock_movements  │
+│  stock, min_stock│      │ _items        │  │─────────────────│
+│  type, unit      │      │───────────────│  │  id (PK)        │
+│  is_favorite     │      │  id (PK)      │  │  product_id(FK) │
+│  image_url       │      │  transaction  │  │  transaction    │
+└──────┬───────────┘      │  _id (FK)     │  │  _id (FK)       │
+       │                  │  product_id   │  │  type (in/out/  │
+       │                  │  (FK)         │  │   adjustment)   │
+       │                  │  product_name │  │  quantity        │
+       │ 1                │  quantity     │  │  stock_before    │
+       │                  │  subtotal     │  │  stock_after     │
+       ▼ N                └───────────────┘  └─────────────────┘
+┌─────────────────┐
+│ stock_movements  │ (juga terhubung dari products)
+└─────────────────┘
 ```
 
-### Table Details
+### Daftar Tabel
 
-#### 1. `stores` - Master Data Toko
+| # | Tabel | Deskripsi | Rows |
+|---|-------|-----------|------|
+| 1 | `stores` | Data toko & pengaturan | 1 |
+| 2 | `categories` | Kategori produk | 8 |
+| 3 | `products` | Daftar produk/jasa | 27 |
+| 4 | `transactions` | Header transaksi penjualan | 44 |
+| 5 | `transaction_items` | Detail item per transaksi | 51 |
+| 6 | `stock_movements` | Riwayat pergerakan stok | 73 |
+| 7 | `printer_settings` | Pengaturan printer thermal | 0 |
 
-```sql
-CREATE TABLE stores (
-    id UUID PRIMARY KEY,
-    user_id UUID REFERENCES auth.users(id),  -- Pemilik toko
-    name TEXT NOT NULL,                       -- Nama toko
-    business_type TEXT,                       -- retail/service/fnb
-    address TEXT,                             -- Alamat toko
-    phone TEXT,                               -- Nomor telepon
-    logo_url TEXT,                            -- URL logo (Supabase Storage)
-    currency TEXT DEFAULT 'Rp',               -- Mata uang
-    timezone TEXT DEFAULT 'Asia/Jakarta',     -- Timezone
-    is_active BOOLEAN DEFAULT true,           -- Status aktif
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
-);
-```
+### Relasi Antar Tabel
 
-**Purpose**: Menyimpan informasi toko. 1 user bisa punya multiple stores (future-proof).
-
-**Indexes**: 
-- `user_id` - untuk query cepat "tampilkan semua toko user ini"
-- `is_active` - filter toko aktif
+| Dari | → | Ke | Tipe |
+|------|---|-----|------|
+| `stores.user_id` | → | `auth.users.id` | Many-to-One |
+| `categories.store_id` | → | `stores.id` | Many-to-One |
+| `products.store_id` | → | `stores.id` | Many-to-One |
+| `products.category_id` | → | `categories.id` | Many-to-One |
+| `transactions.store_id` | → | `stores.id` | Many-to-One |
+| `transactions.created_by` | → | `auth.users.id` | Many-to-One |
+| `transaction_items.transaction_id` | → | `transactions.id` | Many-to-One |
+| `transaction_items.product_id` | → | `products.id` | Many-to-One |
+| `stock_movements.product_id` | → | `products.id` | Many-to-One |
+| `stock_movements.transaction_id` | → | `transactions.id` | Many-to-One |
+| `stock_movements.created_by` | → | `auth.users.id` | Many-to-One |
+| `printer_settings.store_id` | → | `stores.id` | One-to-One |
 
 ---
 
-#### 2. `categories` - Kategori Produk/Jasa
+## 🔄 Alur Penggunaan Aplikasi
 
-```sql
-CREATE TABLE categories (
-    id UUID PRIMARY KEY,
-    store_id UUID REFERENCES stores(id),      -- Toko mana
-    name TEXT NOT NULL,                       -- Nama kategori
-    description TEXT,                         -- Deskripsi
-    color TEXT DEFAULT '#3B82F6',             -- Warna label (hex)
-    icon TEXT,                                -- Emoji atau icon name
-    sort_order INTEGER DEFAULT 0,             -- Urutan tampilan
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ,
-    UNIQUE(store_id, name)                    -- Nama kategori unique per toko
-);
+### Alur Setup Awal
+
+```
+Register → Login → Buat Toko → Tambah Kategori → Tambah Produk → Siap Jualan!
 ```
 
-**Purpose**: Organize produk ke dalam kategori. Contoh: Skincare, Makeup, Haircare.
+### Alur Transaksi (POS)
 
-**Use Case**:
-- Filter produk by kategori di POS
-- Report penjualan by kategori
-- Warna untuk visual labeling
-
----
-
-#### 3. `products` - Produk/Jasa
-
-```sql
-CREATE TABLE products (
-    id UUID PRIMARY KEY,
-    store_id UUID REFERENCES stores(id),
-    category_id UUID REFERENCES categories(id),
-    sku TEXT,                                 -- Kode produk (optional)
-    name TEXT NOT NULL,                       -- Nama produk
-    description TEXT,
-    price NUMERIC(12, 2) NOT NULL,            -- Harga jual
-    cost NUMERIC(12, 2),                      -- Harga modal
-    type TEXT DEFAULT 'product',              -- product/service
-    has_stock BOOLEAN DEFAULT true,           -- Track stok atau tidak
-    stock INTEGER DEFAULT 0,                  -- Stok saat ini
-    min_stock INTEGER DEFAULT 5,              -- Minimum stok (alert)
-    image_url TEXT,                           -- Foto produk
-    is_active BOOLEAN DEFAULT true,           -- Soft delete
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
-);
+```
+1. Buka halaman POS (/pos)
+2. Pilih produk dari grid → masuk ke Keranjang
+3. Atur jumlah barang di keranjang
+4. Klik "Bayar" → muncul modal pembayaran
+5. Pilih metode bayar (Tunai/QRIS/Kartu)
+6. Masukkan jumlah uang bayar
+7. Sistem otomatis hitung:
+   - Diskon otomatis (dari pengaturan)
+   - Pajak & PPN (dari pengaturan)
+   - Kembalian
+8. Klik "Proses Pembayaran"
+9. Stok produk otomatis berkurang
+10. Struk bisa dicetak / di-preview
 ```
 
-**Purpose**: Master data produk/jasa yang dijual.
+### Alur Manajemen Stok
 
-**Key Features**:
-- **Flexible Type**: 
-  - `type='product'` + `has_stock=true` → Produk fisik (retail)
-  - `type='service'` + `has_stock=false` → Jasa/layanan
-- **Price vs Cost**: 
-  - `price` = harga jual
-  - `cost` = harga modal
-  - `profit = price - cost`
-- **Stock Alert**: Jika `stock <= min_stock`, tampilkan alert
-- **Soft Delete**: `is_active=false` untuk "hapus" tanpa hilangkan data
-
-**Indexes**:
-- `store_id` - query produk per toko
-- `category_id` - filter by kategori
-- `sku` - search by SKU
-- `name` - full-text search (GIN index)
-
----
-
-#### 4. `transactions` - Header Transaksi
-
-```sql
-CREATE TABLE transactions (
-    id UUID PRIMARY KEY,
-    store_id UUID REFERENCES stores(id),
-    transaction_number TEXT UNIQUE,           -- TRX-20250126-001
-    subtotal NUMERIC(12, 2),                  -- Total sebelum diskon
-    discount NUMERIC(12, 2) DEFAULT 0,        -- Diskon
-    discount_type TEXT DEFAULT 'nominal',     -- nominal/percent
-    tax NUMERIC(12, 2) DEFAULT 0,             -- Pajak
-    total NUMERIC(12, 2),                     -- Grand total
-    paid NUMERIC(12, 2),                      -- Uang yang dibayar
-    change NUMERIC(12, 2),                    -- Kembalian
-    payment_method TEXT DEFAULT 'cash',       -- cash/transfer/qris/etc
-    customer_name TEXT,                       -- Nama customer (optional)
-    customer_phone TEXT,                      -- Telp customer (optional)
-    notes TEXT,                               -- Catatan
-    created_by UUID REFERENCES auth.users(id), -- Kasir yang input
-    created_at TIMESTAMPTZ
-);
+```
+1. Buka halaman Produk (/products)
+2. Klik ikon stok pada produk
+3. Pilih tipe: Stok Masuk / Stok Keluar / Adjustment
+4. Masukkan jumlah & catatan
+5. Stok terupdate + tercatat di stock_movements
 ```
 
-**Purpose**: Header transaksi penjualan (1 struk = 1 row).
+### Alur Laporan
 
-**Transaction Number Format**: `TRX-YYYYMMDD-XXX`
-- `TRX` = prefix
-- `20250126` = tanggal (YYYYMMDD)
-- `001` = sequence number (reset setiap hari)
-- Contoh: `TRX-20250126-001`, `TRX-20250126-002`, ...
-
-**Calculation Flow**:
 ```
-subtotal = SUM(item.price * item.quantity)
-discount = (discount_type === 'percent') 
-           ? subtotal * (discount / 100) 
-           : discount
-total = subtotal - discount + tax
-change = paid - total
-```
-
-**Indexes**:
-- `transaction_number` - unique, untuk search
-- `created_at` - untuk filter by date range
-- `store_id` - query transaksi per toko
-
----
-
-#### 5. `transaction_items` - Detail Transaksi
-
-```sql
-CREATE TABLE transaction_items (
-    id UUID PRIMARY KEY,
-    transaction_id UUID REFERENCES transactions(id),
-    product_id UUID REFERENCES products(id),  -- Reference (bisa null)
-    product_name TEXT NOT NULL,               -- SNAPSHOT
-    product_sku TEXT,                         -- SNAPSHOT
-    product_price NUMERIC(12, 2),             -- SNAPSHOT
-    quantity INTEGER NOT NULL,
-    subtotal NUMERIC(12, 2),                  -- price * quantity
-    notes TEXT,
-    created_at TIMESTAMPTZ
-);
-```
-
-**Purpose**: Detail item yang dibeli dalam 1 transaksi.
-
-**Why Snapshot?**
-- `product_id` adalah reference (bisa null jika produk dihapus)
-- `product_name`, `product_sku`, `product_price` adalah **snapshot** (copy data saat transaksi)
-- **Alasan**: Jika nanti produk dihapus atau harga berubah, history transaksi tetap akurat
-
-**Example**:
-```
-Transaction TRX-20250126-001:
-- Item 1: Wardah Serum, Rp 75.000, Qty 2 = Rp 150.000
-- Item 2: Emina Face Wash, Rp 25.000, Qty 1 = Rp 25.000
-Subtotal: Rp 175.000
-Discount: Rp 10.000
-Total: Rp 165.000
+1. Buka halaman Laporan (/reports)
+2. Pilih filter waktu: Hari Ini / Minggu / Bulan / Tahun / Custom
+3. Lihat ringkasan: Total Penjualan, Jumlah Transaksi, Rata-rata
+4. Lihat grafik: Penjualan Harian, Produk Terlaris, Metode Bayar
+5. Export ke Excel atau PDF jika diperlukan
+6. Backup seluruh data ke file JSON
 ```
 
 ---
 
-#### 6. `stock_movements` - Riwayat Perubahan Stok
+## 📱 Halaman-Halaman
 
-```sql
-CREATE TABLE stock_movements (
-    id UUID PRIMARY KEY,
-    product_id UUID REFERENCES products(id),
-    transaction_id UUID REFERENCES transactions(id), -- Null jika adjustment
-    type TEXT NOT NULL,                              -- in/out/adjustment
-    quantity INTEGER,                                -- +/- perubahan
-    stock_before INTEGER,                            -- Stok sebelum
-    stock_after INTEGER,                             -- Stok sesudah
-    notes TEXT,
-    created_by UUID REFERENCES auth.users(id),
-    created_at TIMESTAMPTZ
-);
-```
-
-**Purpose**: Audit trail perubahan stok.
-
-**Types**:
-- `in` = Stok masuk (restock, purchase)
-- `out` = Stok keluar (penjualan)
-- `adjustment` = Koreksi manual (stok opname)
-
-**Example**:
-```
-Product: Wardah Serum
-- Stock before: 50
-- Transaction: Jual 2 pcs
-- Stock after: 48
-- Type: out
-- Quantity: -2
-- Reference: TRX-20250126-001
-```
-
-**Use Case**:
-- History stok produk
-- Audit "kenapa stok berkurang?"
-- Report stok masuk/keluar
+| Halaman | Path | Deskripsi |
+|---------|------|-----------|
+| Landing Page | `/` | Halaman marketing untuk pengunjung baru |
+| Login | `/auth/login` | Masuk ke akun |
+| Register | `/auth/register` | Daftar akun baru |
+| Lupa Password | `/auth/forgot-password` | Reset password via email |
+| **Dashboard** | `/dashboard` | Ringkasan: omset hari ini, stok menipis, transaksi terakhir |
+| **POS (Kasir)** | `/pos` | Layar kasir untuk memproses penjualan |
+| **Produk** | `/products` | Kelola produk, kategori, stok |
+| **Transaksi** | `/transactions` | Riwayat semua transaksi |
+| **Laporan** | `/reports` | Grafik, statistik, export data |
+| **Pengaturan** | `/settings` | Profil toko, pembayaran, printer, akun |
+| Riwayat Aktivitas | `/activity-history` | Log semua aktivitas di toko |
 
 ---
 
-#### 7. `printer_settings` - Pengaturan Printer
+## 🔐 Keamanan
 
-```sql
-CREATE TABLE printer_settings (
-    id UUID PRIMARY KEY,
-    store_id UUID REFERENCES stores(id),
-    printer_type TEXT DEFAULT 'thermal',      -- thermal/a4/none
-    paper_width INTEGER DEFAULT 58,           -- 58mm atau 80mm
-    auto_print BOOLEAN DEFAULT false,         -- Print otomatis
-    include_logo BOOLEAN DEFAULT true,        -- Tampilkan logo
-    include_store_info BOOLEAN DEFAULT true,  -- Tampilkan info toko
-    footer_text TEXT,                         -- Custom footer
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ,
-    UNIQUE(store_id)                          -- 1 toko = 1 setting
-);
-```
-
-**Purpose**: Pengaturan print struk per toko.
-
-**Use Case**:
-- Customize tampilan struk
-- Auto-print setelah transaksi
-- Footer custom ("Terima kasih", "Barang tidak dapat dikembalikan", dll)
+- **Autentikasi**: Supabase Auth (email + password)
+- **Row Level Security (RLS)**: Setiap user hanya bisa mengakses data toko miliknya sendiri
+- **Semua 7 tabel** dilindungi RLS dengan policy yang memverifikasi `user_id` melalui tabel `stores`
 
 ---
 
-### Views untuk Reporting
+## 📄 Lisensi
 
-#### 1. `daily_sales_summary`
-
-```sql
-CREATE VIEW daily_sales_summary AS
-SELECT 
-    store_id,
-    DATE(created_at) as sale_date,
-    COUNT(*) as total_transactions,
-    SUM(total) as total_sales,
-    AVG(total) as average_transaction,
-    SUM(CASE WHEN payment_method = 'cash' THEN total ELSE 0 END) as cash_sales,
-    SUM(CASE WHEN payment_method != 'cash' THEN total ELSE 0 END) as non_cash_sales
-FROM transactions
-GROUP BY store_id, DATE(created_at);
-```
-
-**Purpose**: Summary penjualan per hari.
-
-**Use Case**: Dashboard "Penjualan Hari Ini"
-
----
-
-#### 2. `product_sales_summary`
-
-```sql
-CREATE VIEW product_sales_summary AS
-SELECT 
-    p.id as product_id,
-    p.name as product_name,
-    c.name as category_name,
-    COUNT(ti.id) as times_sold,
-    SUM(ti.quantity) as total_quantity_sold,
-    SUM(ti.subtotal) as total_revenue
-FROM products p
-LEFT JOIN transaction_items ti ON ti.product_id = p.id
-LEFT JOIN categories c ON c.id = p.category_id
-GROUP BY p.id, p.name, c.name;
-```
-
-**Purpose**: Summary penjualan per produk.
-
-**Use Case**: Report "Produk Terlaris"
-
----
-
-#### 3. `low_stock_products`
-
-```sql
-CREATE VIEW low_stock_products AS
-SELECT 
-    id,
-    store_id,
-    name,
-    sku,
-    stock,
-    min_stock,
-    (min_stock - stock) as shortage
-FROM products
-WHERE has_stock = true
-  AND is_active = true
-  AND stock <= min_stock
-ORDER BY shortage DESC;
-```
-
-**Purpose**: Daftar produk yang stoknya menipis.
-
-**Use Case**: Dashboard alert "Stok Menipis"
-
----
-
-### Database Functions
-
-#### 1. `generate_transaction_number(store_id)`
-
-```sql
--- Auto-generate nomor transaksi: TRX-20250126-001
-```
-
-**Logic**:
-1. Get today's date → `20250126`
-2. Find last transaction number today → `TRX-20250126-005`
-3. Increment sequence → `006`
-4. Return → `TRX-20250126-006`
-
----
-
-#### 2. `update_product_stock(product_id, quantity, type, ...)`
-
-```sql
--- Update stok produk + log ke stock_movements
-```
-
-**Logic**:
-1. Get current stock
-2. Calculate new stock based on type (in/out/adjustment)
-3. Update products table
-4. Insert log ke stock_movements
-5. Return success/fail
-
----
-
-### Row Level Security (RLS)
-
-**Konsep**: Setiap user hanya bisa akses data toko miliknya sendiri.
-
-**Implementasi**:
-```sql
--- Example policy untuk table products
-CREATE POLICY "Users can view own products"
-ON products FOR SELECT
-USING (
-    store_id IN (
-        SELECT id FROM stores WHERE user_id = auth.uid()
-    )
-);
-```
-
-**Artinya**: 
-- `auth.uid()` = ID user yang sedang login (dari Supabase Auth)
-- User hanya bisa SELECT products yang `store_id` nya ada di toko milik dia
-
-**Benefit**:
-- Data isolation otomatis
-- Tidak perlu manual filter `WHERE store_id = ...` di setiap query
-- Security by default
-
----
-
-## 📥 Installation
-
-### Prerequisites
-
-Pastikan sudah terinstall:
-- **Node.js** >= 18.x ([Download](https://nodejs.org/))
-- **npm** >= 9.x atau **pnpm** (recommended) atau **yarn**
-- **Git** ([Download](https://git-scm.com/))
-- **Akun Supabase** (gratis) ([Sign up](https://supabase.com/))
-- **Akun Vercel** (gratis, optional untuk deploy) ([Sign up](https://vercel.com/))
-
-### Step 1: Clone/Create Project
-
-```bash
-# Option A: Clone repository (jika sudah ada repo)
-git clone <repository-url>
-cd kasir-simple
-
-# Option B: Create new Nuxt project
-npx nuxi@latest init kasir-simple
-cd kasir-simple
-```
-
-### Step 2: Install Dependencies
-
-```bash
-# Menggunakan pnpm (recommended - faster)
-pnpm install
-
-# Atau menggunakan npm
-npm install
-
-#
+MIT License — Lihat file [LICENSE](./LICENSE) untuk detail.

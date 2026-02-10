@@ -133,6 +133,14 @@ const getColorClasses = (color: string) => {
   };
   return colors[color] || colors.blue;
 };
+const greeting = computed(() => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Pagi";
+  if (hour < 15) return "Siang";
+  if (hour < 18) return "Sore";
+  return "Malam";
+});
+
 </script>
 
 <template>
@@ -143,7 +151,7 @@ const getColorClasses = (color: string) => {
       >
         <div>
           <h1 class="text-2xl font-bold text-gray-800">
-            Selamat {{ new Date().getHours() < 12 ? "Pagi" : "Siang" }}, Bu!
+           Selamat {{ greeting }}, {{ store?.name || "Toko Anda" }}!
           </h1>
           <p class="text-gray-500 text-sm italic">
             Semoga dagangan hari ini laris manis ya.

@@ -47,6 +47,48 @@ const toast = useToast();
 const selectedTransaction = ref(null);
 const showReceiptModal = ref(false);
 const showDeleteModal = ref(false);
+const deleteLoading = ref(false);
+
+// Search state
+const searchQuery = ref("");
+
+// Chart visibility toggle (single, persisted to localStorage)
+const showCharts = ref(true);
+
+const initChartsVisibility = () => {
+  if (import.meta.client) {
+    const saved = localStorage.getItem('kasirsimple_show_charts');
+    if (saved !== null) {
+      showCharts.value = saved === 'true';
+    }
+  }
+};
+initChartsVisibility();
+
+const toggleCharts = () => {
+  showCharts.value = !showCharts.value;
+  if (import.meta.client) {
+    localStorage.setItem('kasirsimple_show_charts', String(showCharts.value));
+  }
+};
+
+// Filtered transactions for search
+const filteredTransactions = computed(() => {
+  if (!searchQuery.value.trim()) return transactions.value;
+  const q = searchQuery.value.toLowerCase().trim();
+  return transactions.value.filter((t: any) => {
+    const txNumber = (t.transaction_number || "").toLowerCase();
+    const method = t.payment_method === "cash" ? "tunai" : "transfer";
+    const total = formatCurrency(t.total).toLowerCase();
+    const date = formatDateTime(t.created_at).toLowerCase();
+    return (
+      txNumber.includes(q) ||
+      method.includes(q) ||
+      total.includes(q) ||
+      date.includes(q)
+    );
+  });
+});
 
 // Stats Calculation
 const totalSales = computed(() => {
@@ -173,6 +215,81 @@ const lineChartOptions = {
 // Top Selling Items Computed
 const allItemsSold = computed(() => getAllItemsSold(transactions.value));
 
+// ============ TAB STATE ============
+const activeTab = ref('sales');
+
+// ============ PROFIT/LOSS CALCULATIONS ============
+const buyPriceMap = computed(() => {
+  const map = new Map<string, number>();
+  for (const p of (products.value || [])) {
+    map.set(p.id, Number((p as any).buy_price) || 0);
+  }
+  return map;
+});
+
+const profitByProduct = computed(() => {
+  const productMap = new Map();
+  for (const t of transactions.value) {
+    for (const item of ((t as any).items || [])) {
+      const key = item.product_id || item.product_name;
+      const existing = productMap.get(key) || { name: item.product_name, qty: 0, revenue: 0, cost: 0 };
+      existing.qty += item.quantity;
+      existing.revenue += Number(item.subtotal) || 0;
+      existing.cost += (buyPriceMap.value.get(item.product_id) || 0) * item.quantity;
+      productMap.set(key, existing);
+    }
+  }
+  return Array.from(productMap.values())
+    .map((p: any) => ({
+      ...p,
+      profit: p.revenue - p.cost,
+      margin: p.revenue > 0 ? ((p.revenue - p.cost) / p.revenue * 100) : 0,
+    }))
+    .sort((a: any, b: any) => b.profit - a.profit);
+});
+
+const totalRevenue = computed(() => profitByProduct.value.reduce((s: number, p: any) => s + p.revenue, 0));
+const totalCost = computed(() => profitByProduct.value.reduce((s: number, p: any) => s + p.cost, 0));
+const totalProfit = computed(() => totalRevenue.value - totalCost.value);
+const profitMargin = computed(() => totalRevenue.value > 0 ? (totalProfit.value / totalRevenue.value * 100) : 0);
+
+// Check if any product has buy_price set
+const hasBuyPriceData = computed(() => {
+  return Array.from(buyPriceMap.value.values()).some(v => v > 0);
+});
+
+// ============ DAILY REPORT ============
+const dailyReport = computed(() => {
+  const dayMap = new Map();
+  for (const t of transactions.value) {
+    const dateKey = new Date(t.created_at).toISOString().split('T')[0];
+    const dateLabel = new Date(t.created_at).toLocaleDateString('id-ID', {
+      weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
+    });
+    const existing = dayMap.get(dateKey) || {
+      dateLabel, dateKey,
+      totalTransactions: 0, totalSales: 0,
+      cashSales: 0, nonCashSales: 0,
+      totalItems: 0, totalCost: 0,
+    };
+    existing.totalTransactions += 1;
+    existing.totalSales += Number(t.total) || 0;
+    if (t.payment_method === 'cash') {
+      existing.cashSales += Number(t.total) || 0;
+    } else {
+      existing.nonCashSales += Number(t.total) || 0;
+    }
+    for (const item of ((t as any).items || [])) {
+      existing.totalItems += item.quantity;
+      existing.totalCost += (buyPriceMap.value.get(item.product_id) || 0) * item.quantity;
+    }
+    dayMap.set(dateKey, existing);
+  }
+  return Array.from(dayMap.values())
+    .map((d: any) => ({ ...d, totalProfit: d.totalSales - d.totalCost }))
+    .sort((a: any, b: any) => b.dateKey.localeCompare(a.dateKey));
+});
+
 // View Receipt
 const viewReceipt = (transaction: any) => {
   selectedTransaction.value = transaction;
@@ -188,17 +305,19 @@ const confirmDelete = (transaction: any) => {
 const handleDelete = async () => {
   if (!selectedTransaction.value) return;
 
+  deleteLoading.value = true;
   try {
-    await deleteTransaction(selectedTransaction.value.id);
+    await deleteTransaction((selectedTransaction.value as any).id);
     toast.add({
       title: "Berhasil",
-      description: "Transaksi berhasil dihapus",
+      description: `Transaksi ${(selectedTransaction.value as any).transaction_number} berhasil dihapus dan stok dikembalikan`,
       color: "success",
       icon: "i-heroicons-check-circle",
     });
     showDeleteModal.value = false;
     selectedTransaction.value = null;
-    await fetchTransactions();
+    // Refresh data (transactions + products for updated stock)
+    await loadData();
   } catch (error) {
     toast.add({
       title: "Gagal",
@@ -206,6 +325,8 @@ const handleDelete = async () => {
       color: "error",
       icon: "i-heroicons-x-circle",
     });
+  } finally {
+    deleteLoading.value = false;
   }
 };
 
@@ -693,7 +814,38 @@ watch(
       </div>
     </div>
 
-    <div class="p-8 space-y-8">
+    <!-- Tab Navigation -->
+    <div class="px-8 py-3 bg-white border-b border-gray-200">
+      <div class="flex gap-1 bg-gray-100 p-1 rounded-xl w-full md:w-auto md:inline-flex">
+        <button
+          @click="activeTab = 'sales'"
+          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-1 md:flex-none justify-center"
+          :class="activeTab === 'sales' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+        >
+          <UIcon name="i-heroicons-chart-bar-square" class="w-4 h-4" />
+          Penjualan
+        </button>
+        <button
+          @click="activeTab = 'profit'"
+          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-1 md:flex-none justify-center"
+          :class="activeTab === 'profit' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+        >
+          <UIcon name="i-heroicons-banknotes" class="w-4 h-4" />
+          Laba / Rugi
+        </button>
+        <button
+          @click="activeTab = 'daily'"
+          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-1 md:flex-none justify-center"
+          :class="activeTab === 'daily' ? 'bg-white text-violet-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+        >
+          <UIcon name="i-heroicons-calendar-days" class="w-4 h-4" />
+          Laporan Harian
+        </button>
+      </div>
+    </div>
+
+    <!-- ============ TAB: PENJUALAN ============ -->
+    <div v-if="activeTab === 'sales'" class="p-8 space-y-8">
       <!-- Stats Cards -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div
@@ -746,137 +898,182 @@ watch(
       </div>
 
       <!-- Charts Section -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Sales Trend Chart -->
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h3 class="text-lg font-bold text-gray-900 mb-4">Tren Penjualan</h3>
-          <div class="h-80">
-            <Line
-              :data="salesByDateData"
-              :options="lineChartOptions"
-              v-if="salesByDateData.labels.length > 0"
-            />
-            <div
-              v-else
-              class="flex items-center justify-center h-full text-gray-400"
-            >
-              <p>Tidak ada data penjualan</p>
-            </div>
-          </div>
-        </div>
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+          <UIcon name="i-heroicons-chart-bar-square" class="w-5 h-5 text-primary-500" />
+          Grafik & Analisis
+        </h2>
+        <button
+          @click="toggleCharts"
+          class="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-200 shadow-sm"
+          :class="showCharts ? 'bg-primary-50 text-primary-600 hover:bg-primary-100 border border-primary-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-200'"
+        >
+          <UIcon :name="showCharts ? 'i-heroicons-eye-slash' : 'i-heroicons-eye'" class="w-4 h-4" />
+          {{ showCharts ? 'Sembunyikan Grafik' : 'Tampilkan Grafik' }}
+        </button>
+      </div>
 
-        <!-- Top Products Chart -->
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h3 class="text-lg font-bold text-gray-900 mb-4">
-            Produk Terlaris (Top 5)
-          </h3>
-          <div class="h-80">
-            <Bar
-              :data="topProductsData"
-              :options="chartOptions"
-              v-if="topProductsData.labels.length > 0"
-            />
-            <div
-              v-else
-              class="flex items-center justify-center h-full text-gray-400"
-            >
-              <p>Tidak ada data produk</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Payment Method Pie Chart -->
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h3 class="text-lg font-bold text-gray-900 mb-4">
-            Penjualan Berdasarkan Metode Pembayaran
-          </h3>
-          <div class="h-80 flex items-center justify-center">
-            <div class="w-full h-full">
-              <Pie
-                :data="paymentMethodData"
-                :options="chartOptions"
-                v-if="paymentMethodData.labels.length > 0"
+      <Transition name="chart-toggle">
+        <div v-if="showCharts" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Sales Trend Chart -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h3 class="text-lg font-bold text-gray-900 mb-4">Tren Penjualan</h3>
+            <div class="h-80">
+              <Line
+                :data="salesByDateData"
+                :options="lineChartOptions"
+                v-if="salesByDateData.labels.length > 0"
               />
               <div
                 v-else
                 class="flex items-center justify-center h-full text-gray-400"
               >
-                <p>Tidak ada data pembayaran</p>
+                <p>Tidak ada data penjualan</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top Products Chart -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h3 class="text-lg font-bold text-gray-900 mb-4">
+              Produk Terlaris (Top 5)
+            </h3>
+            <div class="h-80">
+              <Bar
+                :data="topProductsData"
+                :options="chartOptions"
+                v-if="topProductsData.labels.length > 0"
+              />
+              <div
+                v-else
+                class="flex items-center justify-center h-full text-gray-400"
+              >
+                <p>Tidak ada data produk</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Payment Method Pie Chart -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h3 class="text-lg font-bold text-gray-900 mb-4">
+              Penjualan Berdasarkan Metode Pembayaran
+            </h3>
+            <div class="h-80 flex items-center justify-center">
+              <div class="w-full h-full">
+                <Pie
+                  :data="paymentMethodData"
+                  :options="chartOptions"
+                  v-if="paymentMethodData.labels.length > 0"
+                />
+                <div
+                  v-else
+                  class="flex items-center justify-center h-full text-gray-400"
+                >
+                  <p>Tidak ada data pembayaran</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top Selling Items Table -->
+          <div
+            class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col"
+          >
+            <h3 class="text-lg font-bold text-gray-900 mb-4">Item Terjual</h3>
+            <div
+              v-if="allItemsSold.products && allItemsSold.products.length > 0"
+              class="overflow-y-auto flex-1"
+            >
+              <table class="w-full">
+                <thead class="sticky top-0 bg-white">
+                  <tr class="border-b border-gray-200">
+                    <th class="text-left py-3 px-4 font-semibold text-gray-700">
+                      No
+                    </th>
+                    <th class="text-left py-3 px-4 font-semibold text-gray-700">
+                      Nama Produk
+                    </th>
+                    <th class="text-right py-3 px-4 font-semibold text-gray-700">
+                      Jumlah Terjual
+                    </th>
+                    <th class="text-right py-3 px-4 font-semibold text-gray-700">
+                      Total Penjualan
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(product, idx) in allItemsSold.products"
+                    :key="idx"
+                    class="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                  >
+                    <td class="py-3 px-4 text-gray-900 font-medium">
+                      {{ idx + 1 }}
+                    </td>
+                    <td class="py-3 px-4 text-gray-900">{{ product }}</td>
+                    <td class="py-3 px-4 text-right text-gray-900 font-semibold">
+                      {{ allItemsSold.quantities[idx] }} unit
+                    </td>
+                    <td class="py-3 px-4 text-right text-gray-900 font-semibold">
+                      {{
+                        formatCurrency((allItemsSold.sales?.[idx] || 0) as number)
+                      }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div
+              v-else
+              class="flex items-center justify-center flex-1 text-gray-400 py-8"
+            >
+              <div class="text-center">
+                <UIcon
+                  name="i-heroicons-chart-bar"
+                  class="w-12 h-12 mx-auto mb-2 opacity-20"
+                />
+                <p class="font-medium">Belum ada item terjual</p>
               </div>
             </div>
           </div>
         </div>
-
-        <!-- Top Selling Items Table -->
-        <div
-          class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col"
-        >
-          <h3 class="text-lg font-bold text-gray-900 mb-4">Item Terjual</h3>
-          <div
-            v-if="allItemsSold.products && allItemsSold.products.length > 0"
-            class="overflow-y-auto flex-1"
-          >
-            <table class="w-full">
-              <thead class="sticky top-0 bg-white">
-                <tr class="border-b border-gray-200">
-                  <th class="text-left py-3 px-4 font-semibold text-gray-700">
-                    No
-                  </th>
-                  <th class="text-left py-3 px-4 font-semibold text-gray-700">
-                    Nama Produk
-                  </th>
-                  <th class="text-right py-3 px-4 font-semibold text-gray-700">
-                    Jumlah Terjual
-                  </th>
-                  <th class="text-right py-3 px-4 font-semibold text-gray-700">
-                    Total Penjualan
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(product, idx) in allItemsSold.products"
-                  :key="idx"
-                  class="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                >
-                  <td class="py-3 px-4 text-gray-900 font-medium">
-                    {{ idx + 1 }}
-                  </td>
-                  <td class="py-3 px-4 text-gray-900">{{ product }}</td>
-                  <td class="py-3 px-4 text-right text-gray-900 font-semibold">
-                    {{ allItemsSold.quantities[idx] }} unit
-                  </td>
-                  <td class="py-3 px-4 text-right text-gray-900 font-semibold">
-                    {{
-                      formatCurrency((allItemsSold.sales?.[idx] || 0) as number)
-                    }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div
-            v-else
-            class="flex items-center justify-center flex-1 text-gray-400"
-          >
-            <div class="text-center">
-              <UIcon
-                name="i-heroicons-chart-bar"
-                class="w-12 h-12 mx-auto mb-2 opacity-20"
-              />
-              <p class="font-medium">Belum ada item terjual</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      </Transition>
 
       <div
         class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6"
       >
-        <h3 class="text-lg font-bold text-gray-900 mb-4">Transaksi Terakhir</h3>
-        <div v-if="transactions.length > 0" class="divide-y divide-gray-100">
+        <!-- Header with search -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <h3 class="text-lg font-bold text-gray-900">Transaksi Terakhir</h3>
+          <div class="relative w-full sm:w-72">
+            <UIcon
+              name="i-heroicons-magnifying-glass"
+              class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+            />
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Cari no invoice, metode, total..."
+              class="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-gray-700 shadow-sm transition-all placeholder:text-gray-400"
+            />
+            <button
+              v-if="searchQuery"
+              @click="searchQuery = ''"
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <UIcon name="i-heroicons-x-mark" class="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Search result count -->
+        <p v-if="searchQuery" class="text-xs text-gray-500 mb-3">
+          Menampilkan {{ filteredTransactions.length }} dari {{ transactions.length }} transaksi
+        </p>
+
+        <div v-if="filteredTransactions.length > 0" class="divide-y divide-gray-100">
           <div
-            v-for="t in transactions"
+            v-for="t in filteredTransactions"
             :key="t.id"
             class="py-4 flex flex-col gap-4 group hover:bg-gray-50 px-3 -mx-3 rounded-xl transition-colors"
           >
@@ -897,6 +1094,9 @@ watch(
                         ? "Pembayaran Tunai"
                         : "Transfer"
                     }}
+                  </p>
+                  <p class="text-xs font-mono text-primary-600 font-semibold">
+                    {{ t.transaction_number }}
                   </p>
                   <p class="text-xs text-gray-500">
                     {{ formatDateTime(t.created_at) }}
@@ -987,11 +1187,230 @@ watch(
         </div>
         <div v-else class="text-center py-12 text-gray-400">
           <UIcon
-            name="i-heroicons-document-text"
+            :name="searchQuery ? 'i-heroicons-magnifying-glass' : 'i-heroicons-document-text'"
             class="w-12 h-12 mx-auto mb-2 opacity-20"
           />
-          <p class="font-medium">Belum ada transaksi</p>
+          <p class="font-medium">{{ searchQuery ? 'Tidak ditemukan transaksi yang cocok' : 'Belum ada transaksi' }}</p>
+          <p v-if="searchQuery" class="text-sm mt-1">Coba kata kunci lain</p>
         </div>
+      </div>
+    </div>
+
+    <!-- ============ TAB: LABA / RUGI ============ -->
+    <div v-if="activeTab === 'profit'" class="p-8 space-y-8">
+      <!-- Warning if no buy_price -->
+      <div v-if="!hasBuyPriceData" class="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex gap-4 items-start">
+        <UIcon name="i-heroicons-exclamation-triangle" class="w-6 h-6 text-amber-500 shrink-0 mt-0.5" />
+        <div>
+          <p class="font-semibold text-amber-800 mb-1">Harga Modal Belum Diisi</p>
+          <p class="text-sm text-amber-700">
+            Untuk menghitung laba/rugi secara akurat, isi <strong>Harga Beli (Modal)</strong> di setiap produk melalui halaman
+            <NuxtLink to="/products" class="underline font-semibold">Manajemen Produk</NuxtLink>.
+          </p>
+        </div>
+      </div>
+
+      <!-- Profit Stats Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Total Omset</p>
+          <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(totalRevenue) }}</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Total Modal (HPP)</p>
+          <p class="text-2xl font-bold text-red-600">{{ formatCurrency(totalCost) }}</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border" :class="totalProfit >= 0 ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'">
+          <p class="text-xs font-semibold uppercase tracking-wider mb-1" :class="totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600'">Laba Kotor</p>
+          <p class="text-2xl font-bold" :class="totalProfit >= 0 ? 'text-emerald-700' : 'text-red-700'">{{ formatCurrency(totalProfit) }}</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Margin</p>
+          <p class="text-2xl font-bold" :class="profitMargin >= 0 ? 'text-emerald-700' : 'text-red-700'">{{ profitMargin.toFixed(1) }}%</p>
+        </div>
+      </div>
+
+      <!-- Profit Visual Bar -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <h3 class="text-lg font-bold text-gray-900 mb-4">Komposisi Omset</h3>
+        <div class="flex items-center gap-4 mb-3">
+          <div class="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden flex">
+            <div
+              class="h-full bg-emerald-500 rounded-l-full flex items-center justify-center text-xs font-bold text-white transition-all duration-500"
+              :style="{ width: `${totalRevenue > 0 ? Math.max((totalProfit / totalRevenue) * 100, 0) : 0}%` }"
+            >
+              <span v-if="totalRevenue > 0 && (totalProfit / totalRevenue) * 100 > 15">Laba</span>
+            </div>
+            <div
+              class="h-full bg-red-400 flex items-center justify-center text-xs font-bold text-white transition-all duration-500"
+              :style="{ width: `${totalRevenue > 0 ? Math.min((totalCost / totalRevenue) * 100, 100) : 0}%` }"
+            >
+              <span v-if="totalRevenue > 0 && (totalCost / totalRevenue) * 100 > 15">Modal</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex gap-6 text-sm">
+          <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+            <span class="text-gray-600">Laba: {{ formatCurrency(totalProfit) }}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-red-400"></div>
+            <span class="text-gray-600">Modal: {{ formatCurrency(totalCost) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Profit by Product Table -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="p-5 border-b border-gray-100">
+          <h3 class="text-lg font-bold text-gray-900">Laba per Produk</h3>
+          <p class="text-sm text-gray-500">Produk diurutkan dari yang paling menguntungkan</p>
+        </div>
+        <div v-if="profitByProduct.length > 0" class="overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="text-left py-3 px-5 font-semibold text-gray-600 text-sm">No</th>
+                <th class="text-left py-3 px-5 font-semibold text-gray-600 text-sm">Produk</th>
+                <th class="text-right py-3 px-5 font-semibold text-gray-600 text-sm">Terjual</th>
+                <th class="text-right py-3 px-5 font-semibold text-gray-600 text-sm">Omset</th>
+                <th class="text-right py-3 px-5 font-semibold text-gray-600 text-sm">Modal</th>
+                <th class="text-right py-3 px-5 font-semibold text-gray-600 text-sm">Laba</th>
+                <th class="text-right py-3 px-5 font-semibold text-gray-600 text-sm">Margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(p, idx) in profitByProduct"
+                :key="idx"
+                class="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+              >
+                <td class="py-3 px-5 text-gray-500 text-sm">{{ idx + 1 }}</td>
+                <td class="py-3 px-5 font-medium text-gray-900 text-sm">{{ p.name }}</td>
+                <td class="py-3 px-5 text-right text-gray-700 text-sm">{{ p.qty }}</td>
+                <td class="py-3 px-5 text-right text-gray-900 font-semibold text-sm">{{ formatCurrency(p.revenue) }}</td>
+                <td class="py-3 px-5 text-right text-red-600 text-sm">{{ formatCurrency(p.cost) }}</td>
+                <td class="py-3 px-5 text-right font-bold text-sm" :class="p.profit >= 0 ? 'text-emerald-600' : 'text-red-600'">{{ formatCurrency(p.profit) }}</td>
+                <td class="py-3 px-5 text-right text-sm">
+                  <span
+                    class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold"
+                    :class="p.margin >= 30 ? 'bg-emerald-100 text-emerald-700' : p.margin >= 10 ? 'bg-amber-100 text-amber-700' : p.cost === 0 ? 'bg-gray-100 text-gray-500' : 'bg-red-100 text-red-700'"
+                  >
+                    {{ p.cost === 0 ? '-' : p.margin.toFixed(1) + '%' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+            <!-- Totals row -->
+            <tfoot>
+              <tr class="bg-gray-50 font-bold border-t-2 border-gray-200">
+                <td class="py-3 px-5" colspan="2">TOTAL</td>
+                <td class="py-3 px-5 text-right text-sm">{{ profitByProduct.reduce((s, p) => s + p.qty, 0) }}</td>
+                <td class="py-3 px-5 text-right text-sm">{{ formatCurrency(totalRevenue) }}</td>
+                <td class="py-3 px-5 text-right text-red-600 text-sm">{{ formatCurrency(totalCost) }}</td>
+                <td class="py-3 px-5 text-right text-sm" :class="totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600'">{{ formatCurrency(totalProfit) }}</td>
+                <td class="py-3 px-5 text-right text-sm">{{ profitMargin.toFixed(1) }}%</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div v-else class="p-12 text-center text-gray-400">
+          <UIcon name="i-heroicons-calculator" class="w-12 h-12 mx-auto mb-2 opacity-20" />
+          <p class="font-medium">Belum ada data transaksi</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ TAB: LAPORAN HARIAN ============ -->
+    <div v-if="activeTab === 'daily'" class="p-8 space-y-6">
+      <!-- Daily Summary Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Jumlah Hari</p>
+          <p class="text-2xl font-bold text-gray-900">{{ dailyReport.length }} hari</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Rata-rata Penjualan / Hari</p>
+          <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(dailyReport.length > 0 ? totalSales / dailyReport.length : 0) }}</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Rata-rata Transaksi / Hari</p>
+          <p class="text-2xl font-bold text-gray-900">{{ dailyReport.length > 0 ? Math.round(totalTransactions / dailyReport.length) : 0 }} transaksi</p>
+        </div>
+      </div>
+
+      <!-- Daily Cards -->
+      <div v-if="dailyReport.length > 0" class="space-y-4">
+        <div
+          v-for="day in dailyReport"
+          :key="day.dateKey"
+          class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
+        >
+          <!-- Day Header -->
+          <div class="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                <UIcon name="i-heroicons-calendar-days" class="w-6 h-6 text-violet-600" />
+              </div>
+              <div>
+                <p class="font-bold text-gray-900">{{ day.dateLabel }}</p>
+                <p class="text-sm text-gray-500">{{ day.totalTransactions }} transaksi · {{ day.totalItems }} item terjual</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(day.totalSales) }}</p>
+              <p v-if="day.totalCost > 0" class="text-sm font-semibold" :class="day.totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600'">
+                Laba: {{ formatCurrency(day.totalProfit) }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Day Details -->
+          <div class="px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Tunai</p>
+              <p class="text-sm font-bold text-gray-900">{{ formatCurrency(day.cashSales) }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Non-Tunai</p>
+              <p class="text-sm font-bold text-gray-900">{{ formatCurrency(day.nonCashSales) }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Rata-rata</p>
+              <p class="text-sm font-bold text-gray-900">{{ formatCurrency(day.totalTransactions > 0 ? day.totalSales / day.totalTransactions : 0) }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Margin</p>
+              <p class="text-sm font-bold" :class="day.totalCost > 0 ? (day.totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-gray-400'">
+                {{ day.totalCost > 0 ? ((day.totalProfit / day.totalSales) * 100).toFixed(1) + '%' : '-' }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Payment Progress Bar -->
+          <div class="px-5 pb-4">
+            <div class="flex rounded-full h-2 overflow-hidden bg-gray-100">
+              <div class="bg-emerald-500 h-full transition-all duration-300" :style="{ width: day.totalSales > 0 ? `${(day.cashSales / day.totalSales) * 100}%` : '0%' }"></div>
+              <div class="bg-blue-500 h-full transition-all duration-300" :style="{ width: day.totalSales > 0 ? `${(day.nonCashSales / day.totalSales) * 100}%` : '0%' }"></div>
+            </div>
+            <div class="flex gap-4 mt-2 text-xs text-gray-500">
+              <div class="flex items-center gap-1">
+                <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                Tunai {{ day.totalSales > 0 ? ((day.cashSales / day.totalSales) * 100).toFixed(0) : 0 }}%
+              </div>
+              <div class="flex items-center gap-1">
+                <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                Non-Tunai {{ day.totalSales > 0 ? ((day.nonCashSales / day.totalSales) * 100).toFixed(0) : 0 }}%
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-else class="bg-white rounded-2xl p-12 text-center text-gray-400 shadow-sm border border-gray-100">
+        <UIcon name="i-heroicons-calendar-days" class="w-12 h-12 mx-auto mb-2 opacity-20" />
+        <p class="font-medium">Belum ada data harian</p>
+        <p class="text-sm mt-1">Data akan muncul setelah ada transaksi</p>
       </div>
     </div>
 
@@ -1036,43 +1455,97 @@ watch(
     <!-- Delete Confirmation Modal -->
     <Teleport to="body">
       <div
-        v-if="showDeleteModal"
+        v-if="showDeleteModal && selectedTransaction"
         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-        @click.self="showDeleteModal = false"
+        @click.self="!deleteLoading && (showDeleteModal = false)"
       >
         <div
-          class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6"
+          class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6"
           @click.stop
         >
-          <div class="flex items-center gap-3 mb-4">
+          <!-- Header -->
+          <div class="flex items-center gap-3 mb-5">
             <div
-              class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center"
+              class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center shrink-0"
             >
               <UIcon
                 name="i-heroicons-exclamation-triangle"
                 class="w-7 h-7 text-red-600"
               />
             </div>
-            <h3 class="text-xl font-bold text-gray-900">Hapus Transaksi?</h3>
+            <div>
+              <h3 class="text-lg font-bold text-gray-900">Hapus Transaksi?</h3>
+              <p class="text-sm text-gray-500">Tindakan ini tidak dapat dibatalkan</p>
+            </div>
           </div>
 
-          <p class="text-base text-gray-600 mb-6">
-            Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini tidak
-            dapat dibatalkan.
-          </p>
+          <!-- Transaction Info -->
+          <div class="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-200 space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-500">No. Invoice</span>
+              <span class="text-sm font-bold font-mono text-primary-600">{{ (selectedTransaction as any).transaction_number }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-500">Tanggal</span>
+              <span class="text-sm font-medium text-gray-700">{{ formatDateTime((selectedTransaction as any).created_at) }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-500">Metode Bayar</span>
+              <span class="text-sm font-medium text-gray-700">{{ (selectedTransaction as any).payment_method === 'cash' ? 'Tunai' : (selectedTransaction as any).payment_method === 'qris' ? 'QRIS' : 'Kartu Bank' }}</span>
+            </div>
+            <div class="border-t border-gray-200 pt-2 flex justify-between items-center">
+              <span class="text-sm font-semibold text-gray-700">Total</span>
+              <span class="text-lg font-bold text-gray-900">{{ formatCurrency((selectedTransaction as any).total) }}</span>
+            </div>
+          </div>
 
+          <!-- Stock Restoration Notice -->
+          <div class="bg-blue-50 rounded-xl p-4 mb-5 border border-blue-200">
+            <div class="flex gap-3">
+              <UIcon name="i-heroicons-arrow-path" class="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <p class="text-sm font-semibold text-blue-800 mb-1">Stok Akan Dikembalikan</p>
+                <p class="text-xs text-blue-600 mb-2">
+                  Stok produk yang terjual dalam transaksi ini akan otomatis dikembalikan ke inventori.
+                </p>
+                <!-- Item list -->
+                <div
+                  v-if="(selectedTransaction as any).items && (selectedTransaction as any).items.length > 0"
+                  class="space-y-1"
+                >
+                  <div
+                    v-for="item in (selectedTransaction as any).items"
+                    :key="item.id"
+                    class="flex justify-between items-center text-xs"
+                  >
+                    <span class="text-blue-700 truncate mr-2">{{ item.product_name }}</span>
+                    <span class="text-blue-800 font-bold shrink-0">+{{ item.quantity }} {{ item.product_sku || 'pcs' }}</span>
+                  </div>
+                </div>
+                <p v-else class="text-xs text-blue-600 italic">
+                  {{ (selectedTransaction as any).items?.length || 0 }} item akan dikembalikan
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actions -->
           <div class="flex gap-3">
             <button
               @click="showDeleteModal = false"
-              class="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 active:scale-95 transition-all"
+              :disabled="deleteLoading"
+              class="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 active:scale-95 transition-all disabled:opacity-50"
             >
               BATAL
             </button>
             <button
               @click="handleDelete"
-              class="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 active:scale-95 transition-all"
+              :disabled="deleteLoading"
+              class="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              HAPUS
+              <UIcon v-if="deleteLoading" name="i-heroicons-arrow-path" class="w-5 h-5 animate-spin" />
+              <UIcon v-else name="i-heroicons-trash" class="w-5 h-5" />
+              {{ deleteLoading ? 'MENGHAPUS...' : 'HAPUS' }}
             </button>
           </div>
         </div>
@@ -1082,6 +1555,25 @@ watch(
 </template>
 
 <style scoped>
+/* Chart toggle transition */
+.chart-toggle-enter-active,
+.chart-toggle-leave-active {
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+.chart-toggle-enter-from,
+.chart-toggle-leave-to {
+  opacity: 0;
+  max-height: 0;
+  transform: translateY(-8px);
+}
+.chart-toggle-enter-to,
+.chart-toggle-leave-from {
+  opacity: 1;
+  max-height: 500px;
+  transform: translateY(0);
+}
+
 /* Print style untuk cetak struk */
 @media print {
   body * {
