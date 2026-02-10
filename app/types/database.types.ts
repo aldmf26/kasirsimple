@@ -24,6 +24,7 @@ export interface Database {
                     enabled_payment_methods: string | null
                     bank_accounts: string | null
                     show_product_images: boolean
+                    discount_tax_settings: string | null
                     created_at: string
                     updated_at: string
                 }
@@ -41,6 +42,7 @@ export interface Database {
                     enabled_payment_methods?: string | null
                     bank_accounts?: string | null
                     show_product_images?: boolean
+                    discount_tax_settings?: string | null
                     created_at?: string
                     updated_at?: string
                 }
@@ -58,6 +60,7 @@ export interface Database {
                     enabled_payment_methods?: string | null
                     bank_accounts?: string | null
                     show_product_images?: boolean
+                    discount_tax_settings?: string | null
                     created_at?: string
                     updated_at?: string
                 }
@@ -173,7 +176,11 @@ export interface Database {
                     subtotal: number
                     discount: number
                     discount_type: string
+                    discount_from_settings: number
                     tax: number
+                    tax_percentage: number | null
+                    ppn: number
+                    ppn_percentage: number | null
                     total: number
                     paid: number
                     change: number
@@ -191,7 +198,11 @@ export interface Database {
                     subtotal: number
                     discount?: number
                     discount_type?: string
+                    discount_from_settings?: number
                     tax?: number
+                    tax_percentage?: number | null
+                    ppn?: number
+                    ppn_percentage?: number | null
                     total: number
                     paid: number
                     change: number
@@ -209,7 +220,11 @@ export interface Database {
                     subtotal?: number
                     discount?: number
                     discount_type?: string
+                    discount_from_settings?: number
                     tax?: number
+                    tax_percentage?: number | null
+                    ppn?: number
+                    ppn_percentage?: number | null
                     total?: number
                     paid?: number
                     change?: number

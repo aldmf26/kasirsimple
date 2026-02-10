@@ -11,7 +11,7 @@
         class="w-16 h-16 object-contain mx-auto mb-2 grayscale"
       />
       <h2 class="font-bold text-base uppercase">
-        {{ store?.name || "Kasir Simple" }}
+        {{ store?.name || "Kasir Simple" }} 
       </h2>
       <p v-if="store?.address">{{ store.address }}</p>
       <p v-if="store?.phone">{{ store.phone }}</p>
@@ -54,10 +54,75 @@
 
     <!-- Summary -->
     <div class="space-y-1 font-bold">
+      <!-- Subtotal -->
       <div class="flex justify-between">
+        <span>SUBTOTAL</span>
+        <span>{{ formatCurrency(transaction.subtotal) }}</span>
+      </div>
+
+      <!-- Diskon Manual (hanya tampil kalau ada) -->
+      <div
+        v-if="transaction.discount > 0"
+        class="flex justify-between text-orange-700"
+      >
+        <span>DISKON MANUAL</span>
+        <span>-{{ formatCurrency(transaction.discount) }}</span>
+      </div>
+
+      <!-- Diskon Sistem (hanya tampil kalau ada) -->
+      <div
+        v-if="(transaction.discount_from_settings || 0) > 0"
+        class="flex justify-between text-orange-700"
+      >
+        <span>DISKON SISTEM</span>
+        <span
+          >-{{ formatCurrency(transaction.discount_from_settings || 0) }}</span
+        >
+      </div>
+
+      <!-- Subtotal after discount (hanya tampil kalau ada diskon) -->
+      <div
+        v-if="
+          (transaction.discount || 0) > 0 ||
+          (transaction.discount_from_settings || 0) > 0
+        "
+        class="flex justify-between bg-gray-100 px-2 py-1"
+      >
+        <span>SUBTOTAL NETTO</span>
+        <span>{{
+          formatCurrency(
+            transaction.subtotal -
+              (transaction.discount || 0) -
+              (transaction.discount_from_settings || 0),
+          )
+        }}</span>
+      </div>
+
+      <!-- Tax (hanya tampil kalau ada) -->
+      <div
+        v-if="(transaction.tax || 0) > 0"
+        class="flex justify-between text-blue-700"
+      >
+        <span>PAJAK ({{ transaction.tax_percentage }}%)</span>
+        <span>+{{ formatCurrency(transaction.tax) }}</span>
+      </div>
+
+      <!-- PPN (hanya tampil kalau ada) -->
+      <div
+        v-if="(transaction.ppn || 0) > 0"
+        class="flex justify-between text-blue-700"
+      >
+        <span>PPN ({{ transaction.ppn_percentage }}%)</span>
+        <span>+{{ formatCurrency(transaction.ppn) }}</span>
+      </div>
+
+      <!-- Total -->
+      <div class="flex justify-between text-lg">
         <span>TOTAL</span>
         <span>{{ formatCurrency(transaction.total) }}</span>
       </div>
+
+      <!-- Bayar -->
       <div class="flex justify-between">
         <span
           >BAYAR ({{
@@ -74,6 +139,8 @@
           formatCurrency(transaction.paid_amount || transaction.total)
         }}</span>
       </div>
+
+      <!-- Kembali/Change -->
       <div class="flex justify-between">
         <span>KEMBALI</span>
         <span>{{

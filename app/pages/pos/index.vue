@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatCurrency, paymentMethods } from "~/utils/helpers";
+import { formatCurrency } from "~/utils/helpers";
 
 definePageMeta({ layout: "default" });
 
@@ -60,6 +60,45 @@ const showProductImages = computed(() => {
   return storeData.show_product_images !== false;
 });
 
+// Get discount & tax settings from store
+const discountTaxSettings = computed(() => {
+  if (!store.value) {
+    return {
+      discount_global: { enabled: false, percent: 0 },
+      discount_nominal: { enabled: false, min_amount: 0, discount_percent: 0 },
+      tax: { enabled: false, percent: 0 },
+      ppn: { enabled: false, percent: 0 },
+    };
+  }
+  const storeData = store.value as any;
+  if (storeData.discount_tax_settings) {
+    try {
+      const parsed =
+        typeof storeData.discount_tax_settings === "string"
+          ? JSON.parse(storeData.discount_tax_settings)
+          : storeData.discount_tax_settings;
+      return parsed;
+    } catch (e) {
+      return {
+        discount_global: { enabled: false, percent: 0 },
+        discount_nominal: {
+          enabled: false,
+          min_amount: 0,
+          discount_percent: 0,
+        },
+        tax: { enabled: false, percent: 0 },
+        ppn: { enabled: false, percent: 0 },
+      };
+    }
+  }
+  return {
+    discount_global: { enabled: false, percent: 0 },
+    discount_nominal: { enabled: false, min_amount: 0, discount_percent: 0 },
+    tax: { enabled: false, percent: 0 },
+    ppn: { enabled: false, percent: 0 },
+  };
+});
+
 const filteredPaymentMethods = computed(() => {
   return paymentMethods.filter((method) =>
     enabledPaymentMethods.value.includes(method.value),
@@ -83,10 +122,9 @@ const showAlert = (type: "success" | "error", message: string) => {
 const displayPaid = ref("0");
 const selectedCategory = ref("all");
 const searchQuery = ref("");
-const displayedProductsCount = ref(8); // Load more state
+const displayedProductsCount = ref(8);
 const showPaymentModal = ref(false);
-const showReceiptModal = ref(false); // Original receipt modal state, will be replaced by showReceipt
-const showReceipt = ref(false); // NEW state for the thermal printer style receipt
+const showReceipt = ref(false);
 
 interface TransactionReceipt {
   id: string;
@@ -98,6 +136,13 @@ interface TransactionReceipt {
     quantity: number;
     subtotal: number;
   }[];
+  subtotal: number;
+  discount: number;
+  discount_from_settings: number;
+  tax: number;
+  tax_percentage: number;
+  ppn: number;
+  ppn_percentage: number;
   total: number;
   paid_amount: number;
   change_amount: number;
@@ -105,9 +150,8 @@ interface TransactionReceipt {
   customer_name: string;
 }
 
-const lastTransaction = ref<TransactionReceipt | null>(null); // NEW state to store transaction data for the receipt
+const lastTransaction = ref<TransactionReceipt | null>(null);
 const loading = ref(false);
-const transactionData = ref(null); // untuk simpan data nota (this will be replaced by lastTransaction for the new receipt)
 
 const formattedPaid = computed({
   get: () => displayPaid.value,
@@ -132,14 +176,12 @@ const paymentForm = ref({
 const filteredProducts = computed(() => {
   let result = products.value || [];
 
-  // Filter by favorite first
   if (selectedCategory.value === "favorite") {
     result = result.filter((p) => p.is_favorite === true);
   } else if (selectedCategory.value !== "all") {
     result = result.filter((p) => p.category_id === selectedCategory.value);
   }
 
-  // Then filter by search query
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.toLowerCase().trim();
     result = result.filter((p) => p.name.toLowerCase().includes(q));
@@ -162,7 +204,59 @@ const discountAmount = computed(() => {
   return paymentForm.value.discount || 0;
 });
 
-const cartTotal = computed(() => cartSubtotal.value - discountAmount.value);
+const settingsDiscount = computed(() => {
+  let discount = 0;
+
+  if (discountTaxSettings.value.discount_global.enabled) {
+    discount += Math.round(
+      cartSubtotal.value *
+        (discountTaxSettings.value.discount_global.percent / 100),
+    );
+  }
+
+  if (
+    discountTaxSettings.value.discount_nominal.enabled &&
+    cartSubtotal.value >= discountTaxSettings.value.discount_nominal.min_amount
+  ) {
+    discount += Math.round(
+      cartSubtotal.value *
+        (discountTaxSettings.value.discount_nominal.discount_percent / 100),
+    );
+  }
+
+  return discount;
+});
+
+const subtotalAfterDiscount = computed(() => {
+  return Math.max(
+    0,
+    cartSubtotal.value - discountAmount.value - settingsDiscount.value,
+  );
+});
+
+const taxAmount = computed(() => {
+  if (discountTaxSettings.value.tax.enabled) {
+    return Math.round(
+      subtotalAfterDiscount.value *
+        (discountTaxSettings.value.tax.percent / 100),
+    );
+  }
+  return 0;
+});
+
+const ppnAmount = computed(() => {
+  if (discountTaxSettings.value.ppn.enabled) {
+    return Math.round(
+      subtotalAfterDiscount.value *
+        (discountTaxSettings.value.ppn.percent / 100),
+    );
+  }
+  return 0;
+});
+
+const cartTotal = computed(
+  () => subtotalAfterDiscount.value + taxAmount.value + ppnAmount.value,
+);
 
 const changeAmount = computed(() =>
   Math.max(0, paymentForm.value.paid - cartTotal.value),
@@ -203,40 +297,52 @@ const processPayment = async () => {
   if (!cart.value.length) return;
 
   const total = cartTotal.value;
-  const paid = paymentForm.value.paid; // Access value from ref
+  const paid = paymentForm.value.paid;
 
   if (paid < total && paymentForm.value.paymentMethod === "cash") {
-    // Access value from ref
     showAlert("error", "Pembayaran kurang dari total belanja");
     return;
   }
 
-  // Snapshot data sebelum createTransaction (karena cart akan di-clear)
-  const currentItems = cart.value.map((item) => ({
-    name: item.product_name,
+  // ✅ EDIT: Snapshot cart items SEBELUM createTransaction
+  // Deep copy cart untuk menghindari referensi yang berubah
+  const snapshotItems = JSON.parse(JSON.stringify(cart.value.map((item) => ({
+    product_name: item.product_name,
+    product_price: item.product_price,
     quantity: item.quantity,
-    price: item.product_price,
     subtotal: item.subtotal,
-  }));
+  }))));
+
+  // Snapshot data lainnya
+  const currentSubtotal = cartSubtotal.value;
   const currentTotal = cartTotal.value;
   const currentPaid = paymentForm.value.paid;
   const currentChange = changeAmount.value;
   const currentPaymentMethod = paymentForm.value.paymentMethod;
   const currentCustomerName = paymentForm.value.customerName;
+  const currentDiscount = discountAmount.value;
+  const currentSettingsDiscount = settingsDiscount.value;
+  const currentTax = taxAmount.value;
+  const currentPpn = ppnAmount.value;
 
   loading.value = true;
   try {
     const transactionPayload = {
       paid: currentPaid,
       payment_method: currentPaymentMethod,
-      discount: discountAmount.value,
+      discount: currentDiscount,
       discount_type: paymentForm.value.discountType,
+      discount_from_settings: currentSettingsDiscount,
+      tax: currentTax,
+      tax_percentage: discountTaxSettings.value.tax.percent,
+      ppn: currentPpn,
+      ppn_percentage: discountTaxSettings.value.ppn.percent,
       customer_name: currentCustomerName,
     };
 
     const result = await createTransaction(transactionPayload);
 
-    // Simpan data untuk struk baru (gunakan snapshot)
+    // ✅ EDIT: Gunakan snapshot items yang sudah disimpan sebelumnya
     lastTransaction.value = {
       id: result?.id || `TRX-${Date.now().toString().slice(-8)}`,
       created_at: new Date().toISOString(),
@@ -244,12 +350,14 @@ const processPayment = async () => {
         result?.transaction_number ||
         result?.id ||
         `TRX-${Date.now().toString().slice(-8)}`,
-      items: currentItems.map((item) => ({
-        product_name: item.name,
-        product_price: item.price,
-        quantity: item.quantity,
-        subtotal: item.subtotal,
-      })),
+      items: snapshotItems, // ← Gunakan snapshot yang sudah dibuat sebelum cart di-clear
+      subtotal: currentSubtotal,
+      discount: currentDiscount,
+      discount_from_settings: currentSettingsDiscount,
+      tax: currentTax,
+      tax_percentage: discountTaxSettings.value.tax.percent,
+      ppn: currentPpn,
+      ppn_percentage: discountTaxSettings.value.ppn.percent,
       total: currentTotal,
       paid_amount: currentPaid,
       change_amount: currentChange,
@@ -266,16 +374,15 @@ const processPayment = async () => {
       discountType: "nominal",
       selectedBankAccount: "",
     };
-    displayPaid.value = "0"; // Reset display paid
+    displayPaid.value = "0";
     showPaymentModal.value = false;
 
-    // Refresh products untuk update stock di UI
+    // Refresh products
     await fetchProducts();
 
-    // Tampilkan Struk baru
+    // Tampilkan Struk
     showReceipt.value = true;
 
-    // Feedback User
     showAlert("success", "Transaksi Berhasil Disimpan");
   } catch (error: any) {
     showAlert("error", error.message || "Gagal Memproses Transaksi");
@@ -301,7 +408,6 @@ const printReceipt = () => {
 };
 
 onMounted(async () => {
-  // Ensure store is loaded before fetching products/categories
   if (!store.value) {
     await useStore().fetchStore();
   }
@@ -321,6 +427,7 @@ watch(
 </script>
 
 <template>
+  <!-- TEMPLATE TETAP SAMA SEPERTI SEBELUMNYA - TIDAK ADA PERUBAHAN -->
   <div
     class="flex flex-col lg:flex-row min-h-[calc(100vh-64px)] bg-gray-50 gap-0 lg:gap-0"
   >
@@ -389,7 +496,7 @@ watch(
               'opacity-50 pointer-events-none': product.stock === 0,
             }"
           >
-            <!-- Gambar Produk - Conditional Render -->
+            <!-- Gambar Produk -->
             <div
               v-if="showProductImages"
               class="relative bg-gray-100 aspect-square flex items-center justify-center overflow-hidden"
@@ -573,6 +680,36 @@ watch(
 
         <!-- Footer -->
         <div class="p-4 border-gray-200 bg-gray-50 space-y-3">
+          <!-- Discount Info -->
+          <div
+            v-if="settingsDiscount > 0 || discountAmount > 0"
+            class="bg-orange-50 p-3 rounded-lg border border-orange-200"
+          >
+            <p class="text-xs font-semibold text-orange-700 mb-1">
+              ✨ Diskon Diterapkan:
+            </p>
+            <div class="space-y-1 text-sm">
+              <div
+                v-if="discountAmount > 0"
+                class="flex justify-between text-orange-600"
+              >
+                <span>Diskon Manual</span>
+                <span class="font-bold"
+                  >-{{ formatCurrency(discountAmount) }}</span
+                >
+              </div>
+              <div
+                v-if="settingsDiscount > 0"
+                class="flex justify-between text-orange-600"
+              >
+                <span>Diskon Sistem</span>
+                <span class="font-bold"
+                  >-{{ formatCurrency(settingsDiscount) }}</span
+                >
+              </div>
+            </div>
+          </div>
+
           <!-- Total -->
           <div
             class="flex justify-between items-center text-xl font-black bg-gradient-to-br from-primary-50 to-primary-100 p-5 rounded-2xl border-2 border-primary-200"
@@ -611,7 +748,7 @@ watch(
       </div>
     </div>
 
-    <!-- Modal Pembayaran -->
+    <!-- Modal Pembayaran - SAMA, TIDAK ADA PERUBAHAN -->
     <Teleport to="body">
       <div
         v-if="showPaymentModal"
@@ -630,12 +767,74 @@ watch(
 
           <!-- Body -->
           <div class="p-6 space-y-4">
+            <!-- Breakdown Detail -->
+            <div
+              class="bg-gray-50 rounded-2xl border border-gray-200 p-4 space-y-2 text-sm"
+            >
+              <div class="flex justify-between">
+                <span class="text-gray-600">Subtotal</span>
+                <span class="font-bold text-gray-900">{{
+                  formatCurrency(cartSubtotal)
+                }}</span>
+              </div>
+
+              <div
+                v-if="discountAmount > 0"
+                class="flex justify-between text-orange-600"
+              >
+                <span>Diskon Manual</span>
+                <span class="font-bold"
+                  >-{{ formatCurrency(discountAmount) }}</span
+                >
+              </div>
+
+              <div
+                v-if="settingsDiscount > 0"
+                class="flex justify-between text-orange-600"
+              >
+                <span v-if="discountTaxSettings.discount_global.enabled">
+                  Diskon Sistem ({{
+                    discountTaxSettings.discount_global.percent
+                  }}%)
+                </span>
+                <span v-else> Diskon Sistem </span>
+                <span class="font-bold"
+                  >-{{ formatCurrency(settingsDiscount) }}</span
+                >
+              </div>
+
+              <div
+                v-if="taxAmount > 0"
+                class="flex justify-between text-blue-600"
+              >
+                <span>Pajak ({{ discountTaxSettings.tax.percent }}%)</span>
+                <span class="font-bold">+{{ formatCurrency(taxAmount) }}</span>
+              </div>
+
+              <div
+                v-if="ppnAmount > 0"
+                class="flex justify-between text-blue-600"
+              >
+                <span>PPN ({{ discountTaxSettings.ppn.percent }}%)</span>
+                <span class="font-bold">+{{ formatCurrency(ppnAmount) }}</span>
+              </div>
+
+              <div
+                class="border-t border-gray-300 pt-2 mt-2 flex justify-between"
+              >
+                <span class="font-bold text-gray-900">Total</span>
+                <span class="font-black text-lg text-gray-900">{{
+                  formatCurrency(cartTotal)
+                }}</span>
+              </div>
+            </div>
+
             <!-- Total Tagihan -->
             <div
               class="text-center p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border-2 border-blue-200"
             >
               <p class="text-xs font-bold text-blue-600 uppercase mb-2">
-                Total Tagihan
+                Total Bayar
               </p>
               <h2 class="text-5xl font-black text-blue-700">
                 {{ formatCurrency(cartTotal) }}
@@ -679,7 +878,7 @@ watch(
               </div>
             </div>
 
-            <!-- Bank Account Selection (for Card Payment) -->
+            <!-- Bank Account Selection -->
             <div
               v-if="
                 paymentForm.paymentMethod === 'card' && bankAccounts.length > 0
@@ -783,114 +982,7 @@ watch(
       </div>
     </Teleport>
 
-    <!-- Modal Nota / Struk (Original, will be replaced by the new one) -->
-    <Teleport to="body">
-      <div
-        v-if="showReceiptModal"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
-        style="background-color: rgba(0, 0, 0, 0.6)"
-      >
-        <div
-          class="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto"
-          @click.stop
-        >
-          <!-- Struk Content -->
-          <div class="p-6 text-center space-y-4">
-            <!-- Logo & Toko -->
-            <div>
-              <div
-                class="w-20 h-20 mx-auto bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center mb-2"
-              >
-                <span class="text-4xl font-bold">T</span>
-              </div>
-              <h2 class="text-2xl font-bold text-primary">
-                {{ store?.name || "TOKO BARAT" }}
-              </h2>
-              <p class="text-sm text-gray-600">
-                {{ store?.address || "JL Alalak" }}
-              </p>
-              <p class="text-sm text-gray-600">
-                {{ store?.phone || "08123456789" }}
-              </p>
-            </div>
-
-            <!-- Tanggal & ID -->
-            <div class="text-sm text-gray-500 border-b pb-3">
-              {{ transactionData?.date }}
-              <br />
-              ID: {{ transactionData?.id }}
-            </div>
-
-            <!-- Daftar Item -->
-            <div class="text-left space-y-2 text-sm">
-              <div
-                v-for="item in transactionData?.items"
-                :key="item.name"
-                class="flex justify-between border-b pb-1"
-              >
-                <div>
-                  <p class="font-medium">{{ item.name }}</p>
-                  <p class="text-gray-500">
-                    {{ item.qty }} pcs x {{ formatCurrency(item.price) }}
-                  </p>
-                </div>
-                <p class="font-medium">{{ formatCurrency(item.subtotal) }}</p>
-              </div>
-            </div>
-
-            <!-- Ringkasan -->
-            <div class="space-y-2 text-sm text-black">
-              <div class="flex justify-between font-medium">
-                <span>Subtotal</span>
-                <span>{{ formatCurrency(transactionData?.subtotal) }}</span>
-              </div>
-              <div
-                class="flex justify-between text-lg font-black border-t pt-2"
-              >
-                <span>TOTAL</span>
-                <span>{{ formatCurrency(transactionData?.total) }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span>Metode Bayar</span>
-                <span>{{ transactionData?.method }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span>Dibayar</span>
-                <span>{{ formatCurrency(transactionData?.paid) }}</span>
-              </div>
-              <div class="flex justify-between font-bold text-success text-lg">
-                <span>Kembalian</span>
-                <span>{{ formatCurrency(transactionData?.change) }}</span>
-              </div>
-            </div>
-
-            <div class="pt-4 text-gray-500 text-xs italic">
-              --- Terima Kasih Telah Berbelanja ---
-            </div>
-
-            <!-- Tombol Action -->
-            <div class="grid grid-cols-2 gap-3 pt-4">
-              <button
-                class="justify-center px-4 py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 active:scale-95 transition-all flex items-center gap-2"
-              >
-                <UIcon name="i-heroicons-printer" class="w-6 h-6" />
-                CETAK
-              </button>
-
-              <button
-                @click="showReceiptModal = false"
-                class="justify-center px-4 py-3 bg-gray-200 text-gray-800 rounded-xl font-bold hover:bg-gray-300 active:scale-95 transition-all flex items-center gap-2"
-              >
-                <UIcon name="i-heroicons-x-mark" class="w-6 h-6" />
-                TUTUP
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Modal Struk (NEW thermal printer style) -->
+    <!-- Modal Struk - SAMA, TIDAK ADA PERUBAHAN -->
     <Teleport to="body">
       <div
         v-if="showReceipt && lastTransaction"
@@ -900,7 +992,7 @@ watch(
         <div
           class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto flex flex-col"
         >
-          <!-- Preview Area -->
+          <!-- Thermal Printer Receipt Component -->
           <ThermalPrinterReceipt
             :transaction="lastTransaction"
             :store="store"

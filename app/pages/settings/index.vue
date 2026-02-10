@@ -71,6 +71,19 @@ watch(
       // Load product display setting
       showProductImages.value = storeData.show_product_images !== false;
 
+      // Load discount & tax settings
+      if (storeData.discount_tax_settings) {
+        try {
+          const parsed =
+            typeof storeData.discount_tax_settings === "string"
+              ? JSON.parse(storeData.discount_tax_settings)
+              : storeData.discount_tax_settings;
+          Object.assign(discountTaxSettings, parsed);
+        } catch (e) {
+          console.error("Error parsing discount_tax_settings:", e);
+        }
+      }
+
       // Reset preview saat load data baru
       if (!selectedLogoFile.value) {
         logoPreview.value = newStore.logo_url || "";
@@ -147,6 +160,27 @@ const enabledPaymentMethods = ref(["cash", "transfer", "qris"]);
 
 // Product display settings
 const showProductImages = ref(true);
+
+// Discount & Tax settings
+const discountTaxSettings = reactive({
+  discount_global: {
+    enabled: false,
+    percent: 0,
+  },
+  discount_nominal: {
+    enabled: false,
+    min_amount: 0,
+    discount_percent: 0,
+  },
+  tax: {
+    enabled: false,
+    percent: 0,
+  },
+  ppn: {
+    enabled: false,
+    percent: 0,
+  },
+});
 
 // Bank accounts for card payment
 const bankAccounts = ref<
@@ -313,6 +347,7 @@ const autoSavePaymentSettings = async () => {
       enabled_payment_methods: JSON.stringify(enabledPaymentMethods.value),
       bank_accounts: JSON.stringify(bankAccounts.value),
       show_product_images: showProductImages.value,
+      discount_tax_settings: JSON.stringify(discountTaxSettings),
     };
     await updateStore(store.value.id, updateData);
     showAlert("success", "Pengaturan berhasil disimpan");
@@ -353,12 +388,19 @@ watch(
 );
 
 // Watch product images setting with debounce
+watch(showProductImages, () => {
+  if (paymentSettingsDebounce) clearTimeout(paymentSettingsDebounce);
+  paymentSettingsDebounce = setTimeout(autoSavePaymentSettings, 1000);
+});
+
+// Watch discount & tax settings with debounce
 watch(
-  showProductImages,
+  discountTaxSettings,
   () => {
     if (paymentSettingsDebounce) clearTimeout(paymentSettingsDebounce);
     paymentSettingsDebounce = setTimeout(autoSavePaymentSettings, 1000);
   },
+  { deep: true },
 );
 
 const handleLogout = () => {
@@ -783,9 +825,233 @@ const handleLogout = () => {
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- Account -->
+          <!-- Diskon & Pajak Settings -->
+          <div
+            class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"
+          >
+            <h2 class="text-xl font-bold text-gray-900 mb-2">
+              💰 Diskon & Pajak
+            </h2>
+            <p class="text-sm text-gray-500 mb-6">
+              Atur diskon dan pajak yang berlaku untuk semua transaksi
+            </p>
+
+            <div class="space-y-6">
+              <!-- Diskon Global -->
+              <div class="border-b border-gray-200 pb-6">
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <p class="font-bold text-gray-900">Diskon Global</p>
+                    <p class="text-xs text-gray-500 mt-1">
+                      Berikan diskon untuk semua transaksi.
+                    </p>
+                  </div>
+                  <button
+                    @click="
+                      discountTaxSettings.discount_global.enabled =
+                        !discountTaxSettings.discount_global.enabled
+                    "
+                    class="relative inline-flex h-6 w-11 items-center rounded-full"
+                    :class="
+                      discountTaxSettings.discount_global.enabled
+                        ? 'bg-emerald-600'
+                        : 'bg-gray-300'
+                    "
+                  >
+                    <span
+                      class="inline-block h-4 w-4 transform rounded-full bg-white transition"
+                      :class="
+                        discountTaxSettings.discount_global.enabled
+                          ? 'translate-x-6'
+                          : 'translate-x-1'
+                      "
+                    />
+                  </button>
+                </div>
+                <div
+                  v-if="discountTaxSettings.discount_global.enabled"
+                  class="flex items-center gap-3"
+                >
+                  <input
+                    v-model.number="discountTaxSettings.discount_global.percent"
+                    type="number"
+                    min="0"
+                    max="100"
+                    class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="0"
+                  />
+                  <span class="text-sm font-bold text-gray-600">%</span>
+                </div>
+              </div>
+
+              <!-- Diskon Berdasarkan Nominal -->
+              <div class="border-b border-gray-200 pb-6">
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <p class="font-bold text-gray-900">
+                      Diskon Berdasarkan Nominal
+                    </p>
+                    <p class="text-xs text-gray-500 mt-1">
+                      Diskon jika total belanja mencapai nominal tertentu.
+                    </p>
+                  </div>
+                  <button
+                    @click="
+                      discountTaxSettings.discount_nominal.enabled =
+                        !discountTaxSettings.discount_nominal.enabled
+                    "
+                    class="relative inline-flex h-6 w-11 items-center rounded-full"
+                    :class="
+                      discountTaxSettings.discount_nominal.enabled
+                        ? 'bg-emerald-600'
+                        : 'bg-gray-300'
+                    "
+                  >
+                    <span
+                      class="inline-block h-4 w-4 transform rounded-full bg-white transition"
+                      :class="
+                        discountTaxSettings.discount_nominal.enabled
+                          ? 'translate-x-6'
+                          : 'translate-x-1'
+                      "
+                    />
+                  </button>
+                </div>
+                <div
+                  v-if="discountTaxSettings.discount_nominal.enabled"
+                  class="space-y-3"
+                >
+                  <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-2"
+                      >Jika belanja di atas(Rp)</label
+                    >
+                    <input
+                      v-model.number="
+                        discountTaxSettings.discount_nominal.min_amount
+                      "
+                      type="number"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-2"
+                      >Maka diskon sebesar</label
+                    >
+                    <div class="flex items-center gap-3">
+                      <input
+                        v-model.number="
+                          discountTaxSettings.discount_nominal.discount_percent
+                        "
+                        type="number"
+                        min="0"
+                        max="100"
+                        class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        placeholder="0"
+                      />
+                      <span class="text-sm font-bold text-gray-600">%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pajak/Tax -->
+              <div class="border-b border-gray-200 pb-6">
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <p class="font-bold text-gray-900">Pajak(Tax)</p>
+                    <p class="text-xs text-gray-500 mt-1">
+                      Tambahkan pajak(selain PPN)ke transaksi.
+                    </p>
+                  </div>
+                  <button
+                    @click="
+                      discountTaxSettings.tax.enabled =
+                        !discountTaxSettings.tax.enabled
+                    "
+                    class="relative inline-flex h-6 w-11 items-center rounded-full"
+                    :class="
+                      discountTaxSettings.tax.enabled
+                        ? 'bg-emerald-600'
+                        : 'bg-gray-300'
+                    "
+                  >
+                    <span
+                      class="inline-block h-4 w-4 transform rounded-full bg-white transition"
+                      :class="
+                        discountTaxSettings.tax.enabled
+                          ? 'translate-x-6'
+                          : 'translate-x-1'
+                      "
+                    />
+                  </button>
+                </div>
+                <div
+                  v-if="discountTaxSettings.tax.enabled"
+                  class="flex items-center gap-3"
+                >
+                  <input
+                    v-model.number="discountTaxSettings.tax.percent"
+                    type="number"
+                    min="0"
+                    max="100"
+                    class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="0"
+                  />
+                  <span class="text-sm font-bold text-gray-600">%</span>
+                </div>
+              </div>
+
+              <!-- PPN -->
+              <div>
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <p class="font-bold text-gray-900">PPN</p>
+                    <p class="text-xs text-gray-500 mt-1">
+                      Tambahkan PPN ke transaksi.
+                    </p>
+                  </div>
+                  <button
+                    @click="
+                      discountTaxSettings.ppn.enabled =
+                        !discountTaxSettings.ppn.enabled
+                    "
+                    class="relative inline-flex h-6 w-11 items-center rounded-full"
+                    :class="
+                      discountTaxSettings.ppn.enabled
+                        ? 'bg-emerald-600'
+                        : 'bg-gray-300'
+                    "
+                  >
+                    <span
+                      class="inline-block h-4 w-4 transform rounded-full bg-white transition"
+                      :class="
+                        discountTaxSettings.ppn.enabled
+                          ? 'translate-x-6'
+                          : 'translate-x-1'
+                      "
+                    />
+                  </button>
+                </div>
+                <div
+                  v-if="discountTaxSettings.ppn.enabled"
+                  class="flex items-center gap-3"
+                >
+                  <input
+                    v-model.number="discountTaxSettings.ppn.percent"
+                    type="number"
+                    min="0"
+                    max="100"
+                    class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="0"
+                  />
+                  <span class="text-sm font-bold text-gray-600">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         <div v-if="activeSection === 'account'" class="max-w-2xl space-y-6">
           <div
             class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"

@@ -152,7 +152,13 @@ export const useTransactions = () => {
                 }
             }
 
-            const total = subtotal - discountAmount
+            // Calculate total including discount from settings, tax, and ppn
+            const discountFromSettings = paymentData.discount_from_settings || 0
+            const tax = paymentData.tax || 0
+            const ppn = paymentData.ppn || 0
+            
+            const subtotalAfterDiscount = subtotal - discountAmount - discountFromSettings
+            const total = subtotalAfterDiscount + tax + ppn
             const change = paymentData.paid - total
 
             if (paymentData.payment_method === 'cash' && change < 0) {
@@ -161,25 +167,45 @@ export const useTransactions = () => {
 
             const transactionNumber = await generateTransactionNumber()
 
+            // Build insert object dengan optional fields
+            const transactionInsert: any = {
+                store_id: store.value.id,
+                transaction_number: transactionNumber,
+                subtotal,
+                discount: discountAmount,
+                discount_type: paymentData.discount_type || 'nominal',
+                total,
+                paid: paymentData.paid,
+                change,
+                payment_method: paymentData.payment_method,
+                customer_name: paymentData.customer_name || null,
+                customer_phone: paymentData.customer_phone || null,
+                notes: paymentData.notes || null,
+                created_by: user.value?.id
+            }
+
+            // Add optional discount & tax fields jika ada
+            if (paymentData.discount_from_settings !== undefined) {
+                transactionInsert.discount_from_settings = paymentData.discount_from_settings || 0
+            }
+            if (paymentData.tax !== undefined) {
+                transactionInsert.tax = paymentData.tax || 0
+            }
+            if (paymentData.tax_percentage !== undefined) {
+                transactionInsert.tax_percentage = paymentData.tax_percentage || null
+            }
+            if (paymentData.ppn !== undefined) {
+                transactionInsert.ppn = paymentData.ppn || 0
+            }
+            if (paymentData.ppn_percentage !== undefined) {
+                transactionInsert.ppn_percentage = paymentData.ppn_percentage || null
+            }
+
             // Insert transaction header
             // @ts-ignore
             const { data: transaction, error: transactionError } = await supabase
                 .from('transactions')
-                .insert({
-                    store_id: store.value.id,
-                    transaction_number: transactionNumber,
-                    subtotal,
-                    discount: discountAmount,
-                    discount_type: paymentData.discount_type || 'nominal',
-                    total,
-                    paid: paymentData.paid,
-                    change,
-                    payment_method: paymentData.payment_method,
-                    customer_name: paymentData.customer_name || null,
-                    customer_phone: paymentData.customer_phone || null,
-                    notes: paymentData.notes || null,
-                    created_by: user.value?.id // Pastikan user value valid
-                })
+                .insert(transactionInsert)
                 .select()
                 .single()
 

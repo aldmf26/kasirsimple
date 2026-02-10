@@ -565,50 +565,109 @@ watch(
           <div
             v-for="t in transactions"
             :key="t.id"
-            class="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group hover:bg-gray-50 px-3 -mx-3 rounded-xl transition-colors"
+            class="py-4 flex flex-col gap-4 group hover:bg-gray-50 px-3 -mx-3 rounded-xl transition-colors"
           >
-            <div class="flex items-center gap-3">
-              <div
-                class="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 shrink-0"
-              >
-                <UIcon name="i-heroicons-receipt-percent" class="w-6 h-6" />
+            <!-- Row Header -->
+            <div
+              class="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+            >
+              <div class="flex items-center gap-3">
+                <div
+                  class="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 shrink-0"
+                >
+                  <UIcon name="i-heroicons-receipt-percent" class="w-6 h-6" />
+                </div>
+                <div class="min-w-0">
+                  <p class="font-semibold text-gray-900 truncate">
+                    {{
+                      t.payment_method === "cash"
+                        ? "Pembayaran Tunai"
+                        : "Transfer"
+                    }}
+                  </p>
+                  <p class="text-xs text-gray-500">
+                    {{ formatDateTime(t.created_at) }}
+                  </p>
+                </div>
               </div>
-              <div class="min-w-0">
-                <p class="font-semibold text-gray-900 truncate">
-                  {{
-                    t.payment_method === "cash"
-                      ? "Pembayaran Tunai"
-                      : "Transfer"
-                  }}
-                </p>
-                <p class="text-xs text-gray-500">
-                  {{ formatDateTime(t.created_at) }}
-                </p>
+              <div
+                class="flex items-center justify-between sm:justify-end gap-4"
+              >
+                <span class="text-lg font-bold text-gray-900">{{
+                  formatCurrency(t.total)
+                }}</span>
+                <div class="flex items-center gap-2">
+                  <UButton
+                    icon="i-heroicons-eye"
+                    size="md"
+                    color="primary"
+                    variant="soft"
+                    @click="viewReceipt(t)"
+                    class="rounded-xl"
+                    title="Lihat Struk"
+                  />
+                  <UButton
+                    icon="i-heroicons-trash"
+                    size="md"
+                    color="error"
+                    variant="soft"
+                    @click="confirmDelete(t)"
+                    class="rounded-xl"
+                    title="Hapus"
+                  />
+                </div>
               </div>
             </div>
-            <div class="flex items-center justify-between sm:justify-end gap-4">
-              <span class="text-lg font-bold text-gray-900">{{
-                formatCurrency(t.total)
-              }}</span>
-              <div class="flex items-center gap-2">
-                <UButton
-                  icon="i-heroicons-eye"
-                  size="md"
-                  color="primary"
-                  variant="soft"
-                  @click="viewReceipt(t)"
-                  class="rounded-xl"
-                  title="Lihat Struk"
-                />
-                <UButton
-                  icon="i-heroicons-trash"
-                  size="md"
-                  color="error"
-                  variant="soft"
-                  @click="confirmDelete(t)"
-                  class="rounded-xl"
-                  title="Hapus"
-                />
+
+            <!-- Breakdown Info -->
+            <div
+              class="bg-gray-50 rounded-lg p-3 text-sm space-y-1 border border-gray-200"
+            >
+              <div class="flex justify-between">
+                <span class="text-gray-600">Subtotal</span>
+                <span class="font-semibold text-gray-900">{{
+                  formatCurrency(t.subtotal)
+                }}</span>
+              </div>
+
+              <!-- Diskon Manual -->
+              <div
+                v-if="(t.discount || 0) > 0"
+                class="flex justify-between text-orange-600"
+              >
+                <span>Diskon Manual</span>
+                <span class="font-semibold"
+                  >-{{ formatCurrency(t.discount) }}</span
+                >
+              </div>
+
+              <!-- Diskon Sistem -->
+              <div
+                v-if="(t.discount_from_settings || 0) > 0"
+                class="flex justify-between text-orange-600"
+              >
+                <span>Diskon Sistem</span>
+                <span class="font-semibold"
+                  >-{{ formatCurrency(t.discount_from_settings) }}</span
+                >
+              </div>
+
+              <!-- Tax -->
+              <div
+                v-if="(t.tax || 0) > 0"
+                class="flex justify-between text-blue-600"
+              >
+                <span>Pajak ({{ t.tax_percentage }}%)</span>
+                <span class="font-semibold">+{{ formatCurrency(t.tax) }}</span>
+              </div>
+
+              <!-- PPN -->
+              <div
+                v-if="(t.ppn || 0) > 0"
+                class="flex justify-between text-blue-600"
+              >
+                <span>PPN ({{ t.ppn_percentage }}%)</span>
+                <span class="font-semibold">+{{ formatCurrency(t.ppn) }}</span>
               </div>
             </div>
           </div>
