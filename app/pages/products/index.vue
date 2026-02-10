@@ -26,6 +26,13 @@ const {
 } = useCategories();
 const { store } = useStore();
 
+// Show product images setting
+const showProductImages = computed(() => {
+  if (!store.value) return true;
+  const storeData = store.value as any;
+  return storeData.show_product_images !== false;
+});
+
 // Alert State
 const alert = reactive({
   show: false,
@@ -268,27 +275,42 @@ const save = async () => {
       const fileExt = file.name.split(".").pop();
       const fileName = `product-${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("product-images")
-        .upload(fileName, file, {
-          cacheControl: "3600",
-          upsert: false,
-        });
+      try {
+        // Try upload to "products" bucket
+        const { data, error: uploadError } = await supabase.storage
+          .from("products")
+          .upload(fileName, file, {
+            cacheControl: "3600",
+            upsert: false,
+          });
 
-      if (uploadError) throw uploadError;
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("product-images").getPublicUrl(fileName);
-
-      imageUrl = publicUrl;
+        if (uploadError) {
+          console.error("Upload error:", uploadError);
+          showAlert(
+            "error",
+            `⚠️ Foto tidak dapat diupload (${uploadError.message}). Gunakan link URL langsung.`,
+          );
+          selectedProductFile.value = null;
+        } else {
+          const {
+            data: { publicUrl },
+          } = supabase.storage.from("products").getPublicUrl(fileName);
+          imageUrl = publicUrl;
+        }
+      } catch (storageError: any) {
+        console.error("Storage error:", storageError);
+        showAlert(
+          "error",
+          `⚠️ Gagal upload foto: ${storageError.message || "Storage tidak tersedia"}. Gunakan link URL langsung.`,
+        );
+        selectedProductFile.value = null;
+      }
     }
 
     if (isEdit.value) {
       await updateProduct(form.id, {
         name: form.name,
         category_id: form.category_id,
-        buy_price: form.buy_price,
         price: form.sell_price,
         stock: form.stock,
         unit: form.unit,
@@ -300,7 +322,6 @@ const save = async () => {
       await createProduct({
         name: form.name,
         category_id: form.category_id,
-        buy_price: form.buy_price,
         price: form.sell_price,
         stock: form.stock,
         unit: form.unit,
@@ -953,43 +974,40 @@ watch(
               >🖼️ Gambar Produk (opsional)</label
             >
 
-            <!-- Image Preview -->
+            <!-- Warning if photos disabled -->
             <div
-              v-if="productImagePreview"
-              class="relative mb-3 rounded-xl overflow-hidden bg-gray-100"
+              v-if="!showProductImages"
+              class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800 mb-3"
             >
-              <img
-                :src="productImagePreview"
-                class="w-full h-48 object-cover"
-                alt="Product Preview"
-              />
-              <button
-                @click="
-                  productImagePreview = null;
-                  form.image_url = '';
-                  selectedProductFile = null;
-                "
-                class="absolute top-2 right-2 bg-red-600 text-white rounded-full p-2 hover:bg-red-700"
-              >
-                ✕
-              </button>
+              ⚠️ Fitur foto dimatikan. Konfigurasi di
+              <strong>Settings → Pembayaran</strong> untuk mengaktifkannya.
             </div>
 
-            <!-- Upload/Link Options -->
-            <div class="space-y-3">
-              <button
-                @click="triggerProductFileInput"
-                class="w-full py-2 px-4 bg-blue-100 text-blue-700 font-bold rounded-xl border-2 border-blue-300 hover:bg-blue-200 flex items-center justify-center gap-2"
+            <!-- Upload/Link Options - Only show if enabled -->
+            <div v-if="showProductImages" class="space-y-3">
+              <!-- Image Preview -->
+              <div
+                v-if="productImagePreview"
+                class="relative mb-3 rounded-xl overflow-hidden bg-gray-100"
               >
-                📤 Upload dari Device
-              </button>
-              <input
-                id="productImageInput"
-                type="file"
-                accept="image/*"
-                class="hidden"
-                @change="handleProductFileSelect"
-              />
+                <img
+                  :src="productImagePreview"
+                  class="w-full h-48 object-cover"
+                  alt="Product Preview"
+                />
+                <button
+                  @click="
+                    productImagePreview = null;
+                    form.image_url = '';
+                    selectedProductFile = null;
+                  "
+                  class="absolute top-2 right-2 bg-red-600 text-white rounded-full p-2 hover:bg-red-700"
+                >
+                  ✕
+                </button>
+              </div>
+
+              
 
               <div class="relative">
                 <input

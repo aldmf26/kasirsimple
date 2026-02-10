@@ -5,7 +5,7 @@ definePageMeta({
   layout: "default",
 });
 
-const { store, updateStore } = useStore();
+const { store, updateStore, fetchStore } = useStore();
 const supabase = useSupabaseClient();
 
 // Store settings form
@@ -21,11 +21,17 @@ const storeSettings = reactive({
 const selectedLogoFile = ref<File | null>(null);
 const logoPreview = ref<string | null>(null);
 
+// Force refresh store data when entering settings page to ensure latest data
+onMounted(async () => {
+  await fetchStore();
+});
+
 // Sync form with store data
 watch(
-  store,
-  (newStore) => {
-    if (newStore) {
+  () => store.value?.id,
+  async (storeId) => {
+    if (storeId && store.value) {
+      const newStore = store.value;
       storeSettings.name = newStore.name;
       storeSettings.business_type = newStore.business_type || "retail";
       storeSettings.address = newStore.address || "";
@@ -245,74 +251,115 @@ const saveEditBankAccount = () => {
   }
 };
 
-const saveSettings = async () => {
-  if (activeSection.value === "store") {
-    try {
-      if (store.value?.id) {
-        let logoUrl = storeSettings.logo_url;
+// Debounce timers
+let storeSettingsDebounce: ReturnType<typeof setTimeout> | null = null;
+let paymentSettingsDebounce: ReturnType<typeof setTimeout> | null = null;
 
-        // Upload logo jika ada file baru di client
-        if (selectedLogoFile.value) {
-          const file = selectedLogoFile.value;
-          const fileExt = file.name.split(".").pop();
-          const fileName = `${store.value.id}-${Date.now()}.${fileExt}`;
+// Auto-save store settings with debounce
+const autoSaveStoreSettings = async () => {
+  if (!store.value?.id) return;
 
-          const { error: uploadError } = await supabase.storage
-            .from("logos")
-            .upload(fileName, file, {
-              cacheControl: "3600",
-              upsert: false,
-            });
+  try {
+    let logoUrl = storeSettings.logo_url;
 
-          if (uploadError) throw uploadError;
+    // Upload logo jika ada file baru di client
+    if (selectedLogoFile.value) {
+      const file = selectedLogoFile.value;
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${store.value.id}-${Date.now()}.${fileExt}`;
 
-          const {
-            data: { publicUrl },
-          } = supabase.storage.from("logos").getPublicUrl(fileName);
-
-          logoUrl = publicUrl;
-        }
-
-        await updateStore(store.value.id, {
-          name: storeSettings.name,
-          business_type: storeSettings.business_type,
-          address: storeSettings.address,
-          phone: storeSettings.phone,
-          currency: storeSettings.currency,
-          logo_url: logoUrl,
+      const { error: uploadError } = await supabase.storage
+        .from("logos")
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: false,
         });
 
-        // Reset local state
-        selectedLogoFile.value = null;
-        storeSettings.logo_url = logoUrl;
+      if (uploadError) throw uploadError;
 
-        showAlert("success", "Profil toko berhasil diperbarui");
-      }
-    } catch (e: any) {
-      console.error(e);
-      showAlert("error", e.message || "Gagal menyimpan perubahan");
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("logos").getPublicUrl(fileName);
+
+      logoUrl = publicUrl;
     }
-  } else if (activeSection.value === "payment") {
-    // Save payment methods and product display settings
-    try {
-      if (store.value?.id) {
-        const updateData: any = {
-          enabled_payment_methods: JSON.stringify(enabledPaymentMethods.value),
-          bank_accounts: JSON.stringify(bankAccounts.value),
-          show_product_images: showProductImages.value,
-        };
-        await updateStore(store.value.id, updateData);
-        showAlert("success", "Pengaturan berhasil diperbarui");
-      }
-    } catch (e: any) {
-      console.error(e);
-      showAlert("error", e.message || "Gagal menyimpan perubahan");
-    }
-  } else {
-    // For other sections
-    showAlert("success", "Perubahan berhasil disimpan");
+
+    await updateStore(store.value.id, {
+      name: storeSettings.name,
+      business_type: storeSettings.business_type,
+      address: storeSettings.address,
+      phone: storeSettings.phone,
+      currency: storeSettings.currency,
+      logo_url: logoUrl,
+    });
+
+    // Reset local state
+    selectedLogoFile.value = null;
+    storeSettings.logo_url = logoUrl;
+
+    showAlert("success", "Profil toko berhasil disimpan");
+  } catch (e: any) {
+    console.error(e);
+    showAlert("error", e.message || "Gagal menyimpan perubahan");
   }
 };
+
+// Auto-save payment settings with debounce
+const autoSavePaymentSettings = async () => {
+  if (!store.value?.id) return;
+
+  try {
+    const updateData: any = {
+      enabled_payment_methods: JSON.stringify(enabledPaymentMethods.value),
+      bank_accounts: JSON.stringify(bankAccounts.value),
+      show_product_images: showProductImages.value,
+    };
+    await updateStore(store.value.id, updateData);
+    showAlert("success", "Pengaturan berhasil disimpan");
+  } catch (e: any) {
+    console.error(e);
+    showAlert("error", e.message || "Gagal menyimpan perubahan");
+  }
+};
+
+// Watch store settings with debounce
+watch(
+  storeSettings,
+  () => {
+    if (storeSettingsDebounce) clearTimeout(storeSettingsDebounce);
+    storeSettingsDebounce = setTimeout(autoSaveStoreSettings, 1000);
+  },
+  { deep: true },
+);
+
+// Watch payment methods with debounce
+watch(
+  enabledPaymentMethods,
+  () => {
+    if (paymentSettingsDebounce) clearTimeout(paymentSettingsDebounce);
+    paymentSettingsDebounce = setTimeout(autoSavePaymentSettings, 1000);
+  },
+  { deep: true },
+);
+
+// Watch bank accounts with debounce
+watch(
+  bankAccounts,
+  () => {
+    if (paymentSettingsDebounce) clearTimeout(paymentSettingsDebounce);
+    paymentSettingsDebounce = setTimeout(autoSavePaymentSettings, 1000);
+  },
+  { deep: true },
+);
+
+// Watch product images setting with debounce
+watch(
+  showProductImages,
+  () => {
+    if (paymentSettingsDebounce) clearTimeout(paymentSettingsDebounce);
+    paymentSettingsDebounce = setTimeout(autoSavePaymentSettings, 1000);
+  },
+);
 
 const handleLogout = () => {
   const dummyAuth = useCookie("dummy_auth");
@@ -452,100 +499,96 @@ const handleLogout = () => {
                   placeholder="08xxxxxxxxxx"
                 />
               </div>
-            </div>
-          </div>
 
-          <!-- Product Display Settings -->
-          <div
-            class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"
-          >
-            <h2 class="text-xl font-bold text-gray-900 mb-2">
-              📸 Tampilan Produk
-            </h2>
-            <p class="text-sm text-gray-500 mb-6">
-              Pilih apakah foto produk ditampilkan di POS atau tidak
-            </p>
-
-            <div class="space-y-4">
-              <!-- Show Product Images Toggle -->
+              <!-- Product Display Settings -->
               <div
-                class="flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer"
-                :class="
-                  showProductImages
-                    ? 'border-blue-200 bg-blue-50'
-                    : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                "
-                @click="showProductImages = !showProductImages"
+                class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"
               >
-                <div class="flex items-center gap-4">
+                <h2 class="text-xl font-bold text-gray-900 mb-2">
+                  📸 Tampilan Produk
+                </h2>
+                <p class="text-sm text-gray-500 mb-6">
+                  Pilih apakah foto produk ditampilkan di POS atau tidak
+                </p>
+
+                <div class="space-y-4">
+                  <!-- Show Product Images Toggle -->
                   <div
-                    class="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+                    class="flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer"
                     :class="
                       showProductImages
-                        ? 'bg-blue-100 text-blue-600'
-                        : 'bg-gray-200 text-gray-400'
+                        ? 'border-blue-200 bg-blue-50'
+                        : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                     "
+                    @click="showProductImages = !showProductImages"
                   >
+                    <div class="flex items-center gap-4">
+                      <div
+                        class="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+                        :class="
+                          showProductImages
+                            ? 'bg-blue-100 text-blue-600'
+                            : 'bg-gray-200 text-gray-400'
+                        "
+                      >
+                        <UIcon
+                          :name="
+                            showProductImages
+                              ? 'i-heroicons-photo'
+                              : 'i-heroicons-photo-slash'
+                          "
+                          class="w-6 h-6"
+                        />
+                      </div>
+                      <div>
+                        <p
+                          class="font-medium text-gray-900 text-sm sm:text-base"
+                        >
+                          {{
+                            showProductImages
+                              ? "Tampilkan Foto"
+                              : "Sembunyikan Foto"
+                          }}
+                        </p>
+                        <p class="text-xs text-gray-500 mt-1">
+                          {{
+                            showProductImages
+                              ? "Foto produk akan ditampilkan di POS"
+                              : "Menghemat ruang, foto tidak ditampilkan"
+                          }}
+                        </p>
+                      </div>
+                    </div>
                     <UIcon
                       :name="
                         showProductImages
-                          ? 'i-heroicons-photo'
-                          : 'i-heroicons-photo-slash'
+                          ? 'i-heroicons-check-circle-solid'
+                          : 'i-heroicons-x-circle'
                       "
-                      class="w-6 h-6"
+                      class="w-6 h-6 shrink-0"
+                      :class="
+                        showProductImages ? 'text-blue-600' : 'text-gray-300'
+                      "
                     />
                   </div>
-                  <div>
-                    <p class="font-medium text-gray-900 text-sm sm:text-base">
-                      {{
-                        showProductImages
-                          ? "Tampilkan Foto"
-                          : "Sembunyikan Foto"
-                      }}
-                    </p>
-                    <p class="text-xs text-gray-500 mt-1">
-                      {{
-                        showProductImages
-                          ? "Foto produk akan ditampilkan di POS"
-                          : "Menghemat ruang, foto tidak ditampilkan"
-                      }}
-                    </p>
+
+                  <div
+                    v-if="showProductImages"
+                    class="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800"
+                  >
+                    ✅ Anda dapat paste link foto untuk setiap produk
+                  </div>
+                  <div
+                    v-else
+                    class="p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600"
+                  >
+                    💾 Mode hemat: Foto tidak ditampilkan di POS untuk menghemat
+                    ruang
                   </div>
                 </div>
-                <UIcon
-                  :name="
-                    showProductImages
-                      ? 'i-heroicons-check-circle-solid'
-                      : 'i-heroicons-x-circle'
-                  "
-                  class="w-6 h-6 shrink-0"
-                  :class="showProductImages ? 'text-blue-600' : 'text-gray-300'"
-                />
-              </div>
-
-              <div
-                v-if="showProductImages"
-                class="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800"
-              >
-                ✅ Anda dapat upload/link foto untuk setiap produk
-              </div>
-              <div
-                v-else
-                class="p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600"
-              >
-                💾 Mode hemat: Foto tidak ditampilkan di POS untuk menghemat
-                ruang
               </div>
             </div>
           </div>
-
-          <button
-            @click="saveSettings"
-            class="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
-          >
-            <UIcon name="i-heroicons-check" class="w-5 h-5" />
-            Simpan Perubahan
-          </button>
         </div>
 
         <!-- Payment Methods -->
@@ -740,14 +783,6 @@ const handleLogout = () => {
               </div>
             </div>
           </div>
-
-          <button
-            @click="saveSettings"
-            class="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
-          >
-            <UIcon name="i-heroicons-check" class="w-5 h-5" />
-            Simpan Perubahan
-          </button>
         </div>
 
         <!-- Account -->
