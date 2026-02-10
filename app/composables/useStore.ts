@@ -13,45 +13,22 @@ export const useStore = () => {
     const loading = useState('store_loading', () => false)
     const error = useState<string | null>('store_error', () => null)
 
-    // Prevent concurrent fetches
-    let fetchInProgress = false
-
     // Fetch current user's store
     const fetchStore = async (userId?: string) => {
-        // Prevent concurrent fetches
-        if (fetchInProgress) {
-            return
-        }
-
-        // Skip on server-side to avoid hydration issues
-        if (process.server) {
-            return null;
-        }
+        // Skip on server-side
+        if (process.server) return null;
 
         // Use dummy data if dummy mode is enabled
         if (isDummyMode.value) {
-            loading.value = true
-            try {
-                const dummyStore = getDummyStore()
-                store.value = dummyStore as unknown as Store
-                return dummyStore
-            } finally {
-                loading.value = false
-            }
+            const dummyStore = getDummyStore()
+            store.value = dummyStore as unknown as Store
+            return dummyStore
         }
-
-        // Get user ID from parameter OR from reactive user object
-        const targetUserId = userId || user.value?.id
-
-        if (!targetUserId) {
-            store.value = null;
-            return null;
-        }
-        fetchInProgress = true
-        loading.value = true;
-        error.value = null;
 
         try {
+            loading.value = true;
+            error.value = null;
+
             // Priority: Fetch active store for current user
             const targetUserId = userId || user.value?.id;
 
@@ -59,6 +36,8 @@ export const useStore = () => {
                 store.value = null;
                 return null;
             }
+
+            console.log("Fetching store for user:", targetUserId);
 
             const { data, error: fetchError } = await supabase
                 .from('stores')
@@ -81,7 +60,6 @@ export const useStore = () => {
             error.value = e.message;
             return null;
         } finally {
-            fetchInProgress = false
             loading.value = false;
         }
     };
@@ -94,6 +72,21 @@ export const useStore = () => {
         error.value = null
 
         try {
+            // Safety check: Ensure user doesn't already have a store
+            // Query manually to avoid messing with current 'store' state
+            const { data: existingStore } = await supabase
+                .from('stores')
+                .select('*')
+                .eq('user_id', user.value.id)
+                .limit(1)
+                .maybeSingle()
+
+            if (existingStore) {
+                console.log("Store already exists, preventing duplicate creation.");
+                store.value = existingStore;
+                return existingStore;
+            }
+
             const { data, error: createError } = await (supabase
                 .from('stores') as any)
                 .insert({
