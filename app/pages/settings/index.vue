@@ -419,7 +419,7 @@ const helpTabs = [
         type: "list",
         title: "Persiapan Toko:",
         items: [
-          "<b>Pengaturan Profil</b>: Lengkapi nama, alamat, dan logo toko Anda di menu Pengaturan agar muncul di struk belanja.",
+          "<b>Pengaturan Profil</b>: Lengkapi nama, jenis usaha, alamat, no telepon, tampilan produk.",
           "<b>Keamanan Data</b>: Data Anda tersimpan secara otomatis dan rapi. Setiap pemilik toko hanya bisa melihat data miliknya sendiri.",
           "<b>Multi-Perangkat</b>: Anda bisa membuka akun kasir ini dari beberapa HP atau laptop sekaligus secara bersamaan.",
         ],
@@ -435,8 +435,7 @@ const helpTabs = [
         title: "Panduan Transaksi:",
         items: [
           "<b>Pilih Produk</b>: Klik pada gambar atau nama produk untuk memasukkannya ke keranjang belanja.",
-          "<b>Cari & Scan</b>: Gunakan kolom pencarian untuk mencari produk dengan cepat atau scan kode barang (SKU).",
-          "<b>Proses Bayar</b>: Klik tombol Bayar, pilih cara pembayaran (Tunai, QRIS, atau Transfer), lalu masukkan jumlah uang yang diterima.",
+          "<b>Proses Bayar</b>: Klik tombol TUNAI PAS untuk langsung membayar, pilih BAYAR untuk membayar dengan metode pembayaran.",
           "<b>Hitung Kembalian</b>: Sistem akan otomatis menghitung uang kembalian dan memperbarui stok barang Anda.",
         ],
       },
