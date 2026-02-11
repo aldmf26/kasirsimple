@@ -156,7 +156,7 @@ export const useTransactions = () => {
             const discountFromSettings = paymentData.discount_from_settings || 0
             const tax = paymentData.tax || 0
             const ppn = paymentData.ppn || 0
-            
+
             const subtotalAfterDiscount = subtotal - discountAmount - discountFromSettings
             const total = subtotalAfterDiscount + tax + ppn
             const change = paymentData.paid - total
@@ -386,12 +386,35 @@ export const useTransactions = () => {
         }
     }
 
-    // Delete transaction
-    const deleteTransaction = async (transactionId: string) => {
+    // Get single transaction by order number (Public check)
+    const getTransactionByNumber = async (transactionNumber: string) => {
+        loading.value = true
+        error.value = null
+        try {
+            const { data, error: fetchError } = await supabase
+                .from('transactions')
+                .select(`
+                    *,
+                    items:transaction_items(*),
+                    store:stores(*)
+                `)
+                .eq('transaction_number', transactionNumber)
+                .single()
+
+            if (fetchError) throw fetchError
+            return data
+        } catch (e: any) {
+            error.value = e.message
+            return null
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // Return transaction (Restore stock and mark as returned)
+    const returnTransaction = async (transactionId: string) => {
         loading.value = true
         try {
-            const { logActivity } = useActivityLog()
-            
             // Get transaction data first
             const transaction = transactions.value.find(t => t.id === transactionId)
             if (!transaction) throw new Error('Transaksi tidak ditemukan')
@@ -402,7 +425,99 @@ export const useTransactions = () => {
                     // @ts-ignore
                     const { error: stockError } = await supabase
                         .from('products')
-                        .update({ 
+                        .update({
+                            stock: supabase.rpc('increment_stock', {
+                                product_id: item.product_id,
+                                quantity: item.quantity
+                            })
+                        })
+                        .eq('id', item.product_id)
+
+                    // Fallback: Manual stock update if RPC fails
+                    if (stockError) {
+                        // Get current stock
+                        // @ts-ignore
+                        const { data: product } = await supabase
+                            .from('products')
+                            .select('stock')
+                            .eq('id', item.product_id)
+                            .single()
+
+                        const currentStock = product?.stock || 0
+                        const newStock = currentStock + item.quantity
+
+                        // @ts-ignore
+                        await supabase
+                            .from('products')
+                            .update({ stock: newStock })
+                            .eq('id', item.product_id)
+                    }
+
+                    // Record stock movement as reversal
+                    // @ts-ignore
+                    await supabase.from('stock_movements').insert({
+                        product_id: item.product_id,
+                        type: 'in',
+                        quantity: item.quantity,
+                        notes: `Stok dikembalikan dari retur transaksi ${transaction.transaction_number}`,
+                    })
+                }
+            }
+
+            // Update transaction notes to mark as returned
+            // We use a prefix [RETUR] in notes as a status indicator
+            const newNotes = `[RETUR] ${transaction.notes || ''}`.trim()
+            // @ts-ignore
+            const { error: updateError } = await supabase
+                .from('transactions')
+                .update({ notes: newNotes })
+                .eq('id', transactionId)
+
+            if (updateError) throw updateError
+
+            // Update local state
+            const index = transactions.value.findIndex(t => t.id === transactionId)
+            if (index !== -1) {
+                transactions.value[index].notes = newNotes
+            }
+
+            // Log activity
+            logToActivity(
+                store.value?.id || '',
+                ACTIVITY_TYPES.TRANSACTION_DELETED, // Reusing delete type for now or add new if exist
+                {
+                    transactionNumber: transaction.transaction_number,
+                    notes: 'Transaksi di-retur'
+                },
+                transactionId,
+                user.value?.id
+            )
+
+        } catch (e: any) {
+            error.value = e.message
+            throw e
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // Delete transaction
+    const deleteTransaction = async (transactionId: string) => {
+        loading.value = true
+        try {
+            const { logActivity } = useActivityLog()
+
+            // Get transaction data first
+            const transaction = transactions.value.find(t => t.id === transactionId)
+            if (!transaction) throw new Error('Transaksi tidak ditemukan')
+
+            // Restore stock for each item
+            if (transaction.items && transaction.items.length > 0) {
+                for (const item of transaction.items) {
+                    // @ts-ignore
+                    const { error: stockError } = await supabase
+                        .from('products')
+                        .update({
                             stock: supabase.rpc('increment_stock', {
                                 product_id: item.product_id,
                                 quantity: item.quantity
@@ -499,6 +614,8 @@ export const useTransactions = () => {
         createTransaction,
         fetchTransactions,
         getTodaySummary,
-        deleteTransaction
+        deleteTransaction,
+        getTransactionByNumber,
+        returnTransaction
     }
 }

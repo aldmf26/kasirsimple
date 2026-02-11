@@ -107,37 +107,53 @@ const refreshDashboard = async () => {
   }
 };
 
-onMounted(async () => {
-  // Check store
-  if (!store.value) {
-      await fetchStore();
-  }
-  
-  if (store.value) {
-    refreshDashboard();
-  } else {
-    // If user is logged in but no store -> Show Setup Modal
-    if (user.value) {
-        // Pre-fill name
-        if (user.value.user_metadata?.full_name) {
-            setupModal.form.name = `Toko ${user.value.user_metadata.full_name}`;
-        }
-        setupModal.open = true;
-    }
-    loading.value = false;
-  }
-});
-
 // Watch store changes
 watch(
   () => store.value,
-  () => {
-    if (store.value) {
+  (newStore) => {
+    if (newStore) {
+      // If store is loaded (even late), close the modal and refresh
+      setupModal.open = false; 
       refreshDashboard();
     }
   },
   { deep: true },
 );
+
+onMounted(async () => {
+  loading.value = true;
+  
+  try {
+    // Wait for user to be ready if needed
+    if (!user.value) {
+       // Short delay or check
+    }
+
+    // Check store
+    if (!store.value && user.value) {
+        // Explicitly pass user ID to ensure we fetch for the correct user
+        await fetchStore(user.value.id);
+    }
+    
+    if (store.value) {
+      refreshDashboard();
+    } else {
+      // If user is logged in but no store -> Show Setup Modal
+      // Double check user exists before showing
+      if (user.value) {
+          // Pre-fill name
+          if (user.value.user_metadata?.full_name) {
+              setupModal.form.name = `Toko ${user.value.user_metadata.full_name}`;
+          }
+          setupModal.open = true;
+      }
+    }
+  } catch (e) {
+    console.error("Error initializing dashboard:", e);
+  } finally {
+    loading.value = false;
+  }
+});
 
 // Aksi Cepat - Diurutkan berdasarkan prioritas ibu-ibu
 const quickActions = [

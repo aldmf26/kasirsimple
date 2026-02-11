@@ -31,7 +31,7 @@ definePageMeta({
 });
 
 const { store } = useStore();
-const { transactions, loading, fetchTransactions, deleteTransaction } =
+const { transactions, loading, fetchTransactions, deleteTransaction, returnTransaction } =
   useTransactions();
 const { products, fetchProducts } = useProducts();
 const {
@@ -50,12 +50,15 @@ const {
   loading: expenseLoading 
 } = useExpenses();
 const toast = useToast();
+const { shiftsHistory, fetchAllShifts, loading: shiftLoading } = useShifts();
 
 // Modal states
 const selectedTransaction = ref(null);
 const showReceiptModal = ref(false);
 const showDeleteModal = ref(false);
+const showReturnModal = ref(false);
 const deleteLoading = ref(false);
+const returnLoading = ref(false);
 const showAddExpenseModal = ref(false);
 const submitExpenseLoading = ref(false);
 
@@ -111,10 +114,14 @@ const filteredTransactions = computed(() => {
 
 // Stats Calculation
 const totalSales = computed(() => {
-  return transactions.value.reduce((sum, t) => sum + (t.total || 0), 0);
+  return transactions.value
+    .filter((t: any) => !(t.notes || "").includes("[RETUR]"))
+    .reduce((sum, t) => sum + (t.total || 0), 0);
 });
 
-const totalTransactions = computed(() => transactions.value.length);
+const totalTransactions = computed(() => 
+  transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]")).length
+);
 const averageTransaction = computed(() => {
   if (totalTransactions.value === 0) return 0;
   return totalSales.value / totalTransactions.value;
@@ -145,7 +152,8 @@ const salesByDateData = computed(() => {
 });
 
 const paymentMethodData = computed(() => {
-  const { methods, amounts } = getSalesByPaymentMethod(transactions.value);
+  const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
+  const { methods, amounts } = getSalesByPaymentMethod(activeTransactions);
   return {
     labels: methods,
     datasets: [
@@ -160,8 +168,9 @@ const paymentMethodData = computed(() => {
 });
 
 const topProductsData = computed(() => {
+  const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
   const { products: names, quantities } = getTopSellingProducts(
-    transactions.value,
+    activeTransactions,
     5,
   );
   return {
@@ -185,7 +194,8 @@ const topProductsData = computed(() => {
 });
 
 const paymentMethodCountData = computed(() => {
-  const { methods, counts } = getTransactionCountByMethod(transactions.value);
+  const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
+  const { methods, counts } = getTransactionCountByMethod(activeTransactions);
   return {
     labels: methods,
     datasets: [
@@ -201,7 +211,7 @@ const paymentMethodCountData = computed(() => {
 
 const chartOptions = {
   responsive: true,
-  maintainAspectRatio: true,
+  maintainAspectRatio: false,
   plugins: {
     legend: {
       display: true,
@@ -212,7 +222,7 @@ const chartOptions = {
 
 const lineChartOptions = {
   responsive: true,
-  maintainAspectRatio: true,
+  maintainAspectRatio: false,
   plugins: {
     legend: {
       display: true,
@@ -232,7 +242,11 @@ const lineChartOptions = {
 };
 
 // Top Selling Items Computed
-const allItemsSold = computed(() => getAllItemsSold(transactions.value));
+// Top Selling Items Computed
+const allItemsSold = computed(() => {
+  const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
+  return getAllItemsSold(activeTransactions);
+});
 
 // ============ TAB STATE ============
 const activeTab = ref('sales');
@@ -248,7 +262,8 @@ const buyPriceMap = computed(() => {
 
 const profitByProduct = computed(() => {
   const productMap = new Map();
-  for (const t of transactions.value) {
+  const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
+  for (const t of activeTransactions) {
     for (const item of ((t as any).items || [])) {
       const key = item.product_id || item.product_name;
       const existing = productMap.get(key) || { name: item.product_name, qty: 0, revenue: 0, cost: 0 };
@@ -283,7 +298,8 @@ const hasBuyPriceData = computed(() => {
 // ============ DAILY REPORT ============
 const dailyReport = computed(() => {
   const dayMap = new Map();
-  for (const t of transactions.value) {
+  const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
+  for (const t of activeTransactions) {
     const dateKey = new Date(t.created_at).toISOString().split('T')[0];
     const dateLabel = new Date(t.created_at).toLocaleDateString('id-ID', {
       weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
@@ -322,6 +338,39 @@ const viewReceipt = (transaction: any) => {
 const confirmDelete = (transaction: any) => {
   selectedTransaction.value = transaction;
   showDeleteModal.value = true;
+};
+
+// Return Transaction
+const confirmReturn = (transaction: any) => {
+  selectedTransaction.value = transaction;
+  showReturnModal.value = true;
+};
+
+const handleReturn = async () => {
+  if (!selectedTransaction.value) return;
+
+  returnLoading.value = true;
+  try {
+    await returnTransaction((selectedTransaction.value as any).id);
+    toast.add({
+      title: "Berhasil",
+      description: `Transaksi ${(selectedTransaction.value as any).transaction_number} berhasil di-retur dan stok dikembalikan`,
+      color: "success",
+      icon: "i-heroicons-check-circle",
+    });
+    showReturnModal.value = false;
+    selectedTransaction.value = null;
+    await loadData();
+  } catch (error) {
+    toast.add({
+      title: "Gagal",
+      description: "Gagal memproses retur transaksi",
+      color: "error",
+      icon: "i-heroicons-x-circle",
+    });
+  } finally {
+    returnLoading.value = false;
+  }
 };
 
 const handleDelete = async () => {
@@ -407,6 +456,10 @@ const loadData = async () => {
       }),
       fetchProducts(),
       fetchExpenses({
+        startDate: filters.startDate,
+        endDate: filters.endDate
+      }),
+      fetchAllShifts({
         startDate: filters.startDate,
         endDate: filters.endDate
       }),
@@ -735,6 +788,32 @@ const backupData = () => {
   }
 };
 
+// Copy Receipt Link
+const copyReceiptLink = () => {
+  if (!selectedTransaction.value) return;
+  
+  const protocol = window.location.protocol;
+  const host = window.location.host;
+  const t = selectedTransaction.value as any;
+  const url = `${protocol}//${host}/nota/${t.transaction_number}`;
+  
+  navigator.clipboard.writeText(url).then(() => {
+    toast.add({
+      title: "Berhasil",
+      description: "Link nota online telah disalin",
+      color: "success",
+      icon: "i-heroicons-check-circle",
+    });
+  }).catch(() => {
+    toast.add({
+      title: "Gagal",
+      description: "Gagal menyalin link",
+      color: "error",
+      icon: "i-heroicons-x-circle",
+    });
+  });
+};
+
 onMounted(() => {
   loadData();
 });
@@ -753,36 +832,39 @@ watch(
   <div class="h-full flex flex-col bg-gray-50 overflow-auto">
     <!-- Header -->
     <div class="px-8 py-6 border-b border-gray-200 bg-white shadow-sm shrink-0">
-      <div class="flex justify-between items-start">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 class="text-2xl font-bold text-gray-900">Laporan Penjualan</h1>
           <p class="text-sm text-gray-500">Ringkasan performa toko anda</p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 no-scrollbar">
           <UButton
-            color="blue"
+            color="primary"
             variant="soft"
             icon="i-heroicons-arrow-down-tray"
             @click="exportToExcel"
             title="Export ke Excel/CSV"
+            class="whitespace-nowrap flex-none"
           >
             Export Excel
           </UButton>
           <UButton
-            color="red"
+            color="error"
             variant="soft"
             icon="i-heroicons-document-text"
             @click="exportToPDF"
             title="Export ke PDF"
+            class="whitespace-nowrap flex-none"
           >
             Export PDF
           </UButton>
           <UButton
-            color="green"
+            color="success"
             variant="soft"
             icon="i-heroicons-cloud-arrow-down"
             @click="backupData"
             title="Backup semua data"
+            class="whitespace-nowrap flex-none"
           >
             Backup Data
           </UButton>
@@ -796,12 +878,13 @@ watch(
         class="flex flex-col md:flex-row gap-4 items-end md:items-center justify-between"
       >
         <!-- Shortcuts -->
-        <div class="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
+        <div class="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 no-scrollbar">
           <UButton
             size="xs"
             :color="activeFilter === 'today' ? 'primary' : 'neutral'"
             variant="soft"
             @click="setFilter('today')"
+            class="whitespace-nowrap flex-none"
             >Hari Ini</UButton
           >
           <UButton
@@ -809,6 +892,7 @@ watch(
             :color="activeFilter === 'week' ? 'primary' : 'neutral'"
             variant="soft"
             @click="setFilter('week')"
+            class="whitespace-nowrap flex-none"
             >7 Hari</UButton
           >
           <UButton
@@ -816,6 +900,7 @@ watch(
             :color="activeFilter === 'month' ? 'primary' : 'neutral'"
             variant="soft"
             @click="setFilter('month')"
+            class="whitespace-nowrap flex-none"
             >30 Hari</UButton
           >
           <UButton
@@ -823,6 +908,7 @@ watch(
             :color="activeFilter === 'year' ? 'primary' : 'neutral'"
             variant="soft"
             @click="setFilter('year')"
+            class="whitespace-nowrap flex-none"
             >Tahun Ini</UButton
           >
         </div>
@@ -882,11 +968,11 @@ watch(
     </div>
 
     <!-- Tab Navigation -->
-    <div class="px-8 py-3 bg-white border-b border-gray-200">
-      <div class="flex gap-1 bg-gray-100 p-1 rounded-xl w-full md:w-auto md:inline-flex">
+    <div class="px-8 py-3 bg-white border-b border-gray-200 overflow-x-auto no-scrollbar">
+      <div class="flex gap-1 bg-gray-100 p-1 rounded-xl w-max md:w-auto md:inline-flex">
         <button
           @click="activeTab = 'sales'"
-          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-1 md:flex-none justify-center"
+          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
           :class="activeTab === 'sales' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
         >
           <UIcon name="i-heroicons-chart-bar-square" class="w-4 h-4" />
@@ -894,7 +980,7 @@ watch(
         </button>
         <button
           @click="activeTab = 'profit'"
-          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-1 md:flex-none justify-center"
+          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
           :class="activeTab === 'profit' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
         >
           <UIcon name="i-heroicons-banknotes" class="w-4 h-4" />
@@ -902,7 +988,7 @@ watch(
         </button>
         <button
           @click="activeTab = 'daily'"
-          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-1 md:flex-none justify-center"
+          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
           :class="activeTab === 'daily' ? 'bg-white text-violet-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
         >
           <UIcon name="i-heroicons-calendar-days" class="w-4 h-4" />
@@ -910,11 +996,19 @@ watch(
         </button>
         <button
           @click="activeTab = 'expenses'"
-          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-1 md:flex-none justify-center"
+          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
           :class="activeTab === 'expenses' ? 'bg-white text-rose-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
         >
           <UIcon name="i-heroicons-banknotes" class="w-4 h-4" />
           Pengeluaran
+        </button>
+        <button
+          @click="activeTab = 'shifts'"
+          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
+          :class="activeTab === 'shifts' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+        >
+          <UIcon name="i-heroicons-clock" class="w-4 h-4" />
+          Shift
         </button>
       </div>
     </div>
@@ -991,7 +1085,7 @@ watch(
       <Transition name="chart-toggle">
         <div v-if="showCharts" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- Sales Trend Chart -->
-          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
             <h3 class="text-lg font-bold text-gray-900 mb-4">Tren Penjualan</h3>
             <div class="h-80">
               <Line
@@ -1009,7 +1103,7 @@ watch(
           </div>
 
           <!-- Top Products Chart -->
-          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
             <h3 class="text-lg font-bold text-gray-900 mb-4">
               Produk Terlaris (Top 5)
             </h3>
@@ -1029,7 +1123,7 @@ watch(
           </div>
 
           <!-- Payment Method Pie Chart -->
-          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
             <h3 class="text-lg font-bold text-gray-900 mb-4">
               Penjualan Berdasarkan Metode Pembayaran
             </h3>
@@ -1052,7 +1146,7 @@ watch(
 
           <!-- Top Selling Items Table -->
           <div
-            class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col"
+            class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 flex flex-col"
           >
             <h3 class="text-lg font-bold text-gray-900 mb-4">Item Terjual</h3>
             <div
@@ -1163,13 +1257,21 @@ watch(
                   <UIcon name="i-heroicons-receipt-percent" class="w-6 h-6" />
                 </div>
                 <div class="min-w-0">
-                  <p class="font-semibold text-gray-900 truncate">
-                    {{
-                      t.payment_method === "cash"
-                        ? "Pembayaran Tunai"
-                        : "Transfer"
-                    }}
-                  </p>
+                  <div class="flex items-center gap-2">
+                    <p class="font-semibold text-gray-900 truncate">
+                      {{
+                        t.payment_method === "cash"
+                          ? "Pembayaran Tunai"
+                          : "Transfer"
+                      }}
+                    </p>
+                    <span 
+                      v-if="(t.notes || '').includes('[RETUR]')" 
+                      class="px-2 py-0.5 bg-red-100 text-red-600 text-[10px] font-black uppercase rounded-full"
+                    >
+                      DITOLAK/RETUR
+                    </span>
+                  </div>
                   <p class="text-xs font-mono text-primary-600 font-semibold">
                     {{ t.transaction_number }}
                   </p>
@@ -1184,26 +1286,36 @@ watch(
                 <span class="text-lg font-bold text-gray-900">{{
                   formatCurrency(t.total)
                 }}</span>
-                <div class="flex items-center gap-2">
-                  <UButton
-                    icon="i-heroicons-eye"
-                    size="md"
-                    color="primary"
-                    variant="soft"
-                    @click="viewReceipt(t)"
-                    class="rounded-xl"
-                    title="Lihat Struk"
-                  />
-                  <UButton
-                    icon="i-heroicons-trash"
-                    size="md"
-                    color="error"
-                    variant="soft"
-                    @click="confirmDelete(t)"
-                    class="rounded-xl"
-                    title="Hapus"
-                  />
-                </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <UButton
+                      label="Detail"
+                      icon="i-heroicons-eye"
+                      size="sm"
+                      color="primary"
+                      variant="soft"
+                      @click="viewReceipt(t)"
+                      class="rounded-xl font-bold"
+                    />
+                    <UButton
+                      v-if="!(t.notes || '').includes('[RETUR]')"
+                      label="Retur"
+                      icon="i-heroicons-arrow-path"
+                      size="sm"
+                      color="warning"
+                      variant="soft"
+                      @click="confirmReturn(t)"
+                      class="rounded-xl font-bold"
+                    />
+                    <UButton
+                      label="Hapus"
+                      icon="i-heroicons-trash"
+                      size="sm"
+                      color="error"
+                      variant="soft"
+                      @click="confirmDelete(t)"
+                      class="rounded-xl font-bold"
+                    />
+                  </div>
               </div>
             </div>
 
@@ -1510,16 +1622,17 @@ watch(
     </div>
 
     <!-- ============ TAB: PENGELUARAN ============ -->
-    <div v-if="activeTab === 'expenses'" class="p-8 space-y-6">
-      <div class="flex justify-between items-center">
+    <div v-if="activeTab === 'expenses'" class="p-4 sm:p-8 space-y-6">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 class="text-lg font-bold text-gray-900">Riwayat Pengeluaran</h2>
           <p class="text-sm text-gray-500">Catat biaya operasional toko</p>
         </div>
         <UButton
-          color="rose"
+          color="error"
           icon="i-heroicons-plus"
           @click="showAddExpenseModal = true"
+          class="w-full sm:w-auto justify-center"
         >
           Catat Pengeluaran
         </UButton>
@@ -1554,7 +1667,7 @@ watch(
                 <td class="py-3 px-5 text-right text-sm">
                   <UButton
                     size="xs"
-                    color="red"
+                    color="error"
                     variant="ghost"
                     icon="i-heroicons-trash"
                     @click="removeExpense(expense.id)"
@@ -1580,6 +1693,65 @@ watch(
     </div>
 
 
+    <!-- ============ TAB: SHIFTS ============ -->
+    <div v-if="activeTab === 'shifts'" class="p-4 sm:p-8 space-y-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-lg font-bold text-gray-900">Riwayat Shift</h2>
+          <p class="text-sm text-gray-500">Log buka/tutup kasir per hari</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div v-if="shiftsHistory.length > 0" class="overflow-x-auto text-sm">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="text-left py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Waktu</th>
+                <th class="text-left py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Kasir</th>
+                <th class="text-right py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Modal Awal</th>
+                <th class="text-right py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Ekspektasi</th>
+                <th class="text-right py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Aktual</th>
+                <th class="text-right py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Selisih</th>
+                <th class="text-left py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Catatan</th>
+                <th class="text-center py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="shift in shiftsHistory" :key="shift.id" class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                <td class="py-4 px-5">
+                  <p class="font-bold text-gray-900">{{ formatDateTime(shift.start_time) }}</p>
+                  <p v-if="shift.end_time" class="text-[10px] text-gray-500">Selesai: {{ formatDateTime(shift.end_time) }}</p>
+                </td>
+                <td class="py-4 px-5">
+                  <span class="font-medium text-gray-700">{{ shift.user?.email?.split('@')[0] || 'Admin' }}</span>
+                </td>
+                <td class="py-4 px-5 text-right font-medium text-gray-600">{{ formatCurrency(shift.opening_balance) }}</td>
+                <td class="py-4 px-5 text-right font-medium text-blue-600 text-sm italic">{{ shift.status === 'closed' ? formatCurrency(shift.closing_balance_expected) : '-' }}</td>
+                <td class="py-4 px-5 text-right font-bold text-gray-900">{{ shift.status === 'closed' ? formatCurrency(shift.closing_balance_actual) : '-' }}</td>
+                <td class="py-4 px-5 text-right font-black" :class="(shift.closing_balance_actual - shift.closing_balance_expected) === 0 ? 'text-emerald-600' : 'text-red-500'">
+                  {{ shift.status === 'closed' ? formatCurrency(shift.closing_balance_actual - shift.closing_balance_expected) : '-' }}
+                </td>
+                <td class="py-4 px-5">
+                  <p class="max-w-[150px] truncate text-xs text-gray-500" :title="shift.notes">{{ shift.notes || '-' }}</p>
+                </td>
+                <td class="py-4 px-5 text-center">
+                  <span :class="shift.status === 'open' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'" 
+                        class="px-3 py-1 rounded-full text-[10px] font-black uppercase inline-block">
+                    {{ shift.status === 'open' ? 'AKTIF' : 'TUTUP' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="p-12 text-center text-gray-400">
+          <UIcon name="i-heroicons-clock" class="w-12 h-12 mx-auto mb-2 opacity-20" />
+          <p class="font-medium">Belum ada riwayat shift</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal Struk (Thermal Printer Style) -->
     <Teleport to="body">
       <div
@@ -1599,20 +1771,29 @@ watch(
           </div>
 
           <!-- Actions -->
-          <div class="flex gap-2">
+          <div class="flex flex-col gap-2">
             <button
-              @click="showReceiptModal = false"
-              class="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 active:scale-95 transition-all"
+              @click="copyReceiptLink"
+              class="w-full py-3 bg-blue-50 text-blue-700 font-bold rounded-xl hover:bg-blue-100 flex items-center justify-center gap-2 active:scale-95 transition-all border border-blue-200"
             >
-              TUTUP
+              <UIcon name="i-heroicons-share" class="w-5 h-5" />
+              SALIN LINK NOTA ONLINE
             </button>
-            <button
-              @click="printReceipt"
-              class="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 flex items-center justify-center gap-2 active:scale-95 transition-all"
-            >
-              <UIcon name="i-heroicons-printer" class="w-5 h-5" />
-              PRINT
-            </button>
+            <div class="flex gap-2">
+              <button
+                @click="showReceiptModal = false"
+                class="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 active:scale-95 transition-all"
+              >
+                TUTUP
+              </button>
+              <button
+                @click="printReceipt"
+                class="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 flex items-center justify-center gap-2 active:scale-95 transition-all"
+              >
+                <UIcon name="i-heroicons-printer" class="w-5 h-5" />
+                PRINT
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1640,8 +1821,8 @@ watch(
               />
             </div>
             <div>
-              <h3 class="text-lg font-bold text-gray-900">Hapus Transaksi?</h3>
-              <p class="text-sm text-gray-500">Tindakan ini tidak dapat dibatalkan</p>
+              <h3 class="text-xl font-bold text-gray-900">Hapus Transaksi</h3>
+              <p class="text-sm text-gray-500">Tindakan ini tidak bisa dibatalkan</p>
             </div>
           </div>
 
@@ -1712,6 +1893,57 @@ watch(
               <UIcon v-if="deleteLoading" name="i-heroicons-arrow-path" class="w-5 h-5 animate-spin" />
               <UIcon v-else name="i-heroicons-trash" class="w-5 h-5" />
               {{ deleteLoading ? 'MENGHAPUS...' : 'HAPUS' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Return Confirmation Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showReturnModal && selectedTransaction"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        @click.self="!returnLoading && (showReturnModal = false)"
+      >
+        <div
+          class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6"
+          @click.stop
+        >
+          <!-- Header -->
+          <div class="flex items-center gap-3 mb-5">
+            <div
+              class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0"
+            >
+              <UIcon
+                name="i-heroicons-arrow-path"
+                class="w-7 h-7 text-amber-600"
+              />
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-gray-900">Retur Transaksi</h3>
+              <p class="text-sm text-gray-500">Kembalikan stok produk</p>
+            </div>
+          </div>
+          <p class="text-gray-600 mb-6">
+            Apakah Anda yakin ingin me-retur transaksi <strong>{{ (selectedTransaction as any).transaction_number }}</strong>? 
+            Transaksi akan ditandai sebagai <strong>DITOLAK/RETUR</strong>, dan stok produk akan dikembalikan ke inventori secara otomatis.
+          </p>
+          <div class="flex gap-3">
+            <button
+              @click="showReturnModal = false"
+              class="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-all"
+              :disabled="returnLoading"
+            >
+              BATAL
+            </button>
+            <button
+              @click="handleReturn"
+              class="flex-1 py-3 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 disabled:bg-amber-300 transition-all flex items-center justify-center gap-2"
+              :disabled="returnLoading"
+            >
+              <UIcon v-if="returnLoading" name="i-heroicons-arrow-path" class="w-5 h-5 animate-spin" />
+              PROSES RETUR
             </button>
           </div>
         </div>
@@ -1851,5 +2083,13 @@ watch(
     width: 100%;
     background: white !important;
   }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 </style>

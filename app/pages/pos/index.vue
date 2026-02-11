@@ -18,6 +18,18 @@ const {
   createTransaction,
 } = useTransactions();
 const { categories, fetchCategories } = useCategories();
+const toast = useToast();
+const { activeShift, fetchActiveShift, openShift, closeShift, calculateExpectedBalance, error: shiftError } = useShifts();
+
+// Shift State
+const showOpenShiftModal = ref(false);
+const showCloseShiftModal = ref(false);
+const openingBalance = ref("0");
+const actualBalance = ref("0");
+const shiftNotes = ref("");
+const expectedBalance = ref(0);
+const shiftLoading = ref(false);
+const isMounted = ref(false);
 
 // Get enabled payment methods and bank accounts from store
 const enabledPaymentMethods = computed(() => {
@@ -273,7 +285,7 @@ const quickCashAmounts = computed(() => {
   return [...new Set(amounts)].sort((a, b) => a - b).slice(0, 6);
 });
 
-const handleAddToCart = (product) => {
+const handleAddToCart = (product: any) => {
   try {
     addToCart(product);
   } catch (e) {
@@ -294,6 +306,11 @@ const setExactAmount = () => {
 };
 
 const processPayment = async () => {
+  if (!activeShift.value) {
+    showAlert("error", "Shift kasir harus dibuka terlebih dahulu!");
+    showOpenShiftModal.value = true;
+    return;
+  }
   if (!cart.value.length) return;
 
   const total = cartTotal.value;
@@ -407,22 +424,126 @@ const printReceipt = () => {
   }
 };
 
+// Copy Receipt Link
+const copyReceiptLink = () => {
+  if (!lastTransaction.value) return;
+  
+  const protocol = window.location.protocol;
+  const host = window.location.host;
+  const url = `${protocol}//${host}/nota/${lastTransaction.value.transaction_number}`;
+  
+  navigator.clipboard.writeText(url).then(() => {
+    toast.add({
+      title: "Berhasil",
+      description: "Link nota online telah disalin",
+      color: "success",
+      icon: "i-heroicons-check-circle",
+    });
+  }).catch(() => {
+    toast.add({
+      title: "Gagal",
+      description: "Gagal menyalin link",
+      color: "error",
+      icon: "i-heroicons-x-circle",
+    });
+  });
+};
+
+// --- Shift Logic ---
+const handleOpenShift = async () => {
+  const balance = parseInt(openingBalance.value.replace(/\D/g, "")) || 0;
+  shiftLoading.value = true;
+  try {
+    await openShift(balance);
+    showOpenShiftModal.value = false;
+    openingBalance.value = "0";
+    toast.add({
+      title: "Kasir Berhasil Dibuka",
+      description: `Modal awal: ${formatCurrency(balance)}`,
+      icon: "i-heroicons-check-circle",
+      color: "success"
+    });
+  } catch (e: any) {
+    console.error("DEBUG - Open Shift Catch:", e);
+    toast.add({
+      title: "Gagal Membuka Kasir",
+      description: e.message || "Pastikan tabel 'shifts' sudah ada dan RLS sudah diatur.",
+      color: "error"
+    });
+  } finally {
+    shiftLoading.value = false;
+  }
+};
+
+const handlePrepareCloseShift = async () => {
+  shiftLoading.value = true;
+  try {
+    expectedBalance.value = await calculateExpectedBalance(activeShift.value);
+    actualBalance.value = expectedBalance.value.toString();
+    showCloseShiftModal.value = true;
+  } catch (e: any) {
+    toast.add({
+      title: "Gagal",
+      description: "Gagal menghitung saldo: " + e.message,
+      color: "error"
+    });
+  } finally {
+    shiftLoading.value = false;
+  }
+};
+
+const handleCloseShift = async () => {
+  const actual = parseInt(actualBalance.value.replace(/\D/g, "")) || 0;
+  shiftLoading.value = true;
+  try {
+    await closeShift(actual, shiftNotes.value);
+    showCloseShiftModal.value = false;
+    actualBalance.value = "0";
+    shiftNotes.value = "";
+    toast.add({
+      title: "Kasir Berhasil Ditutup",
+      description: "Shift hari ini telah berakhir.",
+      icon: "i-heroicons-check-circle",
+      color: "success"
+    });
+    // Auto-prompt to open new shift if they want
+    setTimeout(() => {
+      showOpenShiftModal.value = true;
+    }, 500);
+  } catch (e: any) {
+    toast.add({
+      title: "Gagal",
+      description: e.message || "Gagal menutup kasir",
+      color: "error"
+    });
+  } finally {
+    shiftLoading.value = false;
+  }
+};
+
 onMounted(async () => {
+  isMounted.value = true;
   if (!store.value) {
     await useStore().fetchStore();
   }
 
   if (store.value) {
-    await Promise.all([fetchCategories(), fetchProducts()]);
+    await Promise.all([fetchCategories(), fetchProducts(), fetchActiveShift()]);
+    if (!activeShift.value) {
+      showOpenShiftModal.value = true;
+    }
   }
 });
 
 watch(
   () => store.value,
   async (val) => {
-    if (val?.id) await Promise.all([fetchCategories(), fetchProducts()]);
+    if (val?.id && process.client) {
+       await Promise.all([fetchCategories(), fetchProducts(), fetchActiveShift()]);
+       if (!activeShift.value) showOpenShiftModal.value = true;
+    }
   },
-  { immediate: true },
+  { immediate: false },
 );
 </script>
 
@@ -452,7 +573,33 @@ watch(
         </div>
 
         <!-- Kategori Button -->
-        <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        <div class="flex gap-2 items-center overflow-x-auto pb-2 scrollbar-hide">
+          <UButton
+            v-if="activeShift"
+            label="TUTUP KASIR"
+            color="error"
+            variant="solid"
+            icon="i-heroicons-lock-closed"
+            class="flex-shrink-0 font-bold"
+            :loading="shiftLoading"
+            @click="handlePrepareCloseShift"
+          />
+          <UButton
+            v-else
+            label="BUKA KASIR"
+            color="primary"
+            variant="solid"
+            icon="i-heroicons-key"
+            class="flex-shrink-0 font-bold"
+            @click="showOpenShiftModal = true"
+          />
+          <div v-if="activeShift" class="bg-blue-50 px-3 py-2 rounded-lg border border-blue-100 flex items-center gap-2 flex-shrink-0">
+             <UIcon name="i-heroicons-user-circle" class="w-4 h-4 text-blue-600" />
+             <span class="text-[10px] font-black text-blue-700 uppercase">
+                SHIFT: {{ store?.name || 'Admin' }} (Modal: {{ formatCurrency(activeShift.opening_balance) }})
+             </span>
+          </div>
+          <div class="w-px h-6 bg-gray-200 mx-1 flex-shrink-0"></div>
           <UButton
             label="Semua"
             size="lg"
@@ -464,7 +611,7 @@ watch(
           <UButton
             label="⭐ Favorit"
             size="lg"
-            :color="selectedCategory === 'favorite' ? 'amber' : 'info'"
+            :color="selectedCategory === 'favorite' ? 'warning' : 'info'"
             :variant="selectedCategory === 'favorite' ? 'solid' : 'soft'"
             @click="selectedCategory = 'favorite'"
             class="flex-shrink-0"
@@ -982,6 +1129,112 @@ watch(
       </div>
     </Teleport>
 
+    <Teleport to="body" v-if="isMounted">
+      <!-- Modal Buka Kasir -->
+      <div v-if="showOpenShiftModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8 animate-[scale-in_0.2s_ease-out]">
+            <div class="flex items-center justify-between mb-6">
+              <div class="flex-1"></div>
+              <div class="text-center w-full">
+                <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <UIcon name="i-heroicons-key" class="w-8 h-8" />
+                </div>
+                <h3 class="text-2xl font-black text-gray-800">Buka Kasir</h3>
+                <p class="text-gray-500 text-sm font-medium">Masukkan modal awal uang tunai</p>
+              </div>
+              <div class="flex-1 flex justify-end">
+                <button @click="showOpenShiftModal = false" class="text-gray-400 hover:text-gray-600 p-2">
+                  <UIcon name="i-heroicons-x-mark" class="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+          
+          <div class="space-y-6">
+            <div v-if="shiftError" class="p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600 font-bold">
+              ⚠️ {{ shiftError }}
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">MODAL AWAL (Rp)</label>
+              <input
+                v-model="openingBalance"
+                type="text"
+                @input="(e) => openingBalance = (e.target as HTMLInputElement).value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.')"
+                class="w-full px-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all outline-none text-2xl font-black text-center"
+                placeholder="0"
+                autofocus
+              />
+            </div>
+            
+            <UButton
+              label="MULAI SHIFT"
+              color="primary"
+              size="xl"
+              block
+              class="py-4 rounded-2xl font-black text-lg"
+              :loading="shiftLoading"
+              @click="handleOpenShift"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Tutup Kasir -->
+      <div v-if="showCloseShiftModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 animate-[scale-in_0.2s_ease-out]">
+          <div class="flex items-center justify-between mb-8">
+            <h3 class="text-2xl font-black text-gray-800">Tutup Kasir</h3>
+            <button @click="showCloseShiftModal = false" class="text-gray-400 hover:text-gray-600">
+              <UIcon name="i-heroicons-x-mark" class="w-6 h-6" />
+            </button>
+          </div>
+          
+          <div class="space-y-6">
+            <div class="grid grid-cols-2 gap-4">
+              <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                <p class="text-[10px] font-black text-gray-400 tracking-widest uppercase mb-1">Modal Awal</p>
+                <p class="text-lg font-bold text-gray-800">{{ formatCurrency(activeShift?.opening_balance || 0) }}</p>
+              </div>
+              <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                <p class="text-[10px] font-black text-blue-400 tracking-widest uppercase mb-1">Ekspektasi Kas</p>
+                <p class="text-lg font-bold text-blue-700">{{ formatCurrency(expectedBalance) }}</p>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">SALDO AKTUAL DI LACI</label>
+              <input
+                v-model="actualBalance"
+                type="text"
+                @input="(e) => actualBalance = (e.target as HTMLInputElement).value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.')"
+                class="w-full px-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all outline-none text-2xl font-black text-center"
+              />
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-black text-gray-400 tracking-widest uppercase mb-2">CATATAN SHIFT</label>
+              <textarea
+                v-model="shiftNotes"
+                rows="2"
+                class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all outline-none resize-none font-medium text-sm"
+                placeholder="Tambahkan info jika ada selisih..."
+              ></textarea>
+            </div>
+            
+            <UButton
+              label="AKHIRI SHIFT"
+              color="error"
+              size="xl"
+              block
+              class="py-4 rounded-2xl font-black text-lg"
+              :loading="shiftLoading"
+              @click="handleCloseShift"
+            />
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Modal Struk - SAMA, TIDAK ADA PERUBAHAN -->
     <Teleport to="body">
       <div
@@ -1000,20 +1253,29 @@ watch(
           />
 
           <!-- Actions -->
-          <div class="flex gap-2">
+          <div class="flex flex-col gap-2">
             <button
-              @click="showReceipt = false"
-              class="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200"
+              @click="copyReceiptLink"
+              class="w-full py-3 bg-blue-50 text-blue-700 font-bold rounded-xl hover:bg-blue-100 flex items-center justify-center gap-2 active:scale-95 transition-all border border-blue-200"
             >
-              TUTUP
+              <UIcon name="i-heroicons-share" class="w-5 h-5" />
+              SALIN LINK NOTA ONLINE
             </button>
-            <button
-              @click="printReceipt"
-              class="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 flex items-center justify-center gap-2"
-            >
-              <UIcon name="i-heroicons-printer" class="w-5 h-5" />
-              PRINT
-            </button>
+            <div class="flex gap-2">
+              <button
+                @click="showReceipt = false"
+                class="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200"
+              >
+                TUTUP
+              </button>
+              <button
+                @click="printReceipt"
+                class="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 flex items-center justify-center gap-2"
+              >
+                <UIcon name="i-heroicons-printer" class="w-5 h-5" />
+                PRINT
+              </button>
+            </div>
           </div>
         </div>
       </div>
