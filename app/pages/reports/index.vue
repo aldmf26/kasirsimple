@@ -1743,7 +1743,6 @@ watch(
                 <th class="text-left py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Waktu</th>
                 <th class="text-left py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Kasir</th>
                 <th class="text-right py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Modal Awal</th>
-                <th class="text-right py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Ekspektasi</th>
                 <th class="text-right py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Aktual</th>
                 <th class="text-right py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Selisih</th>
                 <th class="text-left py-3 px-5 font-semibold text-gray-600 uppercase tracking-wider text-[10px]">Catatan</th>
@@ -1760,7 +1759,6 @@ watch(
                   <span class="font-medium text-gray-700">{{ shift.notes?.includes('Kasir:') ? shift.notes.split(' - ')[0].replace('Kasir: ', '') : (shift.user?.email?.split('@')[0] || 'Admin') }}</span>
                 </td>
                 <td class="py-4 px-5 text-right font-medium text-gray-600">{{ formatCurrency(shift.opening_balance) }}</td>
-                <td class="py-4 px-5 text-right font-medium text-blue-600 text-[10px] italic">{{ shift.status === 'closed' ? formatCurrency(shift.closing_balance_expected) : '-' }}</td>
                 <td class="py-4 px-5 text-right font-bold text-gray-900">{{ shift.status === 'closed' ? formatCurrency(shift.closing_balance_actual) : '-' }}</td>
                 <td class="py-4 px-5 text-right font-black" :class="(shift.closing_balance_actual - shift.closing_balance_expected) === 0 ? 'text-emerald-600' : 'text-red-500'">
                   {{ shift.status === 'closed' ? formatCurrency(shift.closing_balance_actual - shift.closing_balance_expected) : '-' }}

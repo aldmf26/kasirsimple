@@ -98,9 +98,9 @@ const handleLogin = async () => {
           <div class="space-y-1.5">
             <div class="flex justify-between items-center ml-1">
               <label class="text-sm font-semibold text-gray-700">Password</label>
-              <NuxtLink to="/auth/forgot-password" class="text-xs font-semibold text-violet-600 hover:text-violet-700 hover:underline">
+              <!-- <NuxtLink to="/auth/forgot-password" class="text-xs font-semibold text-violet-600 hover:text-violet-700 hover:underline">
                 Lupa password?
-              </NuxtLink>
+              </NuxtLink> -->
             </div>
             <div class="relative group">
               <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
