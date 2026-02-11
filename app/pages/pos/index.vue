@@ -19,7 +19,9 @@ const {
 } = useTransactions();
 const { categories, fetchCategories } = useCategories();
 const toast = useToast();
-const { activeShift, fetchActiveShift, openShift, closeShift, calculateExpectedBalance, error: shiftError } = useShifts();
+const { activeShift, fetchActiveShift, openShift, updateShift, closeShift, calculateExpectedBalance, error: shiftError } = useShifts();
+const isEditingShift = ref(false);
+const hasPromptedShift = ref(false);
 
 // Shift State
 const showOpenShiftModal = ref(false);
@@ -452,22 +454,43 @@ const copyReceiptLink = () => {
 // --- Shift Logic ---
 const handleOpenShift = async () => {
   const balance = parseInt(openingBalance.value.replace(/\D/g, "")) || 0;
+  const name = shiftNotes.value.trim();
+  
+  if (!name) {
+    showAlert("error", "Harap masukkan Nama Operator/Kasir.");
+    return;
+  }
+
   shiftLoading.value = true;
   try {
-    await openShift(balance);
+    if (isEditingShift.value && activeShift.value) {
+      await updateShift(activeShift.value.id, {
+        opening_balance: balance,
+        notes: `Kasir: ${name}`
+      });
+      toast.add({
+        title: "Perubahan Disimpan",
+        description: `Operator: ${name} | Modal: ${formatCurrency(balance)}`,
+        icon: "i-heroicons-check-circle",
+        color: "success"
+      });
+    } else {
+      await openShift(balance, `Kasir: ${name}`);
+      toast.add({
+        title: "Kasir Berhasil Dibuka",
+        description: `Operator: ${name} | Modal: ${formatCurrency(balance)}`,
+        icon: "i-heroicons-check-circle",
+        color: "success"
+      });
+    }
     showOpenShiftModal.value = false;
     openingBalance.value = "0";
-    toast.add({
-      title: "Kasir Berhasil Dibuka",
-      description: `Modal awal: ${formatCurrency(balance)}`,
-      icon: "i-heroicons-check-circle",
-      color: "success"
-    });
+    isEditingShift.value = false;
   } catch (e: any) {
-    console.error("DEBUG - Open Shift Catch:", e);
+    console.error("DEBUG - Open/Edit Shift Catch:", e);
     toast.add({
-      title: "Gagal Membuka Kasir",
-      description: e.message || "Pastikan tabel 'shifts' sudah ada dan RLS sudah diatur.",
+      title: isEditingShift.value ? "Gagal Update Shift" : "Gagal Membuka Kasir",
+      description: e.message || "Terjadi kesalahan pada server.",
       color: "error"
     });
   } finally {
@@ -475,11 +498,29 @@ const handleOpenShift = async () => {
   }
 };
 
+const handleEditShift = () => {
+  if (!activeShift.value) return;
+  
+  isEditingShift.value = true;
+  openingBalance.value = activeShift.value.opening_balance.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  
+  // Extract name from "Kasir: Name - Description" or "Kasir: Name"
+  const rawNotes = activeShift.value.notes || "";
+  const nameMatch = rawNotes.match(/^Kasir:\s*(.*?)(?:\s*-\s*.*|$)/);
+  shiftNotes.value = nameMatch ? nameMatch[1].trim() : "";
+  
+  showOpenShiftModal.value = true;
+};
+
 const handlePrepareCloseShift = async () => {
   shiftLoading.value = true;
   try {
     expectedBalance.value = await calculateExpectedBalance(activeShift.value);
     actualBalance.value = expectedBalance.value.toString();
+    // Pre-fill notes with the cashier name if it exists
+    if (activeShift.value?.notes) {
+      shiftNotes.value = activeShift.value.notes + " - ";
+    }
     showCloseShiftModal.value = true;
   } catch (e: any) {
     toast.add({
@@ -507,6 +548,7 @@ const handleCloseShift = async () => {
       color: "success"
     });
     // Auto-prompt to open new shift if they want
+    hasPromptedShift.value = false; // Reset prompt so it can show once more if needed
     setTimeout(() => {
       showOpenShiftModal.value = true;
     }, 500);
@@ -521,6 +563,36 @@ const handleCloseShift = async () => {
   }
 };
 
+const checkAndPromptShift = async (retryCount = 0) => {
+  // If we already have a session in memory, don't follow the heavy check
+  if (activeShift.value || hasPromptedShift.value) {
+    if (activeShift.value) hasPromptedShift.value = true;
+    return;
+  }
+  
+  // Wait for user session to be available
+  const user = useSupabaseUser();
+  if (!user.value && retryCount < 5) {
+    setTimeout(() => checkAndPromptShift(retryCount + 1), 500);
+    return;
+  }
+
+  // Force a fresh check from DB only if memory is empty
+  loading.value = true;
+  try {
+    const shift = await fetchActiveShift();
+    
+    if (!activeShift.value && !showOpenShiftModal.value) {
+      showOpenShiftModal.value = true;
+    }
+    hasPromptedShift.value = true;
+  } catch (e) {
+    console.warn("Silent shift check failed", e);
+  } finally {
+    loading.value = false;
+  }
+};
+
 onMounted(async () => {
   isMounted.value = true;
   if (!store.value) {
@@ -528,10 +600,8 @@ onMounted(async () => {
   }
 
   if (store.value) {
-    await Promise.all([fetchCategories(), fetchProducts(), fetchActiveShift()]);
-    if (!activeShift.value) {
-      showOpenShiftModal.value = true;
-    }
+    await Promise.all([fetchCategories(), fetchProducts()]);
+    await checkAndPromptShift();
   }
 });
 
@@ -539,8 +609,8 @@ watch(
   () => store.value,
   async (val) => {
     if (val?.id && process.client) {
-       await Promise.all([fetchCategories(), fetchProducts(), fetchActiveShift()]);
-       if (!activeShift.value) showOpenShiftModal.value = true;
+       await Promise.all([fetchCategories(), fetchProducts()]);
+       await checkAndPromptShift();
     }
   },
   { immediate: false },
@@ -560,27 +630,44 @@ watch(
     />
     <!-- LEFT: Produk -->
     <div class="flex-1 flex flex-col p-2 sm:p-3 lg:p-4 overflow-hidden">
-      <!-- Search & Kategori -->
-      <div class="bg-white rounded-xl shadow-sm p-3 sm:p-4 mb-3 sm:mb-4">
-        <!-- Search Bar -->
-        <div class="mb-3">
-          <input
-            v-model="searchQuery"
-            placeholder="Cari produk..."
-            class="w-full flex-1 rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring focus:ring-indigo-500"
-            type="search"
-          />
+      <!-- HEADER: Status & Shift -->
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 px-1">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary-200 shrink-0">
+            <UIcon name="i-heroicons-shopping-bag" class="w-6 h-6" />
+          </div>
+          <div>
+            <h2 class="text-sm font-black text-gray-800 uppercase tracking-tight">Katalog Produk</h2>
+            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{{ store?.name || 'Kasir Simple' }}</p>
+          </div>
         </div>
 
-        <!-- Kategori Button -->
-        <div class="flex gap-2 items-center overflow-x-auto pb-2 scrollbar-hide">
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <!-- Shift Info Pill -->
+          <div v-if="activeShift" class="flex-1 sm:flex-none flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm shrink-0">
+             <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+             <div class="flex flex-col">
+               <div class="flex items-center gap-1">
+                 <span class="text-[10px] font-black text-gray-800 uppercase leading-none">
+                    {{ activeShift.notes?.split(' - ')[0].replace('Kasir: ', '') || 'Operator' }}
+                 </span>
+                 <button @click="handleEditShift" class="hover:text-primary-600 text-gray-400 transition-colors">
+                    <UIcon name="i-heroicons-pencil-square" class="w-3 h-3" />
+                 </button>
+               </div>
+               <span class="text-[9px] font-bold text-gray-800 uppercase tracking-wider">Modal: {{ formatCurrency(activeShift.opening_balance) }}</span>
+             </div>
+          </div>
+
+          <!-- Shift Action Button -->
           <UButton
             v-if="activeShift"
-            label="TUTUP KASIR"
+            label="TUTUP"
             color="error"
-            variant="solid"
+            variant="soft"
             icon="i-heroicons-lock-closed"
-            class="flex-shrink-0 font-bold"
+            class="font-black text-[10px]"
+            size="md"
             :loading="shiftLoading"
             @click="handlePrepareCloseShift"
           />
@@ -590,16 +677,32 @@ watch(
             color="primary"
             variant="solid"
             icon="i-heroicons-key"
-            class="flex-shrink-0 font-bold"
+            class="font-black text-[10px] shadow-lg shadow-primary-200"
+            size="sm"
             @click="showOpenShiftModal = true"
           />
-          <div v-if="activeShift" class="bg-blue-50 px-3 py-2 rounded-lg border border-blue-100 flex items-center gap-2 flex-shrink-0">
-             <UIcon name="i-heroicons-user-circle" class="w-4 h-4 text-blue-600" />
-             <span class="text-[10px] font-black text-blue-700 uppercase">
-                SHIFT: {{ store?.name || 'Admin' }} (Modal: {{ formatCurrency(activeShift.opening_balance) }})
-             </span>
+        </div>
+      </div>
+
+      <!-- Search & Kategori -->
+      <div class="bg-white rounded-2xl shadow-sm p-3 sm:p-5 mb-4 border border-gray-100">
+        <!-- Search Bar -->
+        <div class="relative mb-5 group">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 group-focus-within:text-primary-500 transition-colors">
+            <UIcon name="i-heroicons-magnifying-glass" class="w-5 h-5" />
           </div>
-          <div class="w-px h-6 bg-gray-200 mx-1 flex-shrink-0"></div>
+          <input
+            v-model="searchQuery"
+            placeholder="Cari menu atau baranag..."
+            class="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-xl focus:border-primary-500 focus:bg-white transition-all outline-none text-sm font-medium"
+            type="search"
+          />
+        </div>
+
+        <!-- Kategori Button -->
+        <div class="flex gap-2 items-center overflow-x-auto pb-1 scrollbar-hide">
+          
+
           <UButton
             label="Semua"
             size="lg"
@@ -1137,13 +1240,13 @@ watch(
               <div class="flex-1"></div>
               <div class="text-center w-full">
                 <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <UIcon name="i-heroicons-key" class="w-8 h-8" />
+                  <UIcon :name="isEditingShift ? 'i-heroicons-pencil-square' : 'i-heroicons-key'" class="w-8 h-8" />
                 </div>
-                <h3 class="text-2xl font-black text-gray-800">Buka Kasir</h3>
-                <p class="text-gray-500 text-sm font-medium">Masukkan modal awal uang tunai</p>
+                <h3 class="text-2xl font-black text-gray-800">{{ isEditingShift ? 'Edit Kasir' : 'Buka Kasir' }}</h3>
+                <p class="text-gray-500 text-sm font-medium">{{ isEditingShift ? 'Perbarui modal atau nama operator' : 'Masukkan modal awal uang tunai' }}</p>
               </div>
               <div class="flex-1 flex justify-end">
-                <button @click="showOpenShiftModal = false" class="text-gray-400 hover:text-gray-600 p-2">
+                <button @click="showOpenShiftModal = false; isEditingShift = false" class="text-gray-400 hover:text-gray-600 p-2">
                   <UIcon name="i-heroicons-x-mark" class="w-6 h-6" />
                 </button>
               </div>
@@ -1155,23 +1258,33 @@ watch(
             </div>
 
             <div>
-              <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">MODAL AWAL (Rp)</label>
+              <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">NAMA OPERATOR / KASIR</label>
+              <input
+                v-model="shiftNotes"
+                type="text"
+                class="text-black w-full px-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all outline-none text-lg font-bold text-center"
+                placeholder="Contoh: Budi Gunawan"
+                autofocus
+              />
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">MODAL AWAL (Rp)</label>
               <input
                 v-model="openingBalance"
                 type="text"
                 @input="(e) => openingBalance = (e.target as HTMLInputElement).value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.')"
-                class="w-full px-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all outline-none text-2xl font-black text-center"
+                class="text-black w-full px-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all outline-none text-2xl font-black text-center"
                 placeholder="0"
-                autofocus
               />
             </div>
             
             <UButton
-              label="MULAI SHIFT"
+              :label="isEditingShift ? 'SIMPAN PERUBAHAN' : 'MULAI SHIFT'"
               color="primary"
               size="xl"
               block
-              class="py-4 rounded-2xl font-black text-lg"
+              class="font-black rounded-2xl py-4 shadow-lg shadow-blue-200"
               :loading="shiftLoading"
               @click="handleOpenShift"
             />
@@ -1207,7 +1320,7 @@ watch(
                 v-model="actualBalance"
                 type="text"
                 @input="(e) => actualBalance = (e.target as HTMLInputElement).value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.')"
-                class="w-full px-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all outline-none text-2xl font-black text-center"
+                class="text-black w-full px-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all outline-none text-2xl font-black text-center"
               />
             </div>
 
@@ -1216,7 +1329,7 @@ watch(
               <textarea
                 v-model="shiftNotes"
                 rows="2"
-                class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all outline-none resize-none font-medium text-sm"
+                class="text-black w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-blue-500 focus:bg-white transition-all outline-none resize-none font-medium text-sm"
                 placeholder="Tambahkan info jika ada selisih..."
               ></textarea>
             </div>

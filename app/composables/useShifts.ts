@@ -9,6 +9,19 @@ export const useShifts = () => {
     const loading = useState<boolean>('shift_loading', () => false);
     const error = useState<string | null>('shift_error', () => null);
 
+    // --- SECURITY: Sinkronisasi Otomatis Sesuai Sesi User ---
+    if (process.client) {
+        supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_OUT') {
+                activeShift.value = null;
+                shiftsHistory.value = [];
+                console.log('DEBUG - useShifts: Sesi berakhir, membersihkan data shift.');
+            } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+                // Jangan paksa null di sini agar tidak flicker, tapi fetch ulang nanti
+            }
+        });
+    }
+
     const fetchActiveShift = async () => {
         if (process.server) return null;
 
@@ -27,51 +40,91 @@ export const useShifts = () => {
             return activeShift.value;
         }
 
-        // Ensure user is ready or fetch it
+        // Ensure user is ready (High Persistence for Refresh)
         let currentUser = user.value as any;
-        if (!currentUser) {
+        let authRetries = 0;
+
+        // Jika user null, coba getSession, jika masih null, tunggu sebentar (untuk refresh)
+        while (!currentUser?.id && authRetries < 10) {
             const { data: { session } } = await supabase.auth.getSession();
             currentUser = session?.user;
+
+            if (!currentUser?.id) {
+                console.log(`DEBUG - fetchActiveShift: Waiting for Auth... (${authRetries + 1}/10)`);
+                await new Promise(resolve => setTimeout(resolve, 300));
+                authRetries++;
+            }
         }
 
         if (!currentUser?.id) {
-            console.log('DEBUG - fetchActiveShift: No user session found.');
+            console.error('DEBUG - fetchActiveShift: AUTH GAGAL - Sesi tidak ditemukan setelah 3 detik.');
             return null;
         }
 
+        // Tunggu Store Ready
         let currentStoreId = store.value?.id;
-        if (!currentStoreId) {
+        let storeRetries = 0;
+        while (!currentStoreId && storeRetries < 5) {
             const s = await fetchStore(currentUser.id);
             currentStoreId = s?.id;
+            if (!currentStoreId) {
+                console.log(`DEBUG - fetchActiveShift: Waiting for Store... (${storeRetries + 1}/5)`);
+                await new Promise(resolve => setTimeout(resolve, 500));
+                storeRetries++;
+            }
         }
 
-        if (!currentStoreId) return null;
+        if (!currentStoreId) {
+            console.error('DEBUG - fetchActiveShift: STORE GAGAL - ID Toko tidak ditemukan.');
+            return null;
+        }
 
         loading.value = true;
         try {
-            const { data, error: fetchError } = await (supabase as any)
+            // --- DIAGNOSTIK: Cek apakah RLS memblokir kita ---
+            const { data: allData, error: diagError } = await (supabase as any).from('shifts').select('id, status');
+            console.log('DIAGNOSTIC - fetchActiveShift: Bisa melihat total baris:', allData?.length || 0, 'Error:', diagError?.message);
+
+            console.log('DEBUG - fetchActiveShift: Strict Isolation Check', {
+                store_id: currentStoreId,
+                user_id: currentUser.id
+            });
+
+            // WAJIB: Filter berdasarkan store_id DAN user_id DAN status open
+            let { data, error: fetchError } = await (supabase as any)
                 .from('shifts')
                 .select('*')
                 .eq('store_id', currentStoreId)
                 .eq('user_id', currentUser.id)
                 .eq('status', 'open')
-                .maybeSingle();
+                .order('start_time', { ascending: false })
+                .limit(1);
 
             if (fetchError) {
-                console.warn('Shift check failed:', fetchError.message);
+                console.error('DEBUG - fetchActiveShift: Select Error:', fetchError);
                 return null;
             }
-            activeShift.value = data;
-            return data;
+
+            // Bukannya maybeSingle, kita ambil array index 0 agar lebih robust
+            let activeData = data && data.length > 0 ? data[0] : null;
+
+            // Jika gagal tapi kita tahu ada data (lewat diagnostik), lapor
+            if (!activeData && allData && allData.some((s: any) => s.status === 'open')) {
+                console.error('⚠️ KRITIS: Database punya shift OPEN, tapi pencarian filter gagal. Ini kemungkinan besar masalah RLS di Supabase!');
+            }
+
+            console.log('DEBUG - fetchActiveShift: Final Match ->', activeData ? `FOUND (${activeData.id})` : 'NOT FOUND');
+            activeShift.value = activeData;
+            return activeData;
         } catch (err: any) {
-            console.error('Error fetching active shift:', err.message);
+            console.error('DEBUG - fetchActiveShift: Exception:', err.message);
             return null;
         } finally {
             loading.value = false;
         }
     };
 
-    const openShift = async (openingBalance: number) => {
+    const openShift = async (openingBalance: number, initialNotes: string = '') => {
         if (process.server) return;
         error.value = null;
 
@@ -83,7 +136,8 @@ export const useShifts = () => {
                 user_id: 'dummy-user',
                 start_time: new Date().toISOString(),
                 opening_balance: openingBalance,
-                status: 'open'
+                status: 'open',
+                notes: initialNotes
             };
             return activeShift.value;
         }
@@ -115,24 +169,32 @@ export const useShifts = () => {
 
         loading.value = true;
         try {
+            const payload = {
+                store_id: currentStoreId,
+                user_id: currentUser.id,
+                start_time: new Date().toISOString(),
+                opening_balance: openingBalance,
+                status: 'open',
+                notes: initialNotes
+            };
+
             const { data, error: insertError } = await (supabase as any)
                 .from('shifts')
-                .insert({
-                    store_id: currentStoreId,
-                    user_id: currentUser.id,
-                    start_time: new Date().toISOString(),
-                    opening_balance: openingBalance,
-                    status: 'open'
-                })
+                .insert(payload)
                 .select()
-                .single();
+                .maybeSingle();
 
             if (insertError) {
-                if (insertError.code === '42P01') {
-                    throw new Error('Tabel "shifts" belum ditemukan. Harap pastikan tabel sudah dibuat di database.');
+                // If shift already exists (duplicate key), try to recover it
+                if (insertError.code === '23505') {
+                    console.log('DEBUG - openShift: Shift already exists, recovering state...');
+                    const existing = await fetchActiveShift();
+                    if (existing) return existing;
+                    throw new Error('Shift sudah terbuka di sistem namun gagal disinkronkan. Silakan refresh (F5).');
                 }
                 throw insertError;
             }
+
             activeShift.value = data;
             return data;
         } catch (err: any) {
@@ -210,8 +272,48 @@ export const useShifts = () => {
         }
     };
 
+    const updateShift = async (shiftId: string, data: { opening_balance?: number, notes?: string }) => {
+        if (isDummyMode.value) {
+            if (activeShift.value) {
+                activeShift.value = { ...activeShift.value, ...data };
+            }
+            return activeShift.value;
+        }
+
+        loading.value = true;
+        try {
+            const { data: updatedData, error: updateError } = await (supabase as any)
+                .from('shifts')
+                .update(data)
+                .eq('id', shiftId)
+                .select()
+                .single();
+
+            if (updateError) throw updateError;
+            activeShift.value = updatedData;
+            return updatedData;
+        } catch (err: any) {
+            error.value = err.message || 'Gagal update shift';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    };
+
     const fetchAllShifts = async (filters?: { startDate?: string, endDate?: string }) => {
         if (process.server) return [];
+
+        // Ensure user is ready (Persistent for Refresh/Direct URL)
+        let currentUser = user.value as any;
+        let authRetries = 0;
+        while (!currentUser?.id && authRetries < 5) {
+            const { data: { session } } = await supabase.auth.getSession();
+            currentUser = session?.user;
+            if (!currentUser?.id) {
+                await new Promise(resolve => setTimeout(resolve, 300));
+                authRetries++;
+            }
+        }
 
         if (isDummyMode.value) {
             shiftsHistory.value = [
@@ -229,31 +331,44 @@ export const useShifts = () => {
             return shiftsHistory.value;
         }
 
+        if (!currentUser?.id) return [];
+
         let currentStoreId = store.value?.id;
-        if (!currentStoreId) {
-            const s = await fetchStore();
+        let storeRetries = 0;
+        while (!currentStoreId && storeRetries < 5) {
+            const s = await fetchStore(currentUser.id);
             currentStoreId = s?.id;
+            if (!currentStoreId) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                storeRetries++;
+            }
         }
+
         if (!currentStoreId) return [];
 
         loading.value = true;
         try {
+            console.log('DEBUG - fetchAllShifts: Starting fetch for store:', currentStoreId);
             let query = (supabase as any)
                 .from('shifts')
-                .select('*, user:user_id(email)')
+                .select('*')
                 .eq('store_id', currentStoreId)
                 .order('start_time', { ascending: false });
 
             if (filters?.startDate) {
-                query = query.gte('start_time', filters.startDate + 'T00:00:00');
+                query = query.gte('start_time', filters.startDate);
             }
             if (filters?.endDate) {
-                query = query.lte('start_time', filters.endDate + 'T23:59:59');
+                query = query.lte('start_time', filters.endDate + ' 23:59:59');
             }
 
             const { data, error: fetchError } = await query;
-            if (fetchError) throw fetchError;
+            if (fetchError) {
+                console.error('DEBUG - fetchAllShifts: DB Error:', fetchError);
+                throw fetchError;
+            }
 
+            console.log('DEBUG - fetchAllShifts: Successfully found', data?.length, 'shifts');
             shiftsHistory.value = data || [];
             return shiftsHistory.value;
         } catch (err: any) {
@@ -272,6 +387,7 @@ export const useShifts = () => {
         fetchActiveShift,
         fetchAllShifts,
         openShift,
+        updateShift,
         closeShift,
         calculateExpectedBalance
     };

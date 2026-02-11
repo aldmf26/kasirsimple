@@ -101,13 +101,29 @@ const filteredTransactions = computed(() => {
   return transactions.value.filter((t: any) => {
     const txNumber = (t.transaction_number || "").toLowerCase();
     const method = t.payment_method === "cash" ? "tunai" : "transfer";
-    const total = formatCurrency(t.total).toLowerCase();
+    const total = formatCurrency(t.total || 0).toLowerCase();
     const date = formatDateTime(t.created_at).toLowerCase();
     return (
       txNumber.includes(q) ||
       method.includes(q) ||
       total.includes(q) ||
       date.includes(q)
+    );
+  });
+});
+
+// Filtered shifts for search
+const filteredShifts = computed(() => {
+  if (!searchQuery.value.trim()) return shiftsHistory.value;
+  const q = searchQuery.value.toLowerCase().trim();
+  return shiftsHistory.value.filter((s: any) => {
+    const cashier = (s.notes || "").toLowerCase();
+    const startTime = formatDateTime(s.start_time).toLowerCase();
+    const status = (s.status || "").toLowerCase() === 'open' ? 'aktif' : 'tutup';
+    return (
+      cashier.includes(q) ||
+      startTime.includes(q) ||
+      status.includes(q)
     );
   });
 });
@@ -447,23 +463,40 @@ const setFilter = (type: string) => {
 };
 
 const loadData = async () => {
+  console.log('DEBUG - Reports: Starting loadData. Store status:', !!store.value);
+  
+  // Try to fetch store if missing
+  if (!store.value) {
+    await fetchStore();
+  }
+
   if (store.value) {
-    await Promise.all([
-      fetchTransactions({
-        startDate: filters.startDate,
-        endDate: filters.endDate,
-        paymentMethod: filters.paymentMethod,
-      }),
-      fetchProducts(),
-      fetchExpenses({
-        startDate: filters.startDate,
-        endDate: filters.endDate
-      }),
-      fetchAllShifts({
-        startDate: filters.startDate,
-        endDate: filters.endDate
-      }),
-    ]);
+    loading.value = true;
+    try {
+      await Promise.all([
+        fetchTransactions({
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+          paymentMethod: filters.paymentMethod,
+        }),
+        fetchProducts(),
+        fetchExpenses({
+          startDate: filters.startDate,
+          endDate: filters.endDate
+        }),
+        fetchAllShifts({
+          startDate: filters.startDate,
+          endDate: filters.endDate
+        }),
+      ]);
+      console.log('DEBUG - Reports: Data load complete. Shift count:', shiftsHistory.value?.length);
+    } catch (e: any) {
+      console.error('DEBUG - Reports: Load Error:', e);
+    } finally {
+      loading.value = false;
+    }
+  } else {
+    console.warn('DEBUG - Reports: Cannot load data without store context.');
   }
 };
 
@@ -1703,7 +1736,7 @@ watch(
       </div>
 
       <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div v-if="shiftsHistory.length > 0" class="overflow-x-auto text-sm">
+        <div v-if="filteredShifts.length > 0" class="overflow-x-auto text-sm">
           <table class="w-full">
             <thead>
               <tr class="bg-gray-50 border-b border-gray-200">
@@ -1718,22 +1751,22 @@ watch(
               </tr>
             </thead>
             <tbody>
-              <tr v-for="shift in shiftsHistory" :key="shift.id" class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+              <tr v-for="shift in filteredShifts" :key="shift.id" class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                 <td class="py-4 px-5">
-                  <p class="font-bold text-gray-900">{{ formatDateTime(shift.start_time) }}</p>
-                  <p v-if="shift.end_time" class="text-[10px] text-gray-500">Selesai: {{ formatDateTime(shift.end_time) }}</p>
+                  <p class="font-bold text-gray-900 text-xs">{{ formatDateTime(shift.start_time) }}</p>
+                  <p v-if="shift.end_time" class="text-[9px] text-gray-400">Selesai: {{ formatDateTime(shift.end_time) }}</p>
                 </td>
                 <td class="py-4 px-5">
-                  <span class="font-medium text-gray-700">{{ shift.user?.email?.split('@')[0] || 'Admin' }}</span>
+                  <span class="font-medium text-gray-700">{{ shift.notes?.includes('Kasir:') ? shift.notes.split(' - ')[0].replace('Kasir: ', '') : (shift.user?.email?.split('@')[0] || 'Admin') }}</span>
                 </td>
                 <td class="py-4 px-5 text-right font-medium text-gray-600">{{ formatCurrency(shift.opening_balance) }}</td>
-                <td class="py-4 px-5 text-right font-medium text-blue-600 text-sm italic">{{ shift.status === 'closed' ? formatCurrency(shift.closing_balance_expected) : '-' }}</td>
+                <td class="py-4 px-5 text-right font-medium text-blue-600 text-[10px] italic">{{ shift.status === 'closed' ? formatCurrency(shift.closing_balance_expected) : '-' }}</td>
                 <td class="py-4 px-5 text-right font-bold text-gray-900">{{ shift.status === 'closed' ? formatCurrency(shift.closing_balance_actual) : '-' }}</td>
                 <td class="py-4 px-5 text-right font-black" :class="(shift.closing_balance_actual - shift.closing_balance_expected) === 0 ? 'text-emerald-600' : 'text-red-500'">
                   {{ shift.status === 'closed' ? formatCurrency(shift.closing_balance_actual - shift.closing_balance_expected) : '-' }}
                 </td>
                 <td class="py-4 px-5">
-                  <p class="max-w-[150px] truncate text-xs text-gray-500" :title="shift.notes">{{ shift.notes || '-' }}</p>
+                  <p class="max-w-[150px] truncate text-[10px] text-gray-500" :title="shift.notes">{{ (shift.notes || '-').replace(/^Kasir:.*? - /, '') }}</p>
                 </td>
                 <td class="py-4 px-5 text-center">
                   <span :class="shift.status === 'open' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'" 
@@ -1747,7 +1780,8 @@ watch(
         </div>
         <div v-else class="p-12 text-center text-gray-400">
           <UIcon name="i-heroicons-clock" class="w-12 h-12 mx-auto mb-2 opacity-20" />
-          <p class="font-medium">Belum ada riwayat shift</p>
+          <p class="font-medium">Tidak ada data shift ditemukan</p>
+          <p class="text-xs mt-1">Coba sesuaikan filter tanggal atau pencarian Anda</p>
         </div>
       </div>
     </div>
