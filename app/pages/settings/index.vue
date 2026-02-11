@@ -146,13 +146,18 @@ const sections = [
     label: "Metode Pembayaran",
     icon: "i-heroicons-credit-card",
   },
-  { id: "account", label: "Akun", icon: "i-heroicons-user-circle" },
+  {
+    id: "help",
+    label: "Bantuan & Tutorial",
+    icon: "i-heroicons-question-mark-circle",
+  },
   {
     id: "activity",
     label: "Riwayat Aktivitas",
     icon: "i-heroicons-clock",
     action: () => navigateTo("/activity-history"),
   },
+  { id: "account", label: "Akun", icon: "i-heroicons-user-circle" },
 ];
 
 // Enabled payment methods
@@ -402,6 +407,123 @@ watch(
   },
   { deep: true },
 );
+
+// Help section state
+const activeHelpTab = ref<string | null>("konsep");
+const helpTabs = [
+  {
+    id: "konsep",
+    title: "1. CARA MEMULAI & KEAMANAN",
+    content: [
+      {
+        type: "list",
+        title: "Persiapan Toko:",
+        items: [
+          "<b>Pengaturan Profil</b>: Lengkapi nama, alamat, dan logo toko Anda di menu Pengaturan agar muncul di struk belanja.",
+          "<b>Keamanan Data</b>: Data Anda tersimpan secara otomatis dan rapi. Setiap pemilik toko hanya bisa melihat data miliknya sendiri.",
+          "<b>Multi-Perangkat</b>: Anda bisa membuka akun kasir ini dari beberapa HP atau laptop sekaligus secara bersamaan.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "transaksi",
+    title: "2. CARA JUALAN (KASIR)",
+    content: [
+      {
+        type: "list",
+        title: "Panduan Transaksi:",
+        items: [
+          "<b>Pilih Produk</b>: Klik pada gambar atau nama produk untuk memasukkannya ke keranjang belanja.",
+          "<b>Cari & Scan</b>: Gunakan kolom pencarian untuk mencari produk dengan cepat atau scan kode barang (SKU).",
+          "<b>Proses Bayar</b>: Klik tombol Bayar, pilih cara pembayaran (Tunai, QRIS, atau Transfer), lalu masukkan jumlah uang yang diterima.",
+          "<b>Hitung Kembalian</b>: Sistem akan otomatis menghitung uang kembalian dan memperbarui stok barang Anda.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "stok",
+    title: "3. ATUR BARANG & STOK",
+    content: [
+      {
+        type: "list",
+        title: "Kelola Barang Dagangan:",
+        items: [
+          "<b>Tambah Produk</b>: Masukkan harga beli, harga jual, dan jumlah stok awal saat menambah barang baru.",
+          "<b>Update Stok</b>: Klik ikon kotak/stok pada daftar produk jika ingin menambah stok baru tanpa harus edit data produk.",
+          "<b>Pantau Laba</b>: Dengan mengisi harga beli, Anda bisa melihat estimasi keuntungan bersih toko secara otomatis di laporan.",
+          "<b>Pilah Kategori</b>: Kelompokkan barang (misal: Makanan, Minuman) agar lebih mudah ditemukan saat jualan.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "laporan",
+    title: "4. MELIHAT LAPORAN",
+    content: [
+      {
+        type: "list",
+        title: "Pantau Hasil Penjualan:",
+        items: [
+          "<b>Ringkasan Harian</b>: Cek omzet hari ini dan total keuntungan langsung dari halaman utama (Dashboard).",
+          "<b>Cetak Laporan</b>: Anda bisa mendownload laporan penjualan ke dalam format <b>Excel</b> atau <b>PDF</b> untuk pembukuan.",
+          "<b>Audit Aktivitas</b>: Lihat semua riwayat perubahan (seperti hapus transaksi atau edit produk) di menu Riwayat Aktivitas.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "struk",
+    title: "5. STRUK & PRINTER",
+    content: [
+      {
+        type: "list",
+        title: "Informasi Nota Belanja:",
+        items: [
+          "<b>Cetak Struk</b>: Sambungkan printer thermal (Bluetooth/USB) untuk mencetak nota belanja pelanggan.",
+          "<b>Nota Digital</b>: Jika tidak punya printer, Anda bisa bagikan <b>Link Struk</b> ke WhatsApp pelanggan agar mereka bisa lihat nota di HP sendiri.",
+        ],
+      },
+    ],
+  },
+];
+
+// Account & Password Actions
+const user = useSupabaseUser();
+const newPassword = ref("");
+const confirmingPassword = ref("");
+const changingPassword = ref(false);
+
+const handleUpdatePassword = async () => {
+  if (!newPassword.value) {
+    showAlert("error", "Password baru tidak boleh kosong");
+    return;
+  }
+  if (newPassword.value !== confirmingPassword.value) {
+    showAlert("error", "Konfirmasi password tidak cocok");
+    return;
+  }
+  if (newPassword.value.length < 6) {
+    showAlert("error", "Password minimal 6 karakter");
+    return;
+  }
+
+  changingPassword.value = true;
+  try {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword.value,
+    });
+    if (error) throw error;
+    showAlert("success", "Password berhasil diperbarui");
+    newPassword.value = "";
+    confirmingPassword.value = "";
+  } catch (e: any) {
+    showAlert("error", e.message || "Gagal memperbarui password");
+  } finally {
+    changingPassword.value = false;
+  }
+};
 
 const handleLogout = () => {
   const dummyAuth = useCookie("dummy_auth");
@@ -1052,6 +1174,88 @@ const handleLogout = () => {
             </div>
           </div>
         </div>
+
+        <!-- Help & Tutorial -->
+        <div v-if="activeSection === 'help'" class="max-w-2xl space-y-6">
+          <div
+            class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"
+          >
+            <h2 class="text-xl font-bold text-gray-900 mb-2">
+              Bantuan & Tutorial
+            </h2>
+            <p class="text-sm text-gray-500 mb-8">
+              Panduan lengkap penggunaan aplikasi KasirSimple
+            </p>
+
+            <!-- Accordion Content -->
+            <div class="space-y-3">
+              <div
+                v-for="tab in helpTabs"
+                :key="tab.id"
+                class="rounded-xl border border-gray-200 overflow-hidden transition-all"
+              >
+                <!-- Accordion Header -->
+                <button
+                  @click="
+                    activeHelpTab = activeHelpTab === tab.id ? null : tab.id
+                  "
+                  class="w-full flex items-center justify-between p-4 text-left transition-colors"
+                  :class="activeHelpTab === tab.id ? 'bg-emerald-50' : 'hover:bg-gray-50'"
+                >
+                  <span class="font-bold text-gray-900 text-sm">{{
+                    tab.title
+                  }}</span>
+                  <UIcon
+                    :name="
+                      activeHelpTab === tab.id
+                        ? 'i-heroicons-chevron-up'
+                        : 'i-heroicons-chevron-down'
+                    "
+                    class="w-5 h-5"
+                    :class="activeHelpTab === tab.id ? 'text-emerald-600' : 'text-gray-400'"
+                  />
+                </button>
+
+                <!-- Accordion Body -->
+                <div
+                  v-if="activeHelpTab === tab.id"
+                  class="p-5 border-t border-gray-100 bg-white"
+                >
+                  <div v-for="(block, bIdx) in tab.content" :key="bIdx">
+                    <p v-if="block.title" class="font-bold text-gray-800 mb-3 text-sm">
+                      {{ block.title }}
+                    </p>
+                    <ul v-if="block.type === 'list'" class="space-y-4">
+                      <li
+                        v-for="(item, iIdx) in block.items"
+                        :key="iIdx"
+                        class="flex items-start gap-3 text-sm text-gray-600 leading-relaxed"
+                      >
+                        <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 shrink-0"></div>
+                        <span v-html="item"></span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Contact Support -->
+            <div class="mt-8 p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center gap-4">
+              <div class="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shrink-0">
+                <UIcon name="i-heroicons-chat-bubble-left-right" class="w-5 h-5" />
+              </div>
+              <div>
+                <p class="text-xs text-gray-500">Punya kendala lain?</p>
+                <p class="text-sm font-bold text-gray-900 cursor-pointer hover:text-emerald-600 transition-colors">
+                  WhatsApp CS: 0895413111035
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Account Settings -->
         <div v-if="activeSection === 'account'" class="max-w-2xl space-y-6">
           <div
             class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"
@@ -1064,46 +1268,76 @@ const handleLogout = () => {
               <div
                 class="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shrink-0"
               >
-                <UIcon name="i-heroicons-user" class="w-10 h-10" />
+                <span class="text-2xl font-black">{{ user?.email?.charAt(0).toUpperCase() }}</span>
               </div>
               <div class="text-center sm:text-left">
-                <p class="font-bold text-lg text-gray-900">User Demo</p>
-                <p class="text-gray-500 text-sm">demo@example.com</p>
+                <p class="font-bold text-lg text-gray-900">{{ user?.user_metadata?.full_name || 'Pengguna Kasir' }}</p>
+                <p class="text-gray-500 text-sm">{{ user?.email }}</p>
+                <div class="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                  Aktif
+                </div>
               </div>
             </div>
 
-            <div class="space-y-3">
+            <!-- Change Password Form -->
+            <div class="space-y-4">
+              <h3 class="font-bold text-gray-900">Keamanan & Password</h3>
+              <div class="grid gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-gray-600 mb-1">Password Baru</label>
+                  <input
+                    v-model="newPassword"
+                    type="password"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Minimal 6 karakter"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-gray-600 mb-1">Konfirmasi Password</label>
+                  <input
+                    v-model="confirmingPassword"
+                    type="password"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Ulangi password baru"
+                  />
+                </div>
+              </div>
+              
               <button
-                class="w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                @click="handleUpdatePassword"
+                :disabled="changingPassword"
+                class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
               >
-                <UIcon name="i-heroicons-key" class="w-5 h-5" />
-                Ubah Password
+                <UIcon :name="changingPassword ? 'i-heroicons-arrow-path' : 'i-heroicons-shield-check'" class="w-5 h-5" :class="{'animate-spin': changingPassword}" />
+                {{ changingPassword ? 'Memproses...' : 'Perbarui Password' }}
               </button>
 
-              <button
-                @click="handleLogout"
-                class="w-full py-3 px-4 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
-              >
-                <UIcon
-                  name="i-heroicons-arrow-left-on-rectangle"
-                  class="w-5 h-5"
-                />
-                Logout
-              </button>
+              <div class="pt-6 border-t border-gray-100">
+                <button
+                  @click="handleLogout"
+                  class="w-full py-3 px-4 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  <UIcon
+                    name="i-heroicons-arrow-left-on-rectangle"
+                    class="w-5 h-5"
+                  />
+                  Keluar dari Aplikasi
+                </button>
+              </div>
             </div>
           </div>
 
           <!-- Danger Zone -->
-          <div class="bg-red-50 rounded-2xl border border-red-200 p-6">
-            <h3 class="text-lg font-bold text-red-600 mb-2">Zona Berbahaya</h3>
-            <p class="text-sm text-red-500 mb-4">
-              Tindakan ini tidak dapat dikembalikan
+          <div class="bg-red-50 rounded-2xl border border-red-100 p-6">
+            <h3 class="text-lg font-bold text-red-600 mb-1">Zona Bahaya</h3>
+            <p class="text-xs text-red-500 mb-4 leading-relaxed">
+              Menghapus akun akan menghilangkan seluruh data toko, produk, dan transaksi Anda secara permanen. Tindakan ini tidak dapat dibatalkan.
             </p>
             <button
-              class="py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors text-sm flex items-center gap-2"
+              class="w-full sm:w-auto py-2.5 px-6 border-2 border-red-200 text-red-600 hover:bg-red-600 hover:text-white font-bold rounded-xl transition-all text-sm flex items-center justify-center gap-2"
             >
               <UIcon name="i-heroicons-trash" class="w-4 h-4" />
-              Hapus Akun
+              Hapus Seluruh Data Akun
             </button>
           </div>
         </div>
