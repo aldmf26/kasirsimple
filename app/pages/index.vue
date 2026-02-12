@@ -98,10 +98,10 @@ definePageMeta({
             <!-- Feature 3 -->
              <div class="bg-gray-50 p-8 rounded-3xl border border-gray-100 hover:bg-white hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
                 <div class="w-14 h-14 rounded-2xl bg-white shadow-sm text-green-600 flex items-center justify-center mb-6 group-hover:bg-green-600 group-hover:text-white transition-all transform group-hover:scale-110 group-hover:rotate-3">
-                    <UIcon name="i-heroicons-device-phone-mobile-20-solid" class="w-7 h-7" />
+                    <UIcon name="i-heroicons-clock-20-solid" class="w-7 h-7" />
                 </div>
-                <h3 class="text-xl font-bold text-gray-900 mb-3">Multi Platform</h3>
-                <p class="text-gray-500 leading-relaxed">Akses data bisnis Anda dari mana saja. Bisa lewat HP, Tablet, atau Laptop tanpa instalasi ribet.</p>
+                <h3 class="text-xl font-bold text-gray-900 mb-3">Laporan Shift</h3>
+                <p class="text-gray-500 leading-relaxed">Pantau pembukaan dan penutupan kasir dengan laporan shift yang akurat. Minimalisir selisih uang kas.</p>
             </div>
             
              <!-- Feature 4 -->
@@ -125,10 +125,10 @@ definePageMeta({
              <!-- Feature 6 -->
             <div class="bg-gray-50 p-8 rounded-3xl border border-gray-100 hover:bg-white hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
                 <div class="w-14 h-14 rounded-2xl bg-white shadow-sm text-teal-600 flex items-center justify-center mb-6 group-hover:bg-teal-600 group-hover:text-white transition-all transform group-hover:scale-110 group-hover:rotate-3">
-                    <UIcon name="i-heroicons-user-group-20-solid" class="w-7 h-7" />
+                    <UIcon name="i-heroicons-banknotes-20-solid" class="w-7 h-7" />
                 </div>
-                <h3 class="text-xl font-bold text-gray-900 mb-3">Manajemen Karyawan</h3>
-                <p class="text-gray-500 leading-relaxed">Atur hak akses karyawan kasir. Pantau kinerja setiap kasir dengan laporan shift yang detail.</p>
+                <h3 class="text-xl font-bold text-gray-900 mb-3">Manajemen Pengeluaran</h3>
+                <p class="text-gray-500 leading-relaxed">Catat semua biaya operasional bisnis Anda. Pantau pengeluaran harian agar laba bersih tetap terjaga.</p>
             </div>
         </div>
       </div>
@@ -213,7 +213,7 @@ definePageMeta({
               </li>
             </ul>
             
-            <a href="https://wa.me/your-number" target="_blank" class="flex justify-center items-center w-full py-4 text-lg font-black text-gray-900 bg-white border-2 border-gray-200 rounded-2xl hover:bg-gray-50 transition-all">
+            <a href="https://wa.me/62895413111053?text=Halo,%20saya%20tertarik%20dengan%20jasa%20Custom%20Aplikasi%20Kasir" target="_blank" class="flex justify-center items-center w-full py-4 text-lg font-black text-gray-900 bg-white border-2 border-gray-200 rounded-2xl hover:bg-gray-50 transition-all">
               Hubungi WhatsApp
             </a>
           </div>
