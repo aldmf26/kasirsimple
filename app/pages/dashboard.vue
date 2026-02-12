@@ -337,7 +337,7 @@ const greeting = computed(() => {
                 name="i-heroicons-check-circle"
                 class="w-10 h-10 mx-auto mb-2 text-emerald-400"
               />
-              <p class="text-sm italic">Semua stok barang masih aman, Bu.</p>
+              <p class="text-sm italic">Semua stok barang masih aman.</p>
             </div>
             <div v-else class="divide-y divide-gray-50">
               <div
