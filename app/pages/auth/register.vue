@@ -69,9 +69,7 @@ const handleRegister = async () => {
     <div class="text-center mb-8">
       <div class="flex justify-center mb-4">
         <!-- Logo Icon -->
-        <div class="w-12 h-12 bg-gradient-to-tr from-violet-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-200">
-          <UIcon name="i-heroicons-user-plus" class="w-7 h-7 text-white" />
-        </div>
+        <img src="/images/logo-kasirok.png" alt="Logo" class="w-20 h-20" />
       </div>
       <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Buat Akun Baru</h1>
       <p class="text-gray-500 mt-2 text-sm">Mulai kelola bisnis Anda sekarang</p>

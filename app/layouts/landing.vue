@@ -32,9 +32,7 @@
       
       <!-- Logo -->
       <div class="flex items-center gap-2">
-        <div class="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center text-gray-600">
-          <UIcon name="i-heroicons-shopping-bag-20-solid" class="w-5 h-5" />
-        </div>
+        <img src="/images/logo-kasirok.png" alt="Logo" class="w-10 h-10" />
         <span class="font-bold text-gray-900">KasirOK</span>
       </div>
 
