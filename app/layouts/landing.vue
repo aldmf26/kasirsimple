@@ -35,7 +35,15 @@
              </div>
              <span class="font-bold text-gray-900">KasirOK</span>
           </div>
-          <p class="text-gray-500 text-sm">© {{ new Date().getFullYear() }} KasirOK. All rights reserved.</p>
+          <div class="flex items-center gap-6">
+            <a href="https://instagram.com/kasir.ok" target="_blank" class="flex items-center gap-2 text-gray-500 hover:text-pink-600 transition-colors group">
+              <div class="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center group-hover:border-pink-200 group-hover:bg-pink-50 transition-all">
+                <UIcon name="i-simple-icons-instagram" class="w-5 h-5" />
+              </div>
+              <span class="text-sm font-medium">@kasir.ok</span>
+            </a>
+            <p class="text-gray-500 text-sm">© {{ new Date().getFullYear() }} KasirOK. All rights reserved.</p>
+          </div>
         </div>
       </div>
     </footer>
