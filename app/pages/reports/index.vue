@@ -30,7 +30,7 @@ definePageMeta({
   layout: "default",
 });
 
-const { store } = useStore();
+const { store, fetchStore } = useStore();
 const { transactions, loading, fetchTransactions, deleteTransaction, returnTransaction } =
   useTransactions();
 const { products, fetchProducts } = useProducts();
@@ -463,12 +463,12 @@ const setFilter = (type: string) => {
 };
 
 const loadData = async () => {
-  console.log('DEBUG - Reports: Starting loadData. Store status:', !!store.value);
   
   // Try to fetch store if missing
   if (!store.value) {
     await fetchStore();
   }
+
 
   if (store.value) {
     loading.value = true;
@@ -489,14 +489,11 @@ const loadData = async () => {
           endDate: filters.endDate
         }),
       ]);
-      console.log('DEBUG - Reports: Data load complete. Shift count:', shiftsHistory.value?.length);
     } catch (e: any) {
-      console.error('DEBUG - Reports: Load Error:', e);
     } finally {
       loading.value = false;
     }
   } else {
-    console.warn('DEBUG - Reports: Cannot load data without store context.');
   }
 };
 

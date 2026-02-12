@@ -121,8 +121,6 @@ const handleLogout = async () => {
       </div>
     </nav>
 
-    <!-- Toast Notifications -->
-    <UNotifications />
   </div>
 </template>
 

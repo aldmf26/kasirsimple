@@ -487,7 +487,6 @@ const handleOpenShift = async () => {
     openingBalance.value = "0";
     isEditingShift.value = false;
   } catch (e: any) {
-    console.error("DEBUG - Open/Edit Shift Catch:", e);
     toast.add({
       title: isEditingShift.value ? "Gagal Update Shift" : "Gagal Membuka Kasir",
       description: e.message || "Terjadi kesalahan pada server.",

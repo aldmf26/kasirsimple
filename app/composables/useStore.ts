@@ -37,7 +37,7 @@ export const useStore = () => {
                 return null;
             }
 
-            console.log("Fetching store for user:", targetUserId);
+            // console.log("Fetching store for user:", targetUserId);
 
             const { data, error: fetchError } = await supabase
                 .from('stores')
@@ -56,7 +56,7 @@ export const useStore = () => {
 
             return data;
         } catch (e: any) {
-            console.error('Error fetching store:', e.message);
+            // console.error('Error fetching store:', e.message);
             error.value = e.message;
             return null;
         } finally {

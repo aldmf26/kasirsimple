@@ -15,7 +15,6 @@ export const useShifts = () => {
             if (event === 'SIGNED_OUT') {
                 activeShift.value = null;
                 shiftsHistory.value = [];
-                console.log('DEBUG - useShifts: Sesi berakhir, membersihkan data shift.');
             } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
                 // Jangan paksa null di sini agar tidak flicker, tapi fetch ulang nanti
             }
@@ -50,14 +49,12 @@ export const useShifts = () => {
             currentUser = session?.user;
 
             if (!currentUser?.id) {
-                console.log(`DEBUG - fetchActiveShift: Waiting for Auth... (${authRetries + 1}/10)`);
                 await new Promise(resolve => setTimeout(resolve, 300));
                 authRetries++;
             }
         }
 
         if (!currentUser?.id) {
-            console.error('DEBUG - fetchActiveShift: AUTH GAGAL - Sesi tidak ditemukan setelah 3 detik.');
             return null;
         }
 
@@ -68,14 +65,12 @@ export const useShifts = () => {
             const s = await fetchStore(currentUser.id);
             currentStoreId = s?.id;
             if (!currentStoreId) {
-                console.log(`DEBUG - fetchActiveShift: Waiting for Store... (${storeRetries + 1}/5)`);
                 await new Promise(resolve => setTimeout(resolve, 500));
                 storeRetries++;
             }
         }
 
         if (!currentStoreId) {
-            console.error('DEBUG - fetchActiveShift: STORE GAGAL - ID Toko tidak ditemukan.');
             return null;
         }
 
@@ -83,12 +78,7 @@ export const useShifts = () => {
         try {
             // --- DIAGNOSTIK: Cek apakah RLS memblokir kita ---
             const { data: allData, error: diagError } = await (supabase as any).from('shifts').select('id, status');
-            console.log('DIAGNOSTIC - fetchActiveShift: Bisa melihat total baris:', allData?.length || 0, 'Error:', diagError?.message);
 
-            console.log('DEBUG - fetchActiveShift: Strict Isolation Check', {
-                store_id: currentStoreId,
-                user_id: currentUser.id
-            });
 
             // WAJIB: Filter berdasarkan store_id DAN user_id DAN status open
             let { data, error: fetchError } = await (supabase as any)
@@ -101,7 +91,6 @@ export const useShifts = () => {
                 .limit(1);
 
             if (fetchError) {
-                console.error('DEBUG - fetchActiveShift: Select Error:', fetchError);
                 return null;
             }
 
@@ -113,11 +102,9 @@ export const useShifts = () => {
                 console.error('⚠️ KRITIS: Database punya shift OPEN, tapi pencarian filter gagal. Ini kemungkinan besar masalah RLS di Supabase!');
             }
 
-            console.log('DEBUG - fetchActiveShift: Final Match ->', activeData ? `FOUND (${activeData.id})` : 'NOT FOUND');
             activeShift.value = activeData;
             return activeData;
         } catch (err: any) {
-            console.error('DEBUG - fetchActiveShift: Exception:', err.message);
             return null;
         } finally {
             loading.value = false;
@@ -146,12 +133,7 @@ export const useShifts = () => {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         let currentUser = session?.user || user.value as any;
 
-        console.log('DEBUG - useShifts: Starting openShift.', {
-            sessionId: session?.user?.id,
-            reactiveUserId: user.value?.id,
-            sessionError: sessionError?.message,
-            storeId: store.value?.id
-        });
+
 
         if (!currentUser) {
             throw new Error(`Sesi login tidak terdeteksi. (Debug: S:${session?.user?.id || 'null'}, R:${user.value?.id || 'null'}, E:${sessionError?.message || 'none'}). Silakan coba refresh halaman (F5).`);
@@ -187,7 +169,6 @@ export const useShifts = () => {
             if (insertError) {
                 // If shift already exists (duplicate key), try to recover it
                 if (insertError.code === '23505') {
-                    console.log('DEBUG - openShift: Shift already exists, recovering state...');
                     const existing = await fetchActiveShift();
                     if (existing) return existing;
                     throw new Error('Shift sudah terbuka di sistem namun gagal disinkronkan. Silakan refresh (F5).');
@@ -348,7 +329,6 @@ export const useShifts = () => {
 
         loading.value = true;
         try {
-            console.log('DEBUG - fetchAllShifts: Starting fetch for store:', currentStoreId);
             let query = (supabase as any)
                 .from('shifts')
                 .select('*')
@@ -364,11 +344,9 @@ export const useShifts = () => {
 
             const { data, error: fetchError } = await query;
             if (fetchError) {
-                console.error('DEBUG - fetchAllShifts: DB Error:', fetchError);
                 throw fetchError;
             }
 
-            console.log('DEBUG - fetchAllShifts: Successfully found', data?.length, 'shifts');
             shiftsHistory.value = data || [];
             return shiftsHistory.value;
         } catch (err: any) {
