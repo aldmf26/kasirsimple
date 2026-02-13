@@ -422,45 +422,49 @@ export const useTransactions = () => {
             // Restore stock for each item
             if (transaction.items && transaction.items.length > 0) {
                 for (const item of transaction.items) {
-                    // @ts-ignore
-                    const { error: stockError } = await supabase
-                        .from('products')
-                        .update({
-                            stock: supabase.rpc('increment_stock', {
-                                product_id: item.product_id,
-                                quantity: item.quantity
-                            })
-                        })
-                        .eq('id', item.product_id)
-
-                    // Fallback: Manual stock update if RPC fails
-                    if (stockError) {
+                    try {
                         // Get current stock
                         // @ts-ignore
-                        const { data: product } = await supabase
+                        const { data: product, error: fetchError } = await supabase
                             .from('products')
-                            .select('stock')
+                            .select('stock, has_stock')
                             .eq('id', item.product_id)
                             .single()
 
-                        const currentStock = product?.stock || 0
-                        const newStock = currentStock + item.quantity
+                        if (fetchError || !product) {
+                            console.warn('Could not fetch product for stock restoration:', fetchError)
+                            continue
+                        }
 
-                        // @ts-ignore
-                        await supabase
-                            .from('products')
-                            .update({ stock: newStock })
-                            .eq('id', item.product_id)
+                        // Only restore stock if product tracks stock
+                        if (product.has_stock) {
+                            const currentStock = product.stock || 0
+                            const newStock = currentStock + item.quantity
+
+                            // @ts-ignore
+                            const { error: stockError } = await supabase
+                                .from('products')
+                                .update({
+                                    stock: newStock,
+                                    updated_at: new Date().toISOString()
+                                })
+                                .eq('id', item.product_id)
+
+                            if (stockError) throw stockError
+
+                            // Record stock movement as reversal
+                            // @ts-ignore
+                            await supabase.from('stock_movements').insert({
+                                product_id: item.product_id,
+                                type: 'in',
+                                quantity: item.quantity,
+                                notes: `Stok dikembalikan dari retur transaksi ${transaction.transaction_number}`,
+                                created_by: user.value?.id
+                            })
+                        }
+                    } catch (e: any) {
+                        console.error('Stock restoration failed for item:', item.product_id, e.message)
                     }
-
-                    // Record stock movement as reversal
-                    // @ts-ignore
-                    await supabase.from('stock_movements').insert({
-                        product_id: item.product_id,
-                        type: 'in',
-                        quantity: item.quantity,
-                        notes: `Stok dikembalikan dari retur transaksi ${transaction.transaction_number}`,
-                    })
                 }
             }
 
@@ -514,58 +518,53 @@ export const useTransactions = () => {
             // Restore stock for each item
             if (transaction.items && transaction.items.length > 0) {
                 for (const item of transaction.items) {
-                    // @ts-ignore
-                    const { error: stockError } = await supabase
-                        .from('products')
-                        .update({
-                            stock: supabase.rpc('increment_stock', {
-                                product_id: item.product_id,
-                                quantity: item.quantity
-                            })
-                        })
-                        .eq('id', item.product_id)
-
-                    // Fallback: Manual stock update if RPC fails
-                    if (stockError) {
+                    try {
                         // Get current stock
                         // @ts-ignore
-                        const { data: product } = await supabase
+                        const { data: product, error: fetchError } = await supabase
                             .from('products')
-                            .select('stock')
+                            .select('stock, has_stock')
                             .eq('id', item.product_id)
                             .single()
 
-                        const currentStock = product?.stock || 0
-                        const newStock = currentStock + item.quantity
+                        if (fetchError || !product) {
+                            console.warn('Could not fetch product for stock restoration:', fetchError)
+                            continue
+                        }
 
-                        // @ts-ignore
-                        await supabase
-                            .from('products')
-                            .update({ stock: newStock })
-                            .eq('id', item.product_id)
+                        // Only restore stock if product tracks stock
+                        if (product.has_stock) {
+                            const currentStock = product.stock || 0
+                            const newStock = currentStock + item.quantity
+
+                            // @ts-ignore
+                            const { error: stockError } = await supabase
+                                .from('products')
+                                .update({
+                                    stock: newStock,
+                                    updated_at: new Date().toISOString()
+                                })
+                                .eq('id', item.product_id)
+
+                            if (stockError) throw stockError
+
+                            // Record stock movement as reversal
+                            // @ts-ignore
+                            await supabase.from('stock_movements').insert({
+                                product_id: item.product_id,
+                                type: 'in',
+                                quantity: item.quantity,
+                                notes: `Stok dikembalikan dari penghapusan transaksi ${transaction.transaction_number}`,
+                                created_by: user.value?.id
+                            })
+                        }
+                    } catch (e: any) {
+                        console.error('Stock restoration failed for item:', item.product_id, e.message)
                     }
-
-                    // Record stock movement as reversal
-                    // @ts-ignore
-                    await supabase.from('stock_movements').insert({
-                        product_id: item.product_id,
-                        type: 'in',
-                        quantity: item.quantity,
-                        notes: `Stok dikembalikan dari penghapusan transaksi ${transaction.transaction_number}`,
-                    })
                 }
             }
 
-            // Delete transaction items first
-            // @ts-ignore
-            const { error: itemsError } = await supabase
-                .from('transaction_items')
-                .delete()
-                .eq('transaction_id', transactionId)
-
-            if (itemsError) throw itemsError
-
-            // Delete transaction
+            // Delete transaction header (items will be deleted automatically via ON DELETE CASCADE)
             // @ts-ignore
             const { error: delError } = await supabase
                 .from('transactions')

@@ -311,6 +311,7 @@ const save = async () => {
       await updateProduct(form.id, {
         name: form.name,
         category_id: form.category_id,
+        buy_price: form.buy_price,
         price: form.sell_price,
         stock: form.stock,
         unit: form.unit,
@@ -322,6 +323,7 @@ const save = async () => {
       await createProduct({
         name: form.name,
         category_id: form.category_id,
+        buy_price: form.buy_price,
         price: form.sell_price,
         stock: form.stock,
         unit: form.unit,
