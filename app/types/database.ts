@@ -298,6 +298,8 @@ export interface Database {
                     include_logo: boolean
                     include_store_info: boolean
                     footer_text: string | null
+                    bluetooth_device_name: string | null
+                    bluetooth_device_address: string | null
                     created_at: string
                     updated_at: string
                 }
@@ -310,6 +312,8 @@ export interface Database {
                     include_logo?: boolean
                     include_store_info?: boolean
                     footer_text?: string | null
+                    bluetooth_device_name?: string | null
+                    bluetooth_device_address?: string | null
                     created_at?: string
                     updated_at?: string
                 }
@@ -322,6 +326,8 @@ export interface Database {
                     include_logo?: boolean
                     include_store_info?: boolean
                     footer_text?: string | null
+                    bluetooth_device_name?: string | null
+                    bluetooth_device_address?: string | null
                     created_at?: string
                     updated_at?: string
                 }

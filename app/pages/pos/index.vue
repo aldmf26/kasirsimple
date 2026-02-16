@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatCurrency } from "~/utils/helpers";
+import { generateTextReceipt } from "~/utils/receipt-generator";
 
 definePageMeta({ layout: "default" });
 
@@ -22,6 +23,8 @@ const toast = useToast();
 const { activeShift, fetchActiveShift, openShift, updateShift, closeShift, calculateExpectedBalance, error: shiftError } = useShifts();
 const isEditingShift = ref(false);
 const hasPromptedShift = ref(false);
+
+const { print: btPrint, connectedDevice: btConnected } = useBluetooth();
 
 // Shift State
 const showOpenShiftModal = ref(false);
@@ -410,7 +413,31 @@ const processPayment = async () => {
   }
 };
 
-const printReceipt = () => {
+const printReceipt = async () => {
+  if (printerSettings.value?.printer_type === "bluetooth") {
+    if (!lastTransaction.value) return;
+    
+    const text = generateTextReceipt(lastTransaction.value, store.value, printerSettings.value);
+    const success = await btPrint(text);
+    
+    if (success) {
+      toast.add({
+        title: "Berhasil",
+        description: "Struk dicetak via Bluetooth",
+        color: "success",
+        icon: "i-heroicons-check-circle",
+      });
+    } else {
+      toast.add({
+        title: "Gagal",
+        description: "Gagal cetak via Bluetooth. Pastikan printer terhubung di Pengaturan.",
+        color: "error",
+        icon: "i-heroicons-x-circle",
+      });
+    }
+    return;
+  }
+
   const content = document.getElementById("receipt-content")?.innerHTML;
   const printWindow = window.open("", "", "height=600,width=400");
   if (printWindow && content) {

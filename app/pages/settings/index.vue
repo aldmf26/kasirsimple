@@ -114,6 +114,8 @@ const fetchPrinterSettings = async () => {
         includeLogo: data.include_logo !== false,
         includeStoreInfo: data.include_store_info !== false,
         footerText: data.footer_text || "Terima kasih atas kunjungan Anda!",
+        bluetoothDeviceName: data.bluetooth_device_name || "",
+        bluetoothDeviceAddress: data.bluetooth_device_address || "",
       };
       // Synchronize with global state
       if (globalPrinterSettings) {
@@ -197,7 +199,22 @@ const printerSettings = ref({
   includeLogo: true,
   includeStoreInfo: true,
   footerText: "Terima kasih atas kunjungan Anda!",
+  bluetoothDeviceName: "",
+  bluetoothDeviceAddress: "",
 });
+
+const { scanningBluetooth, bluetoothDevices, bluetoothError, scanDevices, connectToDevice } = useBluetooth();
+
+const handleScanBluetooth = async () => {
+  const device = await scanDevices();
+  if (device) {
+    printerSettings.value.bluetoothDeviceName = device.name;
+    printerSettings.value.bluetoothDeviceAddress = device.id;
+    showAlert("success", `Perangkat ${device.name} terpilih`);
+  } else if (bluetoothError.value) {
+    showAlert("error", bluetoothError.value);
+  }
+};
 
 // Active section
 const activeSection = ref("store");
@@ -448,6 +465,8 @@ const autoSavePrinterSettings = async () => {
         include_logo: printerSettings.value.includeLogo,
         include_store_info: printerSettings.value.includeStoreInfo,
         footer_text: printerSettings.value.footerText,
+        bluetooth_device_name: printerSettings.value.bluetoothDeviceName,
+        bluetooth_device_address: printerSettings.value.bluetoothDeviceAddress,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "store_id" },
@@ -466,6 +485,8 @@ const autoSavePrinterSettings = async () => {
       include_logo: printerSettings.value.includeLogo,
       include_store_info: printerSettings.value.includeStoreInfo,
       footer_text: printerSettings.value.footerText,
+      bluetooth_device_name: printerSettings.value.bluetoothDeviceName,
+      bluetooth_device_address: printerSettings.value.bluetoothDeviceAddress,
       updated_at: new Date().toISOString(),
       created_at: globalPrinterSettings.value?.created_at || new Date().toISOString()
     } as any;
@@ -1366,6 +1387,52 @@ const handleLogout = () => {
               <h2 class="text-xl font-bold text-gray-900 mb-6">⚙️ Pengaturan Printer</h2>
               
               <div class="space-y-6">
+                <!-- Printer Type -->
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">Jenis Koneksi Printer</label>
+                  <div class="grid grid-cols-2 gap-3">
+                    <button 
+                      v-for="type in [{id: 'thermal', label: 'Web / Browser'}, {id: 'bluetooth', label: 'Bluetooth'}]" 
+                      :key="type.id"
+                      @click="printerSettings.printerType = type.id"
+                      class="py-3 rounded-xl border-2 font-bold transition-all text-sm"
+                      :class="printerSettings.printerType === type.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-100 text-gray-500'"
+                    >
+                      {{ type.label }}
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Bluetooth Selection -->
+                <div v-if="printerSettings.printerType === 'bluetooth'" class="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="text-sm font-bold text-emerald-800">Perangkat Bluetooth</span>
+                    <button 
+                      @click="handleScanBluetooth"
+                      :disabled="scanningBluetooth"
+                      class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 disabled:bg-gray-400 flex items-center gap-1"
+                    >
+                      <UIcon :name="scanningBluetooth ? 'i-heroicons-arrow-path' : 'i-heroicons-magnifying-glass'" class="w-4 h-4" :class="{'animate-spin': scanningBluetooth}" />
+                      {{ scanningBluetooth ? 'Mencari...' : 'Scan Printer' }}
+                    </button>
+                  </div>
+                  
+                  <div v-if="printerSettings.bluetoothDeviceName" class="flex items-center gap-2 p-3 bg-white rounded-lg border border-emerald-200">
+                    <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                      <UIcon name="i-heroicons-printer" class="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p class="text-sm font-bold text-gray-900">{{ printerSettings.bluetoothDeviceName }}</p>
+                      <p class="text-[10px] text-gray-500 uppercase tracking-widest">Tersambung</p>
+                    </div>
+                    <UIcon name="i-heroicons-check-circle" class="w-5 h-5 text-emerald-500 ml-auto" />
+                  </div>
+                  
+                  <div v-else class="text-center py-4 bg-white/50 rounded-lg border border-dashed border-emerald-200">
+                    <p class="text-xs text-emerald-600 font-medium">Klik Scan untuk mencari printer Anda</p>
+                  </div>
+                </div>
+
                 <!-- Paper Width -->
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">Lebar Kertas</label>

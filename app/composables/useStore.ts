@@ -39,6 +39,8 @@ export const useStore = () => {
                     include_logo: true,
                     include_store_info: true,
                     footer_text: 'Terima kasih atas kunjungan Anda!',
+                    bluetooth_device_name: '',
+                    bluetooth_device_address: '',
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 }

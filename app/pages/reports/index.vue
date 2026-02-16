@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatCurrency, formatDateTime } from "~/utils/helpers";
+import { generateTextReceipt } from "~/utils/receipt-generator";
 import { Line, Bar, Pie, Doughnut } from "vue-chartjs";
 import {
   Chart as ChartJS,
@@ -31,6 +32,7 @@ definePageMeta({
 });
 
 const { store, printerSettings, fetchStore } = useStore();
+const { print: btPrint } = useBluetooth();
 const { transactions, loading, fetchTransactions, deleteTransaction, returnTransaction } =
   useTransactions();
 const { products, fetchProducts } = useProducts();
@@ -418,7 +420,31 @@ const handleDelete = async () => {
 };
 
 // Print Receipt
-const printReceipt = () => {
+const printReceipt = async () => {
+  if (printerSettings.value?.printer_type === "bluetooth") {
+    if (!selectedTransaction.value) return;
+    
+    const text = generateTextReceipt(selectedTransaction.value, store.value, printerSettings.value);
+    const success = await btPrint(text);
+    
+    if (success) {
+      toast.add({
+        title: "Berhasil",
+        description: "Struk dicetak via Bluetooth",
+        color: "success",
+        icon: "i-heroicons-check-circle",
+      });
+    } else {
+      toast.add({
+        title: "Gagal",
+        description: "Gagal cetak via Bluetooth. Pastikan printer terhubung di Pengaturan.",
+        color: "error",
+        icon: "i-heroicons-x-circle",
+      });
+    }
+    return;
+  }
+
   const content = document.getElementById("receipt-content")?.innerHTML;
   const printWindow = window.open("", "", "height=600,width=400");
   if (printWindow && content) {
