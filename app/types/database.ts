@@ -21,6 +21,9 @@ export interface Database {
                     currency: string
                     timezone: string
                     is_active: boolean
+                    subscription_status: string
+                    subscription_until: string | null
+                    subscription_plan: string
                     created_at: string
                     updated_at: string
                 }
@@ -35,6 +38,9 @@ export interface Database {
                     currency?: string
                     timezone?: string
                     is_active?: boolean
+                    subscription_status?: string
+                    subscription_until?: string | null
+                    subscription_plan?: string
                     created_at?: string
                     updated_at?: string
                 }
@@ -49,6 +55,9 @@ export interface Database {
                     currency?: string
                     timezone?: string
                     is_active?: boolean
+                    subscription_status?: string
+                    subscription_until?: string | null
+                    subscription_plan?: string
                     created_at?: string
                     updated_at?: string
                 }

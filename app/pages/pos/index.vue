@@ -5,7 +5,7 @@ definePageMeta({ layout: "default" });
 
 useHead({ title: "Kasir - POS" });
 
-const { store } = useStore();
+const { store, printerSettings } = useStore();
 const { products, fetchProducts } = useProducts();
 const {
   cart,
@@ -1361,7 +1361,9 @@ watch(
           <ThermalPrinterReceipt
             :transaction="lastTransaction"
             :store="store"
-            class="mb-4"
+            :settings="printerSettings"
+            :style="{ width: printerSettings?.paper_width === 80 ? '380px' : '300px' }"
+            class="mb-4 mx-auto"
           />
 
           <!-- Actions -->

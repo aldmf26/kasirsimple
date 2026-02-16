@@ -5,7 +5,7 @@ definePageMeta({
   layout: "default",
 });
 
-const { store, updateStore, fetchStore } = useStore();
+const { store, printerSettings: globalPrinterSettings, updateStore, fetchStore } = useStore();
 const supabase = useSupabaseClient();
 
 // Store settings form
@@ -88,10 +88,66 @@ watch(
       if (!selectedLogoFile.value) {
         logoPreview.value = newStore.logo_url || "";
       }
+
+      // Load printer settings
+      fetchPrinterSettings();
     }
   },
   { immediate: true },
 );
+
+const fetchPrinterSettings = async () => {
+  if (!store.value?.id) return;
+  try {
+    const { data, error } = await (supabase
+      .from("printer_settings") as any)
+      .select("*")
+      .eq("store_id", store.value.id)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) {
+      printerSettings.value = {
+        printerType: data.printer_type || "thermal",
+        paperWidth: data.paper_width || 58,
+        autoPrint: data.auto_print || false,
+        includeLogo: data.include_logo !== false,
+        includeStoreInfo: data.include_store_info !== false,
+        footerText: data.footer_text || "Terima kasih atas kunjungan Anda!",
+      };
+      // Synchronize with global state
+      if (globalPrinterSettings) {
+        globalPrinterSettings.value = data;
+      }
+    }
+  } catch (e) {
+    console.error("Error fetching printer settings:", e);
+  }
+};
+
+const mockTransaction = computed(() => ({
+  id: "TRX-20260216-001",
+  transaction_number: "TRX-20260216-001",
+  created_at: new Date().toISOString(),
+  items: [
+    { product_name: "Americano", product_price: 22000, quantity: 1, subtotal: 22000 }
+  ],
+  subtotal: 22000,
+  discount: 0,
+  tax: 0,
+  ppn: 0,
+  total: 22000,
+  paid_amount: 22000,
+  payment_method: "cash",
+  customer_name: "Yadi"
+}));
+
+const previewStoreData = computed(() => ({
+  name: storeSettings.name,
+  address: storeSettings.address,
+  phone: storeSettings.phone,
+  logo_url: logoPreview.value
+}));
 
 const handleFileSelect = (event: any) => {
   const file = event.target.files[0];
@@ -108,6 +164,17 @@ const handleFileSelect = (event: any) => {
 
 const triggerFileInput = () => {
   document.getElementById("logoInput")?.click();
+};
+
+const removeLogo = async () => {
+  if (!confirm("Hapus logo toko?")) return;
+
+  logoPreview.value = null;
+  selectedLogoFile.value = null;
+  storeSettings.logo_url = "";
+
+  // Trigger auto save immediately for deletion
+  await autoSaveStoreSettings();
 };
 
 // Alert State
@@ -145,6 +212,11 @@ const sections = [
     id: "payment",
     label: "Metode Pembayaran",
     icon: "i-heroicons-credit-card",
+  },
+  {
+    id: "printer",
+    label: "Pengaturan Struk",
+    icon: "i-heroicons-printer",
   },
   {
     id: "help",
@@ -362,6 +434,59 @@ const autoSavePaymentSettings = async () => {
   }
 };
 
+// Auto-save printer settings
+const autoSavePrinterSettings = async () => {
+  if (!store.value?.id) return;
+
+  try {
+    const { error } = await (supabase.from("printer_settings") as any).upsert(
+      {
+        store_id: store.value.id,
+        printer_type: printerSettings.value.printerType,
+        paper_width: printerSettings.value.paperWidth,
+        auto_print: printerSettings.value.autoPrint,
+        include_logo: printerSettings.value.includeLogo,
+        include_store_info: printerSettings.value.includeStoreInfo,
+        footer_text: printerSettings.value.footerText,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "store_id" },
+    );
+
+    if (error) throw error;
+    
+    // Update global state in useStore immediately
+    globalPrinterSettings.value = {
+      ...(globalPrinterSettings.value || {}),
+      id: globalPrinterSettings.value?.id || '',
+      store_id: store.value.id,
+      printer_type: printerSettings.value.printerType,
+      paper_width: printerSettings.value.paperWidth,
+      auto_print: printerSettings.value.autoPrint,
+      include_logo: printerSettings.value.includeLogo,
+      include_store_info: printerSettings.value.includeStoreInfo,
+      footer_text: printerSettings.value.footerText,
+      updated_at: new Date().toISOString(),
+      created_at: globalPrinterSettings.value?.created_at || new Date().toISOString()
+    } as any;
+    
+    showAlert("success", "Pengaturan struk disimpan");
+  } catch (e: any) {
+    console.error(e);
+    showAlert("error", "Gagal menyimpan pengaturan struk");
+  }
+};
+
+let printerSettingsDebounce: ReturnType<typeof setTimeout> | null = null;
+watch(
+  printerSettings,
+  () => {
+    if (printerSettingsDebounce) clearTimeout(printerSettingsDebounce);
+    printerSettingsDebounce = setTimeout(autoSavePrinterSettings, 500);
+  },
+  { deep: true },
+);
+
 // Watch store settings with debounce
 watch(
   storeSettings,
@@ -381,6 +506,15 @@ watch(
   },
   { deep: true },
 );
+
+// Watch selected logo file to trigger upload
+watch(selectedLogoFile, (newFile) => {
+  if (newFile) {
+    if (storeSettingsDebounce) clearTimeout(storeSettingsDebounce);
+    storeSettingsDebounce = setTimeout(autoSaveStoreSettings, 1000);
+  }
+});
+
 
 // Watch bank accounts with debounce
 watch(
@@ -600,6 +734,56 @@ const handleLogout = () => {
             <h2 class="text-xl font-bold text-gray-900 mb-8">Profil Toko</h2>
 
             <div class="space-y-6">
+              <!-- Logo Toko -->
+              <div class="flex flex-col items-center sm:flex-row gap-6 pb-8 border-b border-gray-100">
+                <div class="relative group cursor-pointer" @click="triggerFileInput">
+                  <div
+                    class="w-24 h-24 rounded-2xl border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50 group-hover:border-emerald-500 transition-colors"
+                    :class="{ 'border-none': logoPreview }"
+                  >
+                    <img
+                      v-if="logoPreview"
+                      :src="logoPreview"
+                      class="w-full h-full object-cover"
+                    />
+                    <div v-else class="text-center">
+                      <UIcon
+                        name="i-heroicons-photo"
+                        class="w-8 h-8 text-gray-400 group-hover:text-emerald-500"
+                      />
+                      <p class="text-[10px] text-gray-400 font-medium">
+                        Tambah Logo
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    class="absolute -bottom-2 -right-2 bg-white shadow-md rounded-full p-1.5 border border-gray-100 text-emerald-600"
+                  >
+                    <UIcon name="i-heroicons-pencil-square" class="w-4 h-4" />
+                  </div>
+                  <input
+                    id="logoInput"
+                    type="file"
+                    class="hidden"
+                    accept="image/*"
+                    @change="handleFileSelect"
+                  />
+                </div>
+                <div class="text-center sm:text-left">
+                  <h3 class="font-bold text-gray-900">Logo Toko</h3>
+                  <p class="text-xs text-gray-500 mt-1 max-w-[200px]">
+                    Format: JPG, PNG, atau WEBP. Maksimal 2MB.
+                  </p>
+                  <button
+                    v-if="logoPreview"
+                    @click.stop="removeLogo"
+                    class="mt-2 text-xs text-red-500 font-medium hover:text-red-700 transition-colors"
+                  >
+                    Hapus Logo
+                  </button>
+                </div>
+              </div>
+
               <!-- Store Name -->
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2"
@@ -1174,7 +1358,90 @@ const handleLogout = () => {
           </div>
         </div>
 
-        <!-- Help & Tutorial -->
+        <!-- Printer & Receipt Settings -->
+        <div v-if="activeSection === 'printer'" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <!-- Settings Column -->
+          <div class="space-y-6">
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <h2 class="text-xl font-bold text-gray-900 mb-6">⚙️ Pengaturan Printer</h2>
+              
+              <div class="space-y-6">
+                <!-- Paper Width -->
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">Lebar Kertas</label>
+                  <div class="grid grid-cols-2 gap-3">
+                    <button 
+                      v-for="width in [58, 80]" 
+                      :key="width"
+                      @click="printerSettings.paperWidth = width"
+                      class="py-3 rounded-xl border-2 font-bold transition-all"
+                      :class="printerSettings.paperWidth === width ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-100 text-gray-500'"
+                    >
+                      {{ width }}mm
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Footer Text -->
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">Pesan Kaki (Footer)</label>
+                  <textarea
+                    v-model="printerSettings.footerText"
+                    rows="2"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Pesan di bagian bawah struk"
+                  ></textarea>
+                </div>
+
+                <!-- Toggles -->
+                <div class="space-y-4 pt-4 border-t border-gray-100">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="font-bold text-gray-900 text-sm">Tampilkan Logo</p>
+                      <p class="text-xs text-gray-500">Munculkan logo toko di struk</p>
+                    </div>
+                    <button
+                      @click="printerSettings.includeLogo = !printerSettings.includeLogo"
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                      :class="printerSettings.includeLogo ? 'bg-emerald-600' : 'bg-gray-300'"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition" :class="printerSettings.includeLogo ? 'translate-x-6' : 'translate-x-1'" />
+                    </button>
+                  </div>
+
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="font-bold text-gray-900 text-sm">Info Toko</p>
+                      <p class="text-xs text-gray-500">Alamat & No. Telepon</p>
+                    </div>
+                    <button
+                      @click="printerSettings.includeStoreInfo = !printerSettings.includeStoreInfo"
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                      :class="printerSettings.includeStoreInfo ? 'bg-emerald-600' : 'bg-gray-300'"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition" :class="printerSettings.includeStoreInfo ? 'translate-x-6' : 'translate-x-1'" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Preview Column -->
+          <div class="lg:sticky lg:top-8 self-start">
+            <h3 class="text-sm font-bold text-gray-500 mb-4 uppercase tracking-wider text-center">Pratinjau Struk</h3>
+            <div class="flex justify-center">
+              <ThermalPrinterReceipt
+                :transaction="mockTransaction"
+                :store="previewStoreData"
+                :settings="printerSettings"
+                :style="{ width: printerSettings.paperWidth === 80 ? '300px' : '230px' }"
+                class="shadow-xl"
+              />
+            </div>
+            <p class="text-center text-xs text-gray-400 mt-4 italic">Ini adalah simulasi tampilan struk Anda</p>
+          </div>
+        </div>
         <div v-if="activeSection === 'help'" class="max-w-2xl space-y-6">
           <div
             class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"

@@ -3,6 +3,7 @@ import type { Database } from '~/types/database'
 type Store = Database['public']['Tables']['stores']['Row']
 type StoreInsert = Database['public']['Tables']['stores']['Insert']
 type StoreUpdate = Database['public']['Tables']['stores']['Update']
+type PrinterSettings = Database['public']['Tables']['printer_settings']['Row']
 
 export const useStore = () => {
     const supabase = useSupabaseClient<Database>()
@@ -10,8 +11,44 @@ export const useStore = () => {
     const { isDummyMode, getDummyStore } = useDummyMode()
 
     const store = useState<Store | null>('current_store', () => null)
+    const printerSettings = useState<PrinterSettings | null>('printer_settings', () => null)
     const loading = useState('store_loading', () => false)
     const error = useState<string | null>('store_error', () => null)
+
+    // Fetch printer settings for the store
+    const fetchPrinterSettings = async (storeId: string) => {
+        try {
+            const { data, error: fetchError } = await supabase
+                .from('printer_settings')
+                .select('*')
+                .eq('store_id', storeId)
+                .maybeSingle();
+
+            if (fetchError) throw fetchError;
+
+            if (data) {
+                printerSettings.value = data;
+            } else {
+                // Return default settings if none exist
+                printerSettings.value = {
+                    id: '',
+                    store_id: storeId,
+                    printer_type: 'thermal',
+                    paper_width: 58,
+                    auto_print: false,
+                    include_logo: true,
+                    include_store_info: true,
+                    footer_text: 'Terima kasih atas kunjungan Anda!',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                }
+            }
+            return printerSettings.value;
+        } catch (e: any) {
+            console.error('Error fetching printer settings:', e.message);
+            return null;
+        }
+    };
 
     // Fetch current user's store
     const fetchStore = async (userId?: string) => {
@@ -37,10 +74,8 @@ export const useStore = () => {
                 return null;
             }
 
-            // console.log("Fetching store for user:", targetUserId);
-
-            const { data, error: fetchError } = await supabase
-                .from('stores')
+            const { data, error: fetchError } = await (supabase
+                .from('stores') as any)
                 .select('*')
                 .eq('user_id', targetUserId)
                 .limit(1)
@@ -50,13 +85,14 @@ export const useStore = () => {
 
             if (data) {
                 store.value = data;
+                // Fetch printer settings once store is loaded
+                await fetchPrinterSettings(data.id);
             } else {
                 store.value = null;
             }
 
             return data;
         } catch (e: any) {
-            // console.error('Error fetching store:', e.message);
             error.value = e.message;
             return null;
         } finally {
@@ -183,9 +219,11 @@ export const useStore = () => {
 
     return {
         store,
+        printerSettings,
         loading,
         error,
         fetchStore,
+        fetchPrinterSettings,
         createStore,
         updateStore,
         isSubscriptionActive,

@@ -30,7 +30,7 @@ definePageMeta({
   layout: "default",
 });
 
-const { store, fetchStore } = useStore();
+const { store, printerSettings, fetchStore } = useStore();
 const { transactions, loading, fetchTransactions, deleteTransaction, returnTransaction } =
   useTransactions();
 const { products, fetchProducts } = useProducts();
@@ -1796,6 +1796,9 @@ watch(
             <ThermalPrinterReceipt
               :transaction="selectedTransaction"
               :store="store"
+              :settings="printerSettings"
+              :style="{ width: printerSettings?.paper_width === 80 ? '340px' : '260px' }"
+              class="mx-auto"
             />
           </div>
 
