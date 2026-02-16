@@ -93,6 +93,9 @@ const handleLogout = async () => {
 
     <main class="flex-1 pb-24"><slot /></main>
 
+    <!-- Global Subscription Guard -->
+    <SubscriptionGuard />
+
     <nav
       class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-2 py-2 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-50"
     >

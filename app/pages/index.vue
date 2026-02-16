@@ -141,80 +141,119 @@ definePageMeta({
           <p class="text-gray-600 text-lg">Investasi kecil untuk pertumbuhan bisnis yang besar.</p>
         </div>
 
-        <div class="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+        <div class="grid md:grid-cols-3 gap-8 max-w-7xl mx-auto">
           <!-- Monthly Plan -->
-          <div class="relative bg-white p-10 rounded-[2.5rem] border-2 border-blue-500 shadow-2xl shadow-blue-100 transform hover:-translate-y-2 transition-all duration-300">
-            <div class="absolute -top-5 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2 rounded-full text-sm font-bold uppercase tracking-widest shadow-lg">
-              Paling Populer
-            </div>
-            
+          <div class="bg-white p-8 rounded-[2.5rem] border border-gray-200 hover:border-blue-200 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2">
             <div class="mb-8">
-              <h3 class="text-2xl font-black text-gray-900 mb-2">Paket Langganan</h3>
-              <p class="text-gray-500 font-medium">Cocok untuk UMKM & Toko Retail</p>
+              <h3 class="text-xl font-black text-gray-900 mb-2">Paket Bulanan</h3>
+              <p class="text-gray-500 text-sm font-medium">Bayar fleksibel tiap bulan</p>
             </div>
             
             <div class="flex items-baseline gap-1 mb-8">
-              <span class="text-4xl font-black text-gray-900">Rp 40.000</span>
-              <span class="text-gray-500 font-bold">/bulan</span>
+              <span class="text-3xl font-black text-gray-900">Rp 40.000</span>
+              <span class="text-gray-500 font-bold text-sm">/bulan</span>
             </div>
             
             <ul class="space-y-4 mb-10">
-              <li class="flex items-center gap-3 text-gray-600 font-medium">
-                <UIcon name="i-heroicons-check-circle-20-solid" class="w-6 h-6 text-green-500" />
-                Semua Fitur Kasir Lengkap
+              <li class="flex items-center gap-3 text-gray-600 text-sm font-medium">
+                <UIcon name="i-heroicons-check-circle-20-solid" class="w-5 h-5 text-green-500" />
+                Semua Fitur Kasir
               </li>
-              <li class="flex items-center gap-3 text-gray-600 font-medium">
-                <UIcon name="i-heroicons-check-circle-20-solid" class="w-6 h-6 text-green-500" />
+              <li class="flex items-center gap-3 text-gray-600 text-sm font-medium">
+                <UIcon name="i-heroicons-check-circle-20-solid" class="w-5 h-5 text-green-500" />
                 Update Fitur Gratis
               </li>
-              <li class="flex items-center gap-3 text-gray-600 font-medium">
-                <UIcon name="i-heroicons-check-circle-20-solid" class="w-6 h-6 text-green-500" />
-                Data Aman di Cloud
+              <li class="flex items-center gap-3 text-gray-600 text-sm font-medium">
+                <UIcon name="i-heroicons-check-circle-20-solid" class="w-5 h-5 text-green-500" />
+                Data Cloud Aman
+              </li>
+              <li class="flex items-center gap-3 text-gray-600 text-sm font-medium">
+                <UIcon name="i-heroicons-check-circle-20-solid" class="w-5 h-5 text-green-500" />
+                Support Teknis
+              </li>
+            </ul>
+            
+            <NuxtLink to="/auth/register" class="flex justify-center items-center w-full py-3 text-base font-bold text-gray-900 bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
+              Pilih Paket
+            </NuxtLink>
+          </div>
+
+          <!-- Annual Plan -->
+          <div class="relative bg-white p-10 rounded-[2.5rem] border-2 border-blue-500 shadow-2xl shadow-blue-100 transform hover:-translate-y-2 transition-all duration-300">
+            <div class="absolute -top-5 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg whitespace-nowrap">
+              Hemat 2 Bulan (17%)
+            </div>
+            
+            <div class="mb-8">
+              <h3 class="text-2xl font-black text-gray-900 mb-2">Paket Tahunan</h3>
+              <p class="text-gray-500 font-medium italic">Hemat & Lebih Untung</p>
+            </div>
+            
+            <div class="flex flex-col mb-8">
+               <div class="flex items-baseline gap-1">
+                 <span class="text-4xl font-black text-gray-900">Rp 400.000</span>
+                 <span class="text-gray-500 font-bold">/tahun</span>
+               </div>
+               <p class="text-xs text-blue-600 font-bold mt-1">Setara Rp 33.333/bulan</p>
+            </div>
+            
+            <ul class="space-y-4 mb-10">
+              <li class="flex items-center gap-3 text-gray-900 font-bold">
+                <UIcon name="i-heroicons-sparkles-20-solid" class="w-6 h-6 text-blue-500" />
+                Semua Fitur Kasir
               </li>
               <li class="flex items-center gap-3 text-gray-600 font-medium">
                 <UIcon name="i-heroicons-check-circle-20-solid" class="w-6 h-6 text-green-500" />
-                Support Teknis 24/7
+                Update Fitur Prioritas
+              </li>
+              <li class="flex items-center gap-3 text-gray-600 font-medium">
+                <UIcon name="i-heroicons-check-circle-20-solid" class="w-6 h-6 text-green-500" />
+                Backup Data Mingguan
+              </li>
+              <li class="flex items-center gap-3 text-gray-600 font-medium">
+                <UIcon name="i-heroicons-check-circle-20-solid" class="w-6 h-6 text-green-500" />
+                Support Prioritas WA
               </li>
             </ul>
             
             <NuxtLink to="/auth/register" class="flex justify-center items-center w-full py-4 text-lg font-black text-white bg-blue-600 rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200">
-              Mulai Langganan
+              Mulai Sekarang
             </NuxtLink>
           </div>
 
           <!-- Custom Plan -->
-          <div class="bg-gray-100/50 backdrop-blur-sm p-10 rounded-[2.5rem] border border-gray-200 hover:border-gray-300 transition-all duration-300">
+          <div class="bg-gray-100/50 backdrop-blur-sm p-8 rounded-[2.5rem] border border-gray-200 hover:border-gray-300 transition-all duration-300">
             <div class="mb-8">
-              <h3 class="text-2xl font-black text-gray-900 mb-2">Custom Aplikasi</h3>
-              <p class="text-gray-500 font-medium">Whitelabel & Penambahan Fitur</p>
+              <h3 class="text-xl font-black text-gray-900 mb-2">Custom Aplikasi</h3>
+              <p class="text-gray-500 text-sm font-medium">Whitelabel & Fitur Khusus</p>
             </div>
             
             <div class="flex flex-col mb-8">
-              <span class="text-gray-500 font-bold">Mulai Dari</span>
-              <span class="text-4xl font-black text-gray-900">Rp 2.000.000</span>
+              <span class="text-gray-500 font-bold text-sm">Mulai Dari</span>
+              <span class="text-3xl font-black text-gray-900">Rp 2.000.000</span>
             </div>
             
             <ul class="space-y-4 mb-10">
-              <li class="flex items-center gap-3 text-gray-600 font-medium">
-                <UIcon name="i-heroicons-sparkles-20-solid" class="w-6 h-6 text-blue-500" />
-                Ganti Logo & Brand Sendiri
+              <li class="flex items-center gap-3 text-gray-600 text-sm font-medium">
+                <UIcon name="i-heroicons-sparkles-20-solid" class="w-5 h-5 text-blue-500" />
+                Logo & Brand Sendiri
               </li>
-              <li class="flex items-center gap-3 text-gray-600 font-medium">
-                <UIcon name="i-heroicons-code-bracket-20-solid" class="w-6 h-6 text-blue-500" />
+              <li class="flex items-center gap-3 text-gray-600 text-sm font-medium">
+                <UIcon name="i-heroicons-code-bracket-20-solid" class="w-5 h-5 text-blue-500" />
                 Custom Fitur Spesifik
               </li>
-              <li class="flex items-center gap-3 text-gray-600 font-medium">
-                <UIcon name="i-heroicons-server-stack-20-solid" class="w-6 h-6 text-blue-500" />
-                Server Mandiri (Opsional)
+              <li class="flex items-center gap-3 text-gray-600 text-sm font-medium">
+                <UIcon name="i-heroicons-server-stack-20-solid" class="w-5 h-5 text-blue-500" />
+                Server Mandiri
               </li>
-              <li class="flex items-center gap-3 text-gray-600 font-medium">
-                <UIcon name="i-heroicons-device-phone-mobile-20-solid" class="w-6 h-6 text-blue-500" />
-                Input Data Produk Awal
+              <li class="flex items-center gap-3 text-gray-600 text-sm font-medium">
+                <UIcon name="i-heroicons-device-phone-mobile-20-solid" class="w-5 h-5 text-blue-500" />
+                Input Data Awal
               </li>
             </ul>
             
-            <a href="https://wa.me/62895413111053?text=Halo,%20saya%20tertarik%20dengan%20jasa%20Custom%20Aplikasi%20Kasir" target="_blank" class="flex justify-center items-center w-full py-4 text-lg font-black text-gray-900 bg-white border-2 border-gray-200 rounded-2xl hover:bg-gray-50 transition-all">
-              Hubungi WhatsApp
+            <a href="https://wa.me/62895413111053?text=Halo,%20saya%20tertarik%20dengan%20jasa%20Custom%20Aplikasi%20Kasir" target="_blank" class="flex justify-center items-center w-full py-3 text-base font-bold text-gray-900 bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
+              WhatsApp Kami
             </a>
           </div>
         </div>

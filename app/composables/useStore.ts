@@ -161,12 +161,35 @@ export const useStore = () => {
     // Initialize auto-fetch
     initStoreAutoFetch()
 
+    // Subscription Logic
+    const isSubscriptionActive = computed(() => {
+        if (!store.value) return true // Default true during loading to avoid flicker
+        if (!store.value.subscription_until) return true
+
+        const now = new Date()
+        const until = new Date(store.value.subscription_until)
+        return until > now
+    })
+
+    const subscriptionDaysLeft = computed(() => {
+        if (!store.value || !store.value.subscription_until) return 0
+        const now = new Date()
+        const until = new Date(store.value.subscription_until)
+        const diffTime = until.getTime() - now.getTime()
+        return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    })
+
+    const isSubscriptionExpired = computed(() => !isSubscriptionActive.value)
+
     return {
         store,
         loading,
         error,
         fetchStore,
         createStore,
-        updateStore
+        updateStore,
+        isSubscriptionActive,
+        subscriptionDaysLeft,
+        isSubscriptionExpired
     }
 }
