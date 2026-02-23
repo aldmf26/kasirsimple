@@ -719,7 +719,7 @@ watch(
           </div>
           <input
             v-model="searchQuery"
-            placeholder="Cari menu atau baranag..."
+            placeholder="Cari menu atau barang..."
             class="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-xl focus:border-primary-500 focus:bg-white transition-all outline-none text-sm font-medium"
             type="search"
           />
