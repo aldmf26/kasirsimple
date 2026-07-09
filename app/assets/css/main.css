@@ -1,6 +1,22 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
+html,
+body {
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+a,
+input,
+textarea,
+select,
+[role="button"] {
+  touch-action: manipulation;
+}
+
 @layer utilities {
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
