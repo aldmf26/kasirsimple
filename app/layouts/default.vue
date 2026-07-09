@@ -7,6 +7,7 @@ const toast = useToast();
 
 // Load store when layout mounted
 const { store, fetchStore } = useStore();
+const isSuperAdmin = computed(() => (store.value as any)?.is_admin === true);
 
 onMounted(async () => {
   // Store fetch akan di-trigger oleh initStoreAutoFetch di composable
@@ -81,14 +82,26 @@ const handleLogout = async () => {
         <span class="font-bold text-lg tracking-tight">KasirOK</span>
       </div>
 
-      <button
-        @click="handleLogout"
-        class="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-all text-sm font-semibold hover:shadow-md active:scale-95"
-        title="Keluar dari aplikasi"
-      >
-        <UIcon name="i-heroicons-arrow-left-on-rectangle" class="w-5 h-5" />
-        <span class="hidden sm:inline">Keluar / Logout</span>
-      </button>
+      <div class="flex items-center gap-2">
+        <NuxtLink
+          v-if="isSuperAdmin"
+          to="/admin"
+          class="flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white transition-all hover:bg-black hover:shadow-md active:scale-95"
+          title="Admin Dashboard"
+        >
+          <UIcon name="i-heroicons-shield-check" class="w-5 h-5" />
+          <span class="hidden sm:inline">Admin</span>
+        </NuxtLink>
+
+        <button
+          @click="handleLogout"
+          class="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-all text-sm font-semibold hover:shadow-md active:scale-95"
+          title="Keluar dari aplikasi"
+        >
+          <UIcon name="i-heroicons-arrow-left-on-rectangle" class="w-5 h-5" />
+          <span class="hidden sm:inline">Keluar / Logout</span>
+        </button>
+      </div>
     </header>
 
     <main class="flex-1 pb-24"><slot /></main>

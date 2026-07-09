@@ -1,0 +1,9 @@
+.env
+.env.*
+.nuxt
+.output
+node_modules
+nuxt-dev.log
+nuxt-dev.err
+*.log
+*.err

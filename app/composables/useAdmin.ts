@@ -21,6 +21,7 @@ export const useAdmin = () => {
             const { data, error } = await supabase
                 .from('stores')
                 .select('*')
+                .or('is_admin.is.null,is_admin.eq.false')
                 .order('created_at', { ascending: false })
 
             if (error) throw error

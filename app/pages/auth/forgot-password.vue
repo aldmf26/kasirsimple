@@ -11,6 +11,7 @@ const successTitle = ref('Email Terkirim')
 const successDesc = ref('Silakan cek kotak masuk email Anda untuk instruksi selanjutnya.')
 
 const supabase = useSupabaseClient()
+const config = useRuntimeConfig()
 
 const handleReset = async () => {
   if (!email.value) return
@@ -19,7 +20,7 @@ const handleReset = async () => {
   
   try {
     const { error: err } = await supabase.auth.resetPasswordForEmail(email.value, {
-      redirectTo: `${window.location.origin}/auth/update-password`,
+      redirectTo: `${config.public.siteUrl}/auth/update-password`,
     })
     if (err) throw err
     sent.value = true

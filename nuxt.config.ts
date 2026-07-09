@@ -35,6 +35,12 @@ export default defineNuxtConfig({
     redirect: false
   },
 
+  runtimeConfig: {
+    public: {
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://kasirok.vercel.app'
+    }
+  },
+
   compatibilityDate: '2025-01-15',
 
   eslint: {

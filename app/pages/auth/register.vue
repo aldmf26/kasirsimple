@@ -8,6 +8,7 @@ import type { Database } from '~/types/database'
 const supabase = useSupabaseClient<Database>()
 const user = useSupabaseUser()
 const toast = useToast()
+const config = useRuntimeConfig()
 
 const name = ref('')
 const email = ref('')
@@ -37,6 +38,7 @@ const handleRegister = async () => {
       email: email.value,
       password: password.value,
       options: {
+        emailRedirectTo: `${config.public.siteUrl}/dashboard`,
         data: {
           full_name: name.value
         }
