@@ -350,6 +350,50 @@ export interface Database {
                     updated_at?: string
                 }
             }
+            shifts: {
+                Row: {
+                    id: string
+                    store_id: string
+                    user_id: string
+                    start_time: string
+                    end_time: string | null
+                    opening_balance: number
+                    closing_balance_actual: number | null
+                    closing_balance_expected: number | null
+                    status: string
+                    notes: string | null
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
+                    id?: string
+                    store_id: string
+                    user_id: string
+                    start_time?: string
+                    end_time?: string | null
+                    opening_balance?: number
+                    closing_balance_actual?: number | null
+                    closing_balance_expected?: number | null
+                    status?: string
+                    notes?: string | null
+                    created_at?: string
+                    updated_at?: string
+                }
+                Update: {
+                    id?: string
+                    store_id?: string
+                    user_id?: string
+                    start_time?: string
+                    end_time?: string | null
+                    opening_balance?: number
+                    closing_balance_actual?: number | null
+                    closing_balance_expected?: number | null
+                    status?: string
+                    notes?: string | null
+                    created_at?: string
+                    updated_at?: string
+                }
+            }
         }
         Views: {
             daily_sales_summary: {

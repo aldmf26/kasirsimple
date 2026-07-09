@@ -12,6 +12,7 @@ node_modules
 # Logs
 logs
 *.log
+*.err
 
 # Misc
 .DS_Store
