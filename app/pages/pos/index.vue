@@ -139,9 +139,17 @@ const showAlert = (type: "success" | "error", message: string) => {
 const displayPaid = ref("0");
 const selectedCategory = ref("all");
 const searchQuery = ref("");
+const barcodeQuery = ref("");
+const quickSaleName = ref("");
+const quickSalePrice = ref("");
 const displayedProductsCount = ref(8);
 const showPaymentModal = ref(false);
 const showReceipt = ref(false);
+const barcodeInputRef = ref<HTMLInputElement | null>(null);
+const barcodeVideoRef = ref<HTMLVideoElement | null>(null);
+const showBarcodeScanner = ref(false);
+let barcodeStream: MediaStream | null = null;
+let barcodeScanFrame = 0;
 
 interface TransactionReceipt {
   id: string;
@@ -201,7 +209,11 @@ const filteredProducts = computed(() => {
 
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.toLowerCase().trim();
-    result = result.filter((p) => p.name.toLowerCase().includes(q));
+    result = result.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.sku || "").toLowerCase().includes(q),
+    );
   }
   return result;
 });
@@ -296,6 +308,110 @@ const handleAddToCart = (product: any) => {
   } catch (e) {
     showAlert("error", "Gagal menambahkan produk");
   }
+};
+
+const findProductByBarcode = (code: string) => {
+  const normalizedCode = code.trim().toLowerCase();
+  return (products.value || []).find(
+    (product: any) => (product.sku || "").trim().toLowerCase() === normalizedCode,
+  );
+};
+
+const handleBarcodeSubmit = () => {
+  const code = barcodeQuery.value.trim();
+  if (!code) return;
+
+  const product = findProductByBarcode(code);
+  if (!product) {
+    showAlert("error", "Barcode belum ada di data barang");
+    barcodeQuery.value = "";
+    barcodeInputRef.value?.focus();
+    return;
+  }
+
+  handleAddToCart(product);
+  barcodeQuery.value = "";
+  barcodeInputRef.value?.focus();
+};
+
+const stopBarcodeCamera = () => {
+  if (barcodeScanFrame) {
+    cancelAnimationFrame(barcodeScanFrame);
+    barcodeScanFrame = 0;
+  }
+  barcodeStream?.getTracks().forEach((track) => track.stop());
+  barcodeStream = null;
+  showBarcodeScanner.value = false;
+};
+
+const startBarcodeCamera = async () => {
+  if (!process.client) return;
+  const BarcodeDetector = (window as any).BarcodeDetector;
+  if (!BarcodeDetector) {
+    showAlert("error", "Browser ini belum support scan kamera");
+    return;
+  }
+
+  try {
+    showBarcodeScanner.value = true;
+    await nextTick();
+    barcodeStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+      audio: false,
+    });
+
+    if (!barcodeVideoRef.value) return;
+    barcodeVideoRef.value.srcObject = barcodeStream;
+    await barcodeVideoRef.value.play();
+
+    const detector = new BarcodeDetector({
+      formats: ["ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e"],
+    });
+
+    const scan = async () => {
+      if (!showBarcodeScanner.value || !barcodeVideoRef.value) return;
+      try {
+        const codes = await detector.detect(barcodeVideoRef.value);
+        const rawValue = codes?.[0]?.rawValue;
+        if (rawValue) {
+          barcodeQuery.value = rawValue;
+          stopBarcodeCamera();
+          handleBarcodeSubmit();
+          return;
+        }
+      } catch (e) {
+        // Kamera belum siap pada frame awal.
+      }
+      barcodeScanFrame = requestAnimationFrame(scan);
+    };
+
+    scan();
+  } catch (e) {
+    stopBarcodeCamera();
+    showAlert("error", "Kamera tidak bisa dibuka");
+  }
+};
+
+const addQuickSale = () => {
+  const price = parseInt(quickSalePrice.value.replace(/\D/g, "")) || 0;
+  if (price <= 0) {
+    showAlert("error", "Isi nominal jual cepat dulu");
+    return;
+  }
+
+  addToCart({
+    id: null,
+    is_quick_sale: true,
+    name: quickSaleName.value.trim() || "Jual Cepat",
+    sku: null,
+    price,
+    image_url: null,
+    has_stock: false,
+    stock: 0,
+  });
+
+  quickSaleName.value = "";
+  quickSalePrice.value = "";
 };
 
 const openPayment = () => {
@@ -641,6 +757,10 @@ watch(
   },
   { immediate: false },
 );
+
+onUnmounted(() => {
+  stopBarcodeCamera();
+});
 </script>
 
 <template>
@@ -707,6 +827,65 @@ watch(
             size="sm"
             @click="showOpenShiftModal = true"
           />
+        </div>
+      </div>
+
+      <!-- Aksi Cepat Kasir -->
+      <div class="bg-white rounded-2xl shadow-sm p-3 sm:p-4 mb-4 border border-gray-100">
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
+          <form class="flex gap-2" @submit.prevent="handleBarcodeSubmit">
+            <div class="relative flex-1">
+              <UIcon
+                name="i-heroicons-qr-code"
+                class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary-500"
+              />
+              <input
+                ref="barcodeInputRef"
+                v-model="barcodeQuery"
+                inputmode="numeric"
+                autocomplete="off"
+                placeholder="Scan barcode..."
+                class="w-full h-12 pl-10 pr-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-primary-500 focus:bg-white transition-all outline-none text-base font-black"
+              />
+            </div>
+            <UButton
+              type="button"
+              icon="i-heroicons-camera"
+              color="neutral"
+              variant="soft"
+              size="xl"
+              class="font-black px-4"
+              @click="startBarcodeCamera"
+            />
+            <UButton
+              type="submit"
+              icon="i-heroicons-plus"
+              color="primary"
+              size="xl"
+              class="font-black px-4"
+            />
+          </form>
+
+          <form class="grid grid-cols-[1fr_1fr_auto] gap-2" @submit.prevent="addQuickSale">
+            <input
+              v-model="quickSaleName"
+              placeholder="Nama bebas"
+              class="h-12 min-w-0 px-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-emerald-500 focus:bg-white transition-all outline-none text-sm font-bold"
+            />
+            <input
+              v-model="quickSalePrice"
+              inputmode="numeric"
+              placeholder="Nominal"
+              class="h-12 min-w-0 px-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-emerald-500 focus:bg-white transition-all outline-none text-sm font-black"
+            />
+            <UButton
+              type="submit"
+              icon="i-heroicons-bolt"
+              color="success"
+              size="xl"
+              class="font-black px-4"
+            />
+          </form>
         </div>
       </div>
 
@@ -910,7 +1089,7 @@ watch(
         >
           <div
             v-for="item in cart"
-            :key="item.product_id"
+            :key="item.cart_line_id"
             class="flex items-center gap-3 bg-gray-50 p-3 rounded-xl"
           >
             <div class="flex-1 min-w-0">
@@ -926,7 +1105,7 @@ watch(
             >
               <button
                 @click="
-                  updateCartItemQuantity(item.product_id, item.quantity - 1)
+                  updateCartItemQuantity(item.cart_line_id, item.quantity - 1)
                 "
                 class="w-8 h-8 flex items-center justify-center text-red-600 hover:bg-red-50 font-bold text-lg active:scale-90 transition-all"
               >
@@ -937,7 +1116,7 @@ watch(
               }}</span>
               <button
                 @click="
-                  updateCartItemQuantity(item.product_id, item.quantity + 1)
+                  updateCartItemQuantity(item.cart_line_id, item.quantity + 1)
                 "
                 class="w-8 h-8 flex items-center justify-center text-primary-600 hover:bg-primary-50 font-bold text-lg active:scale-90 transition-all"
               >
@@ -945,7 +1124,7 @@ watch(
               </button>
             </div>
             <button
-              @click="removeFromCart(item.product_id)"
+              @click="removeFromCart(item.cart_line_id)"
               class="w-8 h-8 flex items-center justify-center text-red-600 hover:bg-red-100 rounded-lg font-bold text-lg transition-all"
               title="Hapus dari keranjang"
             >
@@ -1023,6 +1202,41 @@ watch(
         </div>
       </div>
     </div>
+
+    <!-- Modal Scan Barcode -->
+    <Teleport to="body">
+      <div
+        v-if="showBarcodeScanner"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80"
+        @click.self="stopBarcodeCamera"
+      >
+        <div class="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div class="flex items-center justify-between border-b border-gray-200 p-4">
+            <div class="flex items-center gap-2">
+              <UIcon name="i-heroicons-qr-code" class="h-5 w-5 text-primary-600" />
+              <p class="text-sm font-black text-gray-900">SCAN BARCODE</p>
+            </div>
+            <UButton
+              icon="i-heroicons-x-mark"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              @click="stopBarcodeCamera"
+            />
+          </div>
+          <div class="relative aspect-[3/4] bg-black">
+            <video
+              ref="barcodeVideoRef"
+              class="h-full w-full object-cover"
+              autoplay
+              muted
+              playsinline
+            />
+            <div class="absolute inset-x-8 top-1/2 h-28 -translate-y-1/2 rounded-xl border-2 border-white shadow-[0_0_0_999px_rgba(0,0,0,0.35)]"></div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Modal Pembayaran - SAMA, TIDAK ADA PERUBAHAN -->
     <Teleport to="body">

@@ -7,6 +7,7 @@ type TransactionItem = Database['public']['Tables']['transaction_items']['Row']
 type TransactionItemInsert = Database['public']['Tables']['transaction_items']['Insert']
 
 export interface CartItem {
+    cart_line_id: string
     product_id: string
     product_name: string
     product_sku: string | null
@@ -35,7 +36,11 @@ export const useTransactions = () => {
 
     // Cart operations
     const addToCart = (product: any) => {
-        const existingItem = cart.value.find(item => item.product_id === product.id)
+        const isQuickSale = product.is_quick_sale === true || !product.id
+        const lineId = product.cart_line_id || product.id || `quick-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        const existingItem = isQuickSale
+            ? null
+            : cart.value.find(item => item.product_id === product.id)
 
         if (existingItem) {
             // Check stock
@@ -46,28 +51,29 @@ export const useTransactions = () => {
             existingItem.subtotal = existingItem.quantity * existingItem.product_price
         } else {
             cart.value.push({
-                product_id: product.id,
+                cart_line_id: lineId,
+                product_id: lineId,
                 product_name: product.name,
-                product_sku: product.sku,
+                product_sku: product.sku || null,
                 product_price: product.price,
                 product_image: product.image_url || null,
-                quantity: 1,
-                subtotal: product.price,
-                has_stock: product.has_stock,
-                current_stock: product.stock
+                quantity: product.quantity || 1,
+                subtotal: product.price * (product.quantity || 1),
+                has_stock: product.has_stock === true,
+                current_stock: product.stock || 0
             })
         }
     }
 
-    const removeFromCart = (productId: string) => {
-        cart.value = cart.value.filter(item => item.product_id !== productId)
+    const removeFromCart = (lineId: string) => {
+        cart.value = cart.value.filter(item => item.cart_line_id !== lineId && item.product_id !== lineId)
     }
 
-    const updateCartItemQuantity = (productId: string, quantity: number) => {
-        const item = cart.value.find(item => item.product_id === productId)
+    const updateCartItemQuantity = (lineId: string, quantity: number) => {
+        const item = cart.value.find(item => item.cart_line_id === lineId || item.product_id === lineId)
         if (item) {
             if (quantity <= 0) {
-                removeFromCart(productId)
+                removeFromCart(lineId)
                 return
             }
 
@@ -217,7 +223,7 @@ export const useTransactions = () => {
             const items: TransactionItemInsert[] = cart.value.map(item => ({
                 transaction_id: transaction.id,
                 // store_id dihapus karena tidak ada di schema
-                product_id: item.product_id,
+                product_id: item.product_id.startsWith('quick-') ? null : item.product_id,
                 product_name: item.product_name,
                 product_sku: item.product_sku,
                 product_price: item.product_price,
@@ -237,7 +243,7 @@ export const useTransactions = () => {
 
             // Update stock for products with stock tracking
             for (const item of cart.value) {
-                if (item.has_stock) {
+                if (item.has_stock && !item.product_id.startsWith('quick-')) {
                     try {
                         const newStock = item.current_stock - item.quantity
 
@@ -422,6 +428,7 @@ export const useTransactions = () => {
             // Restore stock for each item
             if (transaction.items && transaction.items.length > 0) {
                 for (const item of transaction.items) {
+                    if (!item.product_id) continue
                     try {
                         // Get current stock
                         // @ts-ignore
@@ -518,6 +525,7 @@ export const useTransactions = () => {
             // Restore stock for each item
             if (transaction.items && transaction.items.length > 0) {
                 for (const item of transaction.items) {
+                    if (!item.product_id) continue
                     try {
                         // Get current stock
                         // @ts-ignore
