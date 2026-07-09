@@ -1,0 +1,50 @@
+# Product Specification Document  
+## Product Name: Kasir Simpel
+
+### 1. Purpose
+Kasir Simpel adalah aplikasi Point of Sale (POS) berbasis web yang dibangun dengan **Nuxt.js** sebagai frontend dan **Supabase** sebagai backend. Tujuannya:
+- Mempermudah pencatatan transaksi penjualan.
+- Mengelola stok produk secara otomatis.
+- Memberikan laporan keuangan sederhana dan cepat.
+- Menyediakan integrasi modern dengan autentikasi dan API Supabase.
+
+### 2. Target Users
+- Pemilik toko kecil/warung.
+- Restoran atau kafe dengan kebutuhan kasir sederhana.
+- UMKM yang ingin digitalisasi sistem kasir dengan teknologi modern.
+
+### 3. Key Features
+- **Authentication (Supabase Auth)**: Login dengan email/password atau social login.
+- **Product Management**: CRUD produk dengan harga dan stok.
+- **Stock Control**: Update stok otomatis saat transaksi dilakukan.
+- **Sales Transactions**: Input penjualan dengan kalkulasi otomatis (subtotal, pajak, total).
+- **Discounts & Promotions**: Opsi diskon per item atau total transaksi.
+- **Reports**: Laporan harian, mingguan, bulanan (penjualan & stok).
+- **Realtime Sync**: Supabase Realtime untuk sinkronisasi data antar cabang.
+
+### 4. Technical Specifications
+- **Frontend**: Nuxt.js (Vue 3, Composition API).
+- **Backend**: Supabase (Postgres + Edge Functions).
+- **Database**: Supabase Postgres.
+- **Deployment**: Vercel untuk frontend, Supabase untuk backend.
+- **Integration**: Supabase client SDK untuk query database dan autentikasi.
+
+### 5. User Flow
+1. **Login** → Kasir masuk dengan akun Supabase Auth.
+2. **Dashboard** → Menampilkan ringkasan penjualan & stok.
+3. **Transaksi** → Kasir input produk, sistem hitung otomatis.
+4. **Cetak Struk** → Struk digital/print.
+5. **Update Stok** → Stok berkurang sesuai transaksi.
+6. **Laporan** → Admin cek laporan penjualan.
+
+### 6. Success Criteria
+- Transaksi dapat dicatat < 5 detik.
+- Laporan harian otomatis tersedia.
+- Stok selalu sinkron dengan transaksi.
+- Sistem mudah digunakan tanpa training panjang.
+
+### 7. Future Enhancements
+- Integrasi dengan QRIS pembayaran.
+- Fitur multi-user dengan level akses lebih detail.
+- Dashboard analitik untuk tren penjualan.
+- Offline mode dengan cache di Nuxt PWA.

@@ -1,0 +1,300 @@
+version: "2"
+type: frontend
+tech_stack:
+  - TypeScript
+  - Nuxt 4
+  - Vue 3
+  - Nuxt UI
+  - Tailwind CSS
+  - Supabase Auth
+  - Supabase Postgres
+  - Supabase Storage
+  - Vercel
+routes:
+  - path: /
+    file: app/pages/index.vue
+    auth_required: false
+    description: Public landing page for KasirOK.
+  - path: /auth/login
+    file: app/pages/auth/login.vue
+    auth_required: false
+    description: User login page.
+  - path: /auth/register
+    file: app/pages/auth/register.vue
+    auth_required: false
+    description: User registration page with email/password sign up.
+  - path: /auth/forgot-password
+    file: app/pages/auth/forgot-password.vue
+    auth_required: false
+    description: Password reset request page.
+  - path: /auth/update-password
+    file: app/pages/auth/update-password.vue
+    auth_required: true
+    description: Password update page after reset link.
+  - path: /dashboard
+    file: app/pages/dashboard.vue
+    auth_required: true
+    description: Main store dashboard and first store setup modal.
+  - path: /pos
+    file: app/pages/pos/index.vue
+    auth_required: true
+    description: Point-of-sale screen with shift open/close and checkout flow.
+  - path: /products
+    file: app/pages/products/index.vue
+    auth_required: true
+    description: Product and category management page.
+  - path: /reports
+    file: app/pages/reports/index.vue
+    auth_required: true
+    description: Sales, product, and shift reporting page.
+  - path: /settings
+    file: app/pages/settings/index.vue
+    auth_required: true
+    description: Store, payment, printer, logo, and profile settings page.
+  - path: /admin
+    file: app/pages/admin/index.vue
+    auth_required: true
+    description: Superadmin dashboard for viewing customer stores and subscription status.
+  - path: /transactions
+    file: app/pages/transactions/index.vue
+    auth_required: true
+    description: Transaction list page.
+  - path: /activity-history
+    file: app/pages/activity-history.vue
+    auth_required: true
+    description: Activity log history page.
+  - path: /nota/:id
+    file: app/pages/nota/[id].vue
+    auth_required: true
+    description: Receipt display page for a completed transaction.
+features:
+  - name: Email Registration
+    description: New users create accounts with Supabase Auth and verify by email.
+    files:
+      - app/pages/auth/register.vue
+      - nuxt.config.ts
+    entry_route: /auth/register
+    user_interactions:
+      - Fill name, email, and password.
+      - Submit registration form.
+      - Confirm email from verification link.
+      - Redirect to dashboard.
+    api_calls:
+      - method: POST
+        endpoint: Supabase Auth signUp
+    auth_required: false
+  - name: Login and Session Routing
+    description: Existing users log in and are redirected to authenticated app pages.
+    files:
+      - app/pages/auth/login.vue
+      - app/middleware/auth.global.ts
+      - app/composables/useStore.ts
+    entry_route: /auth/login
+    user_interactions:
+      - Fill email and password.
+      - Submit login form.
+      - Land on dashboard.
+      - Log out from header.
+    api_calls:
+      - method: POST
+        endpoint: Supabase Auth signInWithPassword
+      - method: POST
+        endpoint: Supabase Auth signOut
+    auth_required: false
+  - name: Store Onboarding
+    description: First-time users create a store profile before using POS features.
+    files:
+      - app/pages/dashboard.vue
+      - app/composables/useStore.ts
+      - supabase/migrations/016_create_shifts_table.sql
+    entry_route: /dashboard
+    user_interactions:
+      - Enter store name.
+      - Select business type.
+      - Optionally enter address.
+      - Save store and proceed to dashboard.
+    api_calls:
+      - method: POST
+        endpoint: Supabase RPC create_store_for_current_user
+      - method: GET
+        endpoint: Supabase table stores
+    auth_required: true
+  - name: Dashboard Metrics
+    description: Dashboard shows sales summary, recent transactions, and low-stock products.
+    files:
+      - app/pages/dashboard.vue
+      - app/composables/useTransactions.ts
+      - app/composables/useProducts.ts
+    entry_route: /dashboard
+    user_interactions:
+      - View today sales metrics.
+      - Review recent transactions.
+      - Review low stock items.
+      - Navigate to POS, products, reports, or settings.
+    api_calls:
+      - method: GET
+        endpoint: Supabase table transactions
+      - method: GET
+        endpoint: Supabase table products
+    auth_required: true
+  - name: Shift Management
+    description: Cashier opens, updates, and closes a cash register shift.
+    files:
+      - app/pages/pos/index.vue
+      - app/composables/useShifts.ts
+      - supabase/migrations/016_create_shifts_table.sql
+    entry_route: /pos
+    user_interactions:
+      - Open cashier with opening balance and operator name.
+      - Continue selling during active shift.
+      - Close cashier with actual balance and notes.
+      - View shift history in reports.
+    api_calls:
+      - method: GET
+        endpoint: Supabase table shifts
+      - method: POST
+        endpoint: Supabase table shifts
+      - method: PATCH
+        endpoint: Supabase table shifts
+    auth_required: true
+  - name: POS Checkout
+    description: Cashier selects products, applies payment, records transaction, and updates stock.
+    files:
+      - app/pages/pos/index.vue
+      - app/composables/useTransactions.ts
+      - app/composables/useProducts.ts
+    entry_route: /pos
+    user_interactions:
+      - Browse or search products.
+      - Add products to cart.
+      - Set quantities and payment method.
+      - Complete sale.
+      - Print or view receipt.
+    api_calls:
+      - method: POST
+        endpoint: Supabase table transactions
+      - method: POST
+        endpoint: Supabase table transaction_items
+      - method: PATCH
+        endpoint: Supabase table products
+      - method: POST
+        endpoint: Supabase table stock_movements
+    auth_required: true
+  - name: Product Management
+    description: Users create, edit, deactivate, upload images for, and favorite products.
+    files:
+      - app/pages/products/index.vue
+      - app/composables/useProducts.ts
+      - app/composables/useCategories.ts
+    entry_route: /products
+    user_interactions:
+      - Add category.
+      - Add product with price, stock, unit, and buy price.
+      - Upload product image.
+      - Edit product details.
+      - Toggle favorite or deactivate product.
+    api_calls:
+      - method: GET
+        endpoint: Supabase table products
+      - method: POST
+        endpoint: Supabase table products
+      - method: PATCH
+        endpoint: Supabase table products
+      - method: POST
+        endpoint: Supabase Storage bucket products
+    auth_required: true
+  - name: Expense Tracking
+    description: Users record expenses and include them in expected shift balance.
+    files:
+      - app/composables/useExpenses.ts
+      - app/pages/reports/index.vue
+      - app/composables/useShifts.ts
+    entry_route: /reports
+    user_interactions:
+      - Add expense category, amount, date, and note.
+      - View expense totals.
+      - Include expenses in shift balance calculations.
+    api_calls:
+      - method: GET
+        endpoint: Supabase table expenses
+      - method: POST
+        endpoint: Supabase table expenses
+      - method: DELETE
+        endpoint: Supabase table expenses
+    auth_required: true
+  - name: Reporting
+    description: Users view sales reports, product reports, transaction details, and shift reports.
+    files:
+      - app/pages/reports/index.vue
+      - app/composables/useTransactions.ts
+      - app/composables/useShifts.ts
+    entry_route: /reports
+    user_interactions:
+      - Filter reports by date.
+      - Switch between report tabs.
+      - Review sales totals and payment breakdowns.
+      - Review shift history.
+      - Print reports.
+    api_calls:
+      - method: GET
+        endpoint: Supabase table transactions
+      - method: GET
+        endpoint: Supabase table transaction_items
+      - method: GET
+        endpoint: Supabase table shifts
+    auth_required: true
+  - name: Store Settings
+    description: Users configure store profile, logo, payment methods, printer settings, and password.
+    files:
+      - app/pages/settings/index.vue
+      - app/composables/useStore.ts
+    entry_route: /settings
+    user_interactions:
+      - Edit store profile.
+      - Upload logo.
+      - Configure payment methods.
+      - Configure printer and Bluetooth settings.
+      - Update password.
+    api_calls:
+      - method: PATCH
+        endpoint: Supabase table stores
+      - method: UPSERT
+        endpoint: Supabase table printer_settings
+      - method: POST
+        endpoint: Supabase Storage bucket logos
+      - method: POST
+        endpoint: Supabase Auth updateUser
+    auth_required: true
+  - name: Superadmin Dashboard
+    description: Superadmin views customer stores, revenue, transaction count, and subscription access.
+    files:
+      - app/pages/admin/index.vue
+      - app/composables/useAdmin.ts
+      - app/layouts/default.vue
+    entry_route: /admin
+    user_interactions:
+      - Login as superadmin.
+      - Open Admin dashboard.
+      - Review customer stores.
+      - Edit subscription status, plan, and expiration.
+    api_calls:
+      - method: GET
+        endpoint: Supabase table stores
+      - method: PATCH
+        endpoint: Supabase table stores
+      - method: GET
+        endpoint: Supabase table transactions
+    auth_required: true
+known_limitations:
+  - issue: TypeScript typecheck currently fails due to stale or incomplete Supabase type definitions and several component typing issues.
+    location: app/types/database.ts, app/types/database.types.ts, app/composables, app/pages
+    impact: Runtime can deploy, but static type safety is incomplete.
+  - issue: TestSprite bootstrap timed out in current environment.
+    location: testsprite_tests
+    impact: PRD generation required manual code summary creation.
+  - issue: Some schema definitions were historically created directly in Supabase and not always mirrored in repo migrations.
+    location: supabase/schema.sql and supabase/migrations
+    impact: Backup/restore reliability depends on keeping migrations updated.
+  - issue: Local generated log files can remain locked by Nuxt dev server.
+    location: nuxt-dev.err
+    impact: Workspace may show ignored local artifacts until dev process exits.

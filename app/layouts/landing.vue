@@ -1,66 +1,453 @@
+<script setup lang="ts">
+const mobileMenuOpen = ref(false)
+
+function toggleMenu() {
+  mobileMenuOpen.value = !mobileMenuOpen.value
+}
+
+function closeMenu() {
+  mobileMenuOpen.value = false
+}
+
+// Load GSAP from CDN
+useHead({
+  script: [
+    {
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js',
+      defer: true
+    },
+    {
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js',
+      defer: true
+    }
+  ]
+})
+
+onMounted(() => {
+  // Animate navbar on load
+  const waitForGsap = setInterval(() => {
+    if (typeof window !== 'undefined' && (window as any).gsap) {
+      clearInterval(waitForGsap)
+      const gsap = (window as any).gsap
+      gsap.from('.landing-nav', {
+        y: -20,
+        opacity: 0,
+        duration: 0.6,
+        ease: 'power2.out'
+      })
+    }
+  }, 50)
+})
+</script>
+
 <template>
-  <div class="font-sans antialiased text-gray-900 bg-white min-h-screen flex flex-col">
+  <div class="landing-root">
     <!-- Navbar -->
-    <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
-      <div class="container mx-auto px-6 h-20 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-             <img src="/images/logo-kasirok.png" alt="Logo" class="w-10 h-10" />
-          <span class="text-xl font-bold tracking-tight text-gray-900">KasirOK</span>
+    <header class="landing-nav">
+      <div class="nav-inner">
+        <div class="nav-brand">
+          <img src="/images/logo-kasirok.png" alt="Logo" class="nav-logo">
+          <span class="nav-brand-text">KasirOK</span>
         </div>
-        <nav class="hidden md:flex items-center gap-8">
-          <a href="#features" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors">Fitur</a>
-          <a href="#pricing" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors">Harga</a>
-          <a href="#testimonials" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors">Testimoni</a>
+
+        <!-- Desktop nav -->
+        <nav class="nav-links">
+          <a href="#features" class="nav-link">Fitur</a>
+          <a href="#pricing" class="nav-link">Harga</a>
         </nav>
-        <div class="flex items-center gap-4">
-          <NuxtLink to="/auth/login" class="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors">Masuk</NuxtLink>
-          <NuxtLink to="/auth/register" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-full text-sm font-semibold transition-all shadow-lg shadow-blue-200 hover:shadow-blue-300 hover:-translate-y-0.5">
-            Daftar Gratis
-          </NuxtLink>
+
+        <div class="nav-actions">
+          <NuxtLink to="/auth/login" class="nav-login">Masuk</NuxtLink>
+          <NuxtLink to="/auth/register" class="nav-register">Daftar Gratis</NuxtLink>
         </div>
+
+        <!-- Mobile hamburger -->
+        <button class="nav-hamburger" @click="toggleMenu" aria-label="Menu">
+          <span :class="['hamburger-line', { open: mobileMenuOpen }]" />
+          <span :class="['hamburger-line', { open: mobileMenuOpen }]" />
+          <span :class="['hamburger-line', { open: mobileMenuOpen }]" />
+        </button>
       </div>
+
+      <!-- Mobile menu -->
+      <Transition name="slide-menu">
+        <div v-if="mobileMenuOpen" class="mobile-menu">
+          <a href="#features" class="mobile-link" @click="closeMenu">Fitur</a>
+          <a href="#pricing" class="mobile-link" @click="closeMenu">Harga</a>
+          <div class="mobile-actions">
+            <NuxtLink to="/auth/login" class="mobile-login" @click="closeMenu">Masuk</NuxtLink>
+            <NuxtLink to="/auth/register" class="mobile-register" @click="closeMenu">Daftar Gratis</NuxtLink>
+          </div>
+        </div>
+      </Transition>
     </header>
 
-    <main class="flex-1">
+    <main class="landing-main">
       <slot />
     </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-50 border-t border-gray-200 py-12">
-  <div class="container mx-auto px-6">
-    <div class="flex flex-col md:flex-row justify-between items-center gap-6 text-center md:text-left">
-      
-      <!-- Logo -->
-      <div class="flex items-center gap-2">
-        <img src="/images/logo-kasirok.png" alt="Logo" class="w-10 h-10" />
-        <span class="font-bold text-gray-900">KasirOK</span>
+    <footer class="landing-footer">
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <img src="/images/logo-kasirok.png" alt="Logo" class="footer-logo">
+          <span class="footer-brand-text">KasirOK</span>
+        </div>
+
+        <div class="footer-social">
+          <a
+            href="https://instagram.com/kasir.ok"
+            target="_blank"
+            class="social-link"
+          >
+            <div class="social-icon-wrap">
+              <UIcon name="i-simple-icons-instagram" class="w-5 h-5" />
+            </div>
+            <span>@kasir.ok</span>
+          </a>
+        </div>
+
+        <p class="footer-copy">
+          © {{ new Date().getFullYear() }} KasirOK. All rights reserved.
+        </p>
       </div>
+    </footer>
 
-      <!-- Social -->
-      <div class="flex items-center gap-6">
-        <a 
-          href="https://instagram.com/kasir.ok" 
-          target="_blank" 
-          class="flex items-center gap-2 text-gray-500 hover:text-pink-600 transition-colors group"
-        >
-          <div class="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center group-hover:border-pink-200 group-hover:bg-pink-50 transition-all">
-            <UIcon name="i-simple-icons-instagram" class="w-5 h-5" />
-          </div>
-          <span class="text-sm font-medium">@kasir.ok</span>
-        </a>
-      </div>
-
-      <!-- Copyright -->
-      <p class="text-gray-500 text-sm">
-        © {{ new Date().getFullYear() }} KasirOK. All rights reserved.
-      </p>
-
-    </div>
-  </div>
-</footer>
-
-
-    <!-- Toast Notifications -->
     <UNotifications />
   </div>
 </template>
+
+<style scoped>
+/* ========================================
+   LANDING LAYOUT — Clean & Centered
+   ======================================== */
+.landing-root {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #1f2937;
+  background: #fff;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Navbar ---------- */
+.landing-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.nav-logo {
+  width: 36px;
+  height: 36px;
+}
+
+.nav-brand-text {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #111827;
+  letter-spacing: -0.01em;
+}
+
+.nav-links {
+  display: none;
+  align-items: center;
+  gap: 2rem;
+}
+
+.nav-link {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-decoration: none;
+  transition: color 0.2s;
+  position: relative;
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: #2563eb;
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+.nav-link:hover {
+  color: #2563eb;
+}
+
+.nav-link:hover::after {
+  width: 100%;
+}
+
+.nav-actions {
+  display: none;
+  align-items: center;
+  gap: 1rem;
+}
+
+.nav-login {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1f2937;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.nav-login:hover {
+  color: #2563eb;
+}
+
+.nav-register {
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  color: #fff;
+  padding: 0.5rem 1.25rem;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+  transition: all 0.3s;
+}
+
+.nav-register:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
+}
+
+/* Hamburger */
+.nav-hamburger {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.hamburger-line {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: #374151;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+}
+
+.hamburger-line.open:nth-child(1) {
+  transform: rotate(45deg) translate(5px, 5px);
+}
+
+.hamburger-line.open:nth-child(2) {
+  opacity: 0;
+}
+
+.hamburger-line.open:nth-child(3) {
+  transform: rotate(-45deg) translate(5px, -5px);
+}
+
+/* Mobile menu */
+.mobile-menu {
+  padding: 1rem 1.5rem 1.5rem;
+  border-top: 1px solid #f3f4f6;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.mobile-link {
+  display: block;
+  padding: 0.75rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  text-decoration: none;
+  border-bottom: 1px solid #f9fafb;
+  transition: color 0.2s;
+}
+
+.mobile-link:hover {
+  color: #2563eb;
+}
+
+.mobile-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.mobile-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1f2937;
+  background: #f9fafb;
+  border-radius: 0.75rem;
+  text-decoration: none;
+  border: 1px solid #e5e7eb;
+}
+
+.mobile-register {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  border-radius: 0.75rem;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+}
+
+/* Menu animation */
+.slide-menu-enter-active,
+.slide-menu-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-menu-enter-from,
+.slide-menu-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+/* ---------- Main ---------- */
+.landing-main {
+  flex: 1;
+}
+
+/* ---------- Footer ---------- */
+.landing-footer {
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  padding: 2.5rem 0;
+}
+
+.footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  text-align: center;
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.footer-logo {
+  width: 36px;
+  height: 36px;
+}
+
+.footer-brand-text {
+  font-weight: 800;
+  font-size: 1rem;
+  color: #111827;
+}
+
+.social-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6b7280;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.social-link:hover {
+  color: #e1306c;
+}
+
+.social-icon-wrap {
+  width: 32px;
+  height: 32px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.social-link:hover .social-icon-wrap {
+  border-color: #fbcfe8;
+  background: #fdf2f8;
+}
+
+.footer-copy {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+/* ========================================
+   Responsive
+   ======================================== */
+@media (min-width: 768px) {
+  .nav-inner {
+    height: 72px;
+  }
+
+  .nav-links {
+    display: flex;
+  }
+
+  .nav-actions {
+    display: flex;
+  }
+
+  .nav-hamburger {
+    display: none;
+  }
+
+  .footer-inner {
+    flex-direction: row;
+    justify-content: space-between;
+    text-align: left;
+  }
+}
+</style>
