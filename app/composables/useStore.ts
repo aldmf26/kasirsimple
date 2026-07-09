@@ -125,14 +125,13 @@ export const useStore = () => {
                 return existingStore;
             }
 
-            const { data, error: createError } = await (supabase
-                .from('stores') as any)
-                .insert({
-                    ...storeData,
-                    user_id: user.value.id
+            const { data, error: createError } = await (supabase as any)
+                .rpc('create_store_for_current_user', {
+                    store_name: storeData.name,
+                    store_business_type: storeData.business_type || 'retail',
+                    store_address: storeData.address || null,
+                    store_phone: storeData.phone || null
                 })
-                .select()
-                .single()
 
             if (createError) throw createError
 
