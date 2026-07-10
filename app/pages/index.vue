@@ -246,7 +246,7 @@ function initAnimations(gsap: any, ScrollTrigger: any) {
               <UIcon name="i-heroicons-printer-20-solid" class="w-7 h-7" />
             </div>
             <h3 class="feature-title">Cetak Struk</h3>
-            <p class="feature-desc">Hubungkan dengan printer thermal bluetooth dengan mudah untuk mencetak struk belanja pelanggan.</p>
+            <p class="feature-desc">Cetak struk lewat menu print bawaan HP, tablet, atau komputer dengan ukuran thermal 58mm dan 80mm.</p>
           </div>
 
           <!-- Feature 5 -->

@@ -120,14 +120,14 @@ const fetchPrinterSettings = async () => {
     if (error) throw error;
     if (data) {
       printerSettings.value = {
-        printerType: data.printer_type || "thermal",
+        printerType: "thermal",
         paperWidth: data.paper_width || 58,
         autoPrint: data.auto_print || false,
         includeLogo: data.include_logo !== false,
         includeStoreInfo: data.include_store_info !== false,
         footerText: data.footer_text || "Terima kasih atas kunjungan Anda!",
-        bluetoothDeviceName: data.bluetooth_device_name || "",
-        bluetoothDeviceAddress: data.bluetooth_device_address || "",
+        bluetoothDeviceName: "",
+        bluetoothDeviceAddress: "",
       };
       // Synchronize with global state
       if (globalPrinterSettings) {
@@ -214,47 +214,6 @@ const printerSettings = ref({
   bluetoothDeviceName: "",
   bluetoothDeviceAddress: "",
 });
-
-const { isScanning: scanningBluetooth, devices: bluetoothDevices, error: bluetoothError, scanDevices, connectToDevice, print: btPrint } = useBluetooth();
-
-const handleScanBluetooth = async () => {
-  const device = await scanDevices();
-  if (device) {
-    printerSettings.value.bluetoothDeviceName = device.name;
-    printerSettings.value.bluetoothDeviceAddress = device.id;
-    showAlert("success", `Printer ${device.name} berhasil ditambahkan`);
-  } else if (bluetoothError.value) {
-    showAlert("error", bluetoothError.value);
-  }
-};
-
-const handleTestPrint = async () => {
-  if (!printerSettings.value.bluetoothDeviceName) {
-    showAlert("error", "Hubungkan printer terlebih dahulu");
-    return;
-  }
-  
-  const testData = `
---------------------------------
-      TEST PRINT BERHASIL
-      KAIR SIMPLE APP
---------------------------------
-Waktu: ${new Date().toLocaleString()}
-Status: Printer Oke!
---------------------------------
-\n\n\n\n`;
-  
-  try {
-    const success = await btPrint(testData);
-    if (success) {
-      showAlert("success", "Print test berhasil dikirim");
-    } else {
-      showAlert("error", bluetoothError.value || "Gagal mencetak test");
-    }
-  } catch (e) {
-    showAlert("error", "Koneksi terputus. Harap hubungkan ulang.");
-  }
-};
 
 // Active section
 const activeSection = ref("store");
@@ -514,8 +473,8 @@ const autoSavePrinterSettings = async () => {
         include_logo: printerSettings.value.includeLogo,
         include_store_info: printerSettings.value.includeStoreInfo,
         footer_text: printerSettings.value.footerText,
-        bluetooth_device_name: printerSettings.value.bluetoothDeviceName,
-        bluetooth_device_address: printerSettings.value.bluetoothDeviceAddress,
+        bluetooth_device_name: "",
+        bluetooth_device_address: "",
         updated_at: new Date().toISOString(),
       },
       { onConflict: "store_id" },
@@ -534,8 +493,8 @@ const autoSavePrinterSettings = async () => {
       include_logo: printerSettings.value.includeLogo,
       include_store_info: printerSettings.value.includeStoreInfo,
       footer_text: printerSettings.value.footerText,
-      bluetooth_device_name: printerSettings.value.bluetoothDeviceName,
-      bluetooth_device_address: printerSettings.value.bluetoothDeviceAddress,
+      bluetooth_device_name: "",
+      bluetooth_device_address: "",
       updated_at: new Date().toISOString(),
       created_at: globalPrinterSettings.value?.created_at || new Date().toISOString()
     } as any;
@@ -685,7 +644,7 @@ const helpTabs = [
         type: "list",
         title: "Informasi Nota Belanja:",
         items: [
-          "<b>Cetak Struk</b>: Sambungkan printer thermal (Bluetooth/USB) untuk mencetak nota belanja pelanggan.",
+          "<b>Cetak Struk</b>: Atur ukuran kertas dan tampilan struk di aplikasi. Koneksi printer diatur dari HP/Windows lewat menu print bawaan.",
           "<b>Nota Digital</b>: Jika tidak punya printer, Anda bisa bagikan <b>Link Struk</b> ke WhatsApp pelanggan agar mereka bisa lihat nota di HP sendiri.",
         ],
       },
@@ -1723,121 +1682,12 @@ const backupPreviewCounts = computed(() => {
           <!-- Settings Column -->
           <div class="space-y-6">
             <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-              <h2 class="text-xl font-bold text-gray-900 mb-6">⚙️ Pengaturan Printer</h2>
+              <h2 class="text-xl font-bold text-gray-900 mb-2">Pengaturan Struk</h2>
+              <p class="text-sm text-gray-500 mb-6">
+                Koneksi printer diatur dari HP/Windows. Di sini hanya atur tampilan struk.
+              </p>
               
               <div class="space-y-6">
-                <!-- Printer Type -->
-                <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">Jenis Koneksi Printer</label>
-                  <div class="grid grid-cols-2 gap-3">
-                    <button 
-                      type="button"
-                      v-for="type in [{id: 'thermal', label: 'Web / Browser'}, {id: 'bluetooth', label: 'Bluetooth'}]" 
-                      :key="type.id"
-                      @click="printerSettings.printerType = type.id"
-                      class="py-3 rounded-xl border-2 font-bold transition-all text-sm"
-                      :class="printerSettings.printerType === type.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-100 text-gray-500'"
-                    >
-                      {{ type.label }}
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Bluetooth Management Premium UI -->
-                <div v-if="printerSettings.printerType === 'bluetooth'" class="space-y-4">
-                  <!-- Header Section -->
-                  <div class="flex items-center justify-between">
-                    <h3 class="text-sm font-black text-gray-700 uppercase tracking-widest">Koneksi Bluetooth</h3>
-                    <div v-if="scanningBluetooth" class="flex items-center gap-2 text-emerald-600 text-xs font-bold animate-pulse">
-                      <div class="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                      Mencari Perangkat...
-                    </div>
-                  </div>
-
-                  <!-- Scanning / Radar State -->
-                  <div v-if="!printerSettings.bluetoothDeviceName && !scanningBluetooth" 
-                    @click="handleScanBluetooth"
-                    class="group cursor-pointer relative overflow-hidden bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center transition-all hover:border-emerald-500 hover:bg-emerald-50"
-                  >
-                    <div class="relative z-10">
-                      <div class="w-16 h-16 bg-white rounded-full shadow-sm border border-gray-100 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                        <UIcon name="i-heroicons-bluetooth" class="w-8 h-8 text-gray-400 group-hover:text-emerald-500" />
-                      </div>
-                      <p class="font-bold text-gray-900 mb-1">Cari Printer Bluetooth</p>
-                      <p class="text-xs text-gray-500">Klik untuk memindai perangkat printer Anda</p>
-                    </div>
-                  </div>
-
-                  <!-- Scanning Animation -->
-                  <div v-if="scanningBluetooth" class="bg-emerald-900 rounded-2xl p-10 flex flex-col items-center justify-center relative overflow-hidden">
-                    <div class="absolute inset-0 opacity-20">
-                      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 border border-emerald-400 rounded-full animate-ping"></div>
-                      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border border-emerald-400 rounded-full animate-ping [animation-delay:0.5s]"></div>
-                      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 border border-emerald-400 rounded-full animate-ping [animation-delay:1s]"></div>
-                    </div>
-                    <UIcon name="i-heroicons-cpu-chip" class="w-12 h-12 text-emerald-400 animate-spin mb-4" />
-                    <p class="text-white font-black text-sm relative z-10 tracking-widest uppercase">Scanning...</p>
-                    <p class="text-emerald-300 text-[10px] mt-2 relative z-10">Harap pilih printer di jendela browser</p>
-                  </div>
-
-                  <!-- Connected Device Card -->
-                  <div v-if="printerSettings.bluetoothDeviceName && !scanningBluetooth" class="relative group">
-                    <div class="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-2xl p-5 text-white shadow-lg overflow-hidden">
-                      <!-- Decorative Background -->
-                      <div class="absolute top-0 right-0 p-2 opacity-10">
-                        <UIcon name="i-heroicons-wifi" class="w-32 h-32" />
-                      </div>
-                      
-                      <div class="relative z-10">
-                        <div class="flex items-start justify-between mb-6">
-                          <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center">
-                              <UIcon name="i-heroicons-printer" class="w-7 h-7" />
-                            </div>
-                            <div>
-                              <p class="text-[10px] text-emerald-200 font-bold uppercase tracking-widest">Printer Aktif</p>
-                              <p class="text-lg font-black leading-tight">{{ printerSettings.bluetoothDeviceName }}</p>
-                            </div>
-                          </div>
-                          <div class="px-2 py-1 bg-emerald-400/30 backdrop-blur-md border border-white/20 rounded-lg flex items-center gap-1.5">
-                            <div class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></div>
-                            <span class="text-[10px] font-black tracking-widest uppercase">CONNECTED</span>
-                          </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3">
-                          <button 
-                            type="button"
-                            @click="handleTestPrint"
-                            class="py-2.5 bg-white text-emerald-700 rounded-xl font-black text-xs hover:bg-emerald-50 active:scale-95 transition-all flex items-center justify-center gap-2"
-                          >
-                            <UIcon name="i-heroicons-document-text" class="w-4 h-4" />
-                            TEST PRINT
-                          </button>
-                          <button 
-                            type="button"
-                            @click="printerSettings.bluetoothDeviceName = ''; printerSettings.bluetoothDeviceAddress = ''"
-                            class="py-2.5 bg-emerald-400/20 text-white border border-white/20 rounded-xl font-bold text-xs hover:bg-emerald-400/30 transition-all active:scale-95 flex items-center justify-center gap-2"
-                          >
-                            <UIcon name="i-heroicons-trash" class="w-4 h-4" />
-                            HAPUS
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <!-- Search New Button -->
-                    <button 
-                      type="button"
-                      @click="handleScanBluetooth"
-                      class="w-full mt-3 py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-500 font-bold text-xs hover:border-emerald-500 hover:text-emerald-600 transition-all flex items-center justify-center gap-2"
-                    >
-                      <UIcon name="i-heroicons-plus-circle" class="w-4 h-4" />
-                      PASANG PRINTER LAIN
-                    </button>
-                  </div>
-                </div>
-
                 <!-- Paper Width -->
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">Lebar Kertas</label>
