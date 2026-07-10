@@ -115,7 +115,11 @@ const filteredProducts = computed(() => {
 
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.toLowerCase().trim();
-    result = result.filter((p) => p.name.toLowerCase().includes(q));
+    result = result.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.sku || "").toLowerCase().includes(q),
+    );
   }
 
   if (selectedCategory.value !== "all") {
@@ -181,6 +185,7 @@ const productImagePreview = ref<string | null>(null);
 const form = reactive({
   id: "",
   name: "",
+  sku: "",
   category_id: "",
   buy_price: 0,
   sell_price: 0,
@@ -220,6 +225,7 @@ const openAdd = () => {
   isEdit.value = false;
   form.id = "";
   form.name = "";
+  form.sku = "";
   form.category_id = "";
   form.buy_price = 0;
   form.sell_price = 0;
@@ -236,6 +242,7 @@ const openEdit = (product) => {
   isEdit.value = true;
   form.id = product.id;
   form.name = product.name;
+  form.sku = product.sku || "";
   form.category_id = product.category_id || "";
   form.buy_price = product.buy_price || 0;
   form.sell_price = product.price || 0;
@@ -310,6 +317,7 @@ const save = async () => {
     if (isEdit.value) {
       await updateProduct(form.id, {
         name: form.name,
+        sku: form.sku.trim() || null,
         category_id: form.category_id,
         buy_price: form.buy_price,
         price: form.sell_price,
@@ -322,6 +330,7 @@ const save = async () => {
     } else {
       await createProduct({
         name: form.name,
+        sku: form.sku.trim() || null,
         category_id: form.category_id,
         buy_price: form.buy_price,
         price: form.sell_price,
@@ -891,6 +900,18 @@ watch(
               v-model="form.name"
               class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Contoh: Nasi Goreng"
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-bold text-gray-700 mb-2"
+              >SKU / Barcode</label
+            >
+            <input
+              v-model="form.sku"
+              inputmode="text"
+              class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Scan barcode atau isi kode barang"
             />
           </div>
 
