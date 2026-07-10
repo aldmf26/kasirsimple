@@ -778,6 +778,13 @@ const backupPreviewCounts = computed(() => {
 
 const handleToggleOwnerPin = async () => {
   const nextEnabled = !isOwnerPinEnabled.value;
+  
+  // Guard: If turning off PIN while it is enabled and currently locked, show error
+  if (!nextEnabled && isOwnerPinEnabled.value && !isOwnerUnlocked.value) {
+    showAlert("error", "Masukkan PIN Owner terlebih dahulu untuk mematikan kunci PIN");
+    return;
+  }
+
   try {
     await setOwnerPinEnabled(nextEnabled);
     showAlert(

@@ -145,6 +145,11 @@ export const useOwnerPin = () => {
 
   const setOwnerPinEnabled = async (enabled: boolean) => {
     if (!store.value?.id) throw new Error('Toko belum siap')
+    
+    // Guard: Prevent disabling PIN if it is currently enabled and locked
+    if (!enabled && isOwnerPinEnabled.value && !isOwnerUnlocked.value) {
+      throw new Error('PIN Owner harus dibuka terlebih dahulu')
+    }
 
     loading.value = true
     try {
