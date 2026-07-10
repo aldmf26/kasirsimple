@@ -304,12 +304,16 @@ const showProductImages = ref(true);
 const discountTaxSettings = reactive({
   discount_global: {
     enabled: false,
+    type: "percent",
     percent: 0,
+    nominal: 0,
   },
   discount_nominal: {
     enabled: false,
     min_amount: 0,
+    type: "percent",
     discount_percent: 0,
+    discount_nominal: 0,
   },
   tax: {
     enabled: false,
@@ -1344,17 +1348,63 @@ const backupPreviewCounts = computed(() => {
                 </div>
                 <div
                   v-if="discountTaxSettings.discount_global.enabled"
-                  class="flex items-center gap-3"
+                  class="space-y-3"
                 >
-                  <input
-                    v-model.number="discountTaxSettings.discount_global.percent"
-                    type="number"
-                    min="0"
-                    max="100"
-                    class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    placeholder="0"
-                  />
-                  <span class="text-sm font-bold text-gray-600">%</span>
+                  <div class="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1">
+                    <button
+                      class="rounded-lg px-3 py-2 text-sm font-black transition"
+                      :class="
+                        discountTaxSettings.discount_global.type !== 'nominal'
+                          ? 'bg-white text-emerald-700 shadow-sm'
+                          : 'text-gray-500'
+                      "
+                      @click="discountTaxSettings.discount_global.type = 'percent'"
+                    >
+                      Persen
+                    </button>
+                    <button
+                      class="rounded-lg px-3 py-2 text-sm font-black transition"
+                      :class="
+                        discountTaxSettings.discount_global.type === 'nominal'
+                          ? 'bg-white text-emerald-700 shadow-sm'
+                          : 'text-gray-500'
+                      "
+                      @click="discountTaxSettings.discount_global.type = 'nominal'"
+                    >
+                      Nominal
+                    </button>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span
+                      v-if="discountTaxSettings.discount_global.type === 'nominal'"
+                      class="text-sm font-black text-gray-600"
+                    >
+                      Rp
+                    </span>
+                    <input
+                      v-if="discountTaxSettings.discount_global.type === 'nominal'"
+                      v-model.number="discountTaxSettings.discount_global.nominal"
+                      type="number"
+                      min="0"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      placeholder="0"
+                    />
+                    <input
+                      v-else
+                      v-model.number="discountTaxSettings.discount_global.percent"
+                      type="number"
+                      min="0"
+                      max="100"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      placeholder="0"
+                    />
+                    <span
+                      v-if="discountTaxSettings.discount_global.type !== 'nominal'"
+                      class="text-sm font-bold text-gray-600"
+                    >
+                      %
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -1412,8 +1462,47 @@ const backupPreviewCounts = computed(() => {
                     <label class="block text-xs font-bold text-gray-600 mb-2"
                       >Maka diskon sebesar</label
                     >
+                    <div class="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1 mb-3">
+                      <button
+                        class="rounded-lg px-3 py-2 text-sm font-black transition"
+                        :class="
+                          discountTaxSettings.discount_nominal.type !== 'nominal'
+                            ? 'bg-white text-emerald-700 shadow-sm'
+                            : 'text-gray-500'
+                        "
+                        @click="discountTaxSettings.discount_nominal.type = 'percent'"
+                      >
+                        Persen
+                      </button>
+                      <button
+                        class="rounded-lg px-3 py-2 text-sm font-black transition"
+                        :class="
+                          discountTaxSettings.discount_nominal.type === 'nominal'
+                            ? 'bg-white text-emerald-700 shadow-sm'
+                            : 'text-gray-500'
+                        "
+                        @click="discountTaxSettings.discount_nominal.type = 'nominal'"
+                      >
+                        Nominal
+                      </button>
+                    </div>
                     <div class="flex items-center gap-3">
+                      <span
+                        v-if="discountTaxSettings.discount_nominal.type === 'nominal'"
+                        class="text-sm font-black text-gray-600"
+                      >
+                        Rp
+                      </span>
                       <input
+                        v-if="discountTaxSettings.discount_nominal.type === 'nominal'"
+                        v-model.number="discountTaxSettings.discount_nominal.discount_nominal"
+                        type="number"
+                        min="0"
+                        class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        placeholder="0"
+                      />
+                      <input
+                        v-else
                         v-model.number="
                           discountTaxSettings.discount_nominal.discount_percent
                         "
@@ -1423,7 +1512,12 @@ const backupPreviewCounts = computed(() => {
                         class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         placeholder="0"
                       />
-                      <span class="text-sm font-bold text-gray-600">%</span>
+                      <span
+                        v-if="discountTaxSettings.discount_nominal.type !== 'nominal'"
+                        class="text-sm font-bold text-gray-600"
+                      >
+                        %
+                      </span>
                     </div>
                   </div>
                 </div>

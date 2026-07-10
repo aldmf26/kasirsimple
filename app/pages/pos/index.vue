@@ -79,13 +79,21 @@ const showProductImages = computed(() => {
 
 // Get discount & tax settings from store
 const discountTaxSettings = computed(() => {
+  const defaults = {
+    discount_global: { enabled: false, type: "percent", percent: 0, nominal: 0 },
+    discount_nominal: {
+      enabled: false,
+      min_amount: 0,
+      type: "percent",
+      discount_percent: 0,
+      discount_nominal: 0,
+    },
+    tax: { enabled: false, percent: 0 },
+    ppn: { enabled: false, percent: 0 },
+  };
+
   if (!store.value) {
-    return {
-      discount_global: { enabled: false, percent: 0 },
-      discount_nominal: { enabled: false, min_amount: 0, discount_percent: 0 },
-      tax: { enabled: false, percent: 0 },
-      ppn: { enabled: false, percent: 0 },
-    };
+    return defaults;
   }
   const storeData = store.value as any;
   if (storeData.discount_tax_settings) {
@@ -94,26 +102,23 @@ const discountTaxSettings = computed(() => {
         typeof storeData.discount_tax_settings === "string"
           ? JSON.parse(storeData.discount_tax_settings)
           : storeData.discount_tax_settings;
-      return parsed;
-    } catch (e) {
       return {
-        discount_global: { enabled: false, percent: 0 },
-        discount_nominal: {
-          enabled: false,
-          min_amount: 0,
-          discount_percent: 0,
+        ...defaults,
+        ...parsed,
+        discount_global: {
+          ...defaults.discount_global,
+          ...(parsed.discount_global || {}),
         },
-        tax: { enabled: false, percent: 0 },
-        ppn: { enabled: false, percent: 0 },
+        discount_nominal: {
+          ...defaults.discount_nominal,
+          ...(parsed.discount_nominal || {}),
+        },
       };
+    } catch (e) {
+      return defaults;
     }
   }
-  return {
-    discount_global: { enabled: false, percent: 0 },
-    discount_nominal: { enabled: false, min_amount: 0, discount_percent: 0 },
-    tax: { enabled: false, percent: 0 },
-    ppn: { enabled: false, percent: 0 },
-  };
+  return defaults;
 });
 
 const filteredPaymentMethods = computed(() => {
@@ -234,25 +239,56 @@ const discountAmount = computed(() => {
 
 const settingsDiscount = computed(() => {
   let discount = 0;
+  const subtotal = cartSubtotal.value;
+  const globalDiscount = discountTaxSettings.value.discount_global;
+  const minimumDiscount = discountTaxSettings.value.discount_nominal;
 
-  if (discountTaxSettings.value.discount_global.enabled) {
-    discount += Math.round(
-      cartSubtotal.value *
-        (discountTaxSettings.value.discount_global.percent / 100),
-    );
+  if (globalDiscount.enabled) {
+    if (globalDiscount.type === "nominal") {
+      discount += Number(globalDiscount.nominal || 0);
+    } else {
+      discount += Math.round(subtotal * (Number(globalDiscount.percent || 0) / 100));
+    }
   }
 
   if (
-    discountTaxSettings.value.discount_nominal.enabled &&
-    cartSubtotal.value >= discountTaxSettings.value.discount_nominal.min_amount
+    minimumDiscount.enabled &&
+    subtotal >= Number(minimumDiscount.min_amount || 0)
   ) {
-    discount += Math.round(
-      cartSubtotal.value *
-        (discountTaxSettings.value.discount_nominal.discount_percent / 100),
+    if (minimumDiscount.type === "nominal") {
+      discount += Number(minimumDiscount.discount_nominal || 0);
+    } else {
+      discount += Math.round(
+        subtotal * (Number(minimumDiscount.discount_percent || 0) / 100),
+      );
+    }
+  }
+
+  return Math.min(discount, subtotal);
+});
+
+const settingsDiscountLabel = computed(() => {
+  const parts: string[] = [];
+  const globalDiscount = discountTaxSettings.value.discount_global;
+  const minimumDiscount = discountTaxSettings.value.discount_nominal;
+
+  if (globalDiscount.enabled) {
+    parts.push(
+      globalDiscount.type === "nominal"
+        ? formatCurrency(Number(globalDiscount.nominal || 0))
+        : `${globalDiscount.percent || 0}%`,
     );
   }
 
-  return discount;
+  if (minimumDiscount.enabled) {
+    parts.push(
+      minimumDiscount.type === "nominal"
+        ? formatCurrency(Number(minimumDiscount.discount_nominal || 0))
+        : `${minimumDiscount.discount_percent || 0}%`,
+    );
+  }
+
+  return parts.length ? `Diskon Sistem (${parts.join(" + ")})` : "Diskon Sistem";
 });
 
 const subtotalAfterDiscount = computed(() => {
@@ -1264,12 +1300,7 @@ onUnmounted(() => {
                 v-if="settingsDiscount > 0"
                 class="flex justify-between text-orange-600"
               >
-                <span v-if="discountTaxSettings.discount_global.enabled">
-                  Diskon Sistem ({{
-                    discountTaxSettings.discount_global.percent
-                  }}%)
-                </span>
-                <span v-else> Diskon Sistem </span>
+                <span>{{ settingsDiscountLabel }}</span>
                 <span class="font-bold"
                   >-{{ formatCurrency(settingsDiscount) }}</span
                 >
