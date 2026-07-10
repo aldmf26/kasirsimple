@@ -25,6 +25,9 @@ export interface Database {
                     bank_accounts: string | null
                     show_product_images: boolean
                     discount_tax_settings: string | null
+                    owner_pin_enabled: boolean
+                    owner_pin_hash: string | null
+                    owner_pin_salt: string | null
                     created_at: string
                     updated_at: string
                 }
@@ -43,6 +46,9 @@ export interface Database {
                     bank_accounts?: string | null
                     show_product_images?: boolean
                     discount_tax_settings?: string | null
+                    owner_pin_enabled?: boolean
+                    owner_pin_hash?: string | null
+                    owner_pin_salt?: string | null
                     created_at?: string
                     updated_at?: string
                 }
@@ -61,6 +67,9 @@ export interface Database {
                     bank_accounts?: string | null
                     show_product_images?: boolean
                     discount_tax_settings?: string | null
+                    owner_pin_enabled?: boolean
+                    owner_pin_hash?: string | null
+                    owner_pin_salt?: string | null
                     created_at?: string
                     updated_at?: string
                 }

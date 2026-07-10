@@ -7,6 +7,22 @@
 const ACTIVITY_STORAGE_KEY = 'activity_logs'
 const THREE_MONTHS_MS = 3 * 30 * 24 * 60 * 60 * 1000
 
+const createLogId = () => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+        return crypto.randomUUID()
+    }
+
+    return Math.random().toString(36).slice(2, 11)
+}
+
+const pruneOldLocalLogs = (logs: ActivityLog[]) => {
+    const now = Date.now()
+    return logs.filter(log => {
+        const logTime = new Date(log.timestamp).getTime()
+        return !Number.isNaN(logTime) && (now - logTime) < THREE_MONTHS_MS
+    })
+}
+
 export interface ActivityLog {
     id: string
     store_id: string
@@ -33,9 +49,11 @@ export function logToActivity(
     relatedId?: string,
     userId?: string
 ) {
+    if (!storeId) return
+
     try {
         const newLog: ActivityLog = {
-            id: Math.random().toString(36).substr(2, 9),
+            id: createLogId(),
             store_id: storeId,
             user_id: userId,
             action,
@@ -49,14 +67,29 @@ export function logToActivity(
         const logs: ActivityLog[] = storedData ? JSON.parse(storedData) : []
         logs.unshift(newLog)
 
-        // Keep only last 3 months
-        const now = new Date().getTime()
-        const validLogs = logs.filter(log => {
-            const logTime = new Date(log.timestamp).getTime()
-            return (now - logTime) < THREE_MONTHS_MS
-        })
+        localStorage.setItem(ACTIVITY_STORAGE_KEY, JSON.stringify(pruneOldLocalLogs(logs)))
 
-        localStorage.setItem(ACTIVITY_STORAGE_KEY, JSON.stringify(validLogs))
+        // Fire-and-forget DB audit log. Local log stays as fallback when network/RLS fails.
+        try {
+            const supabase = useSupabaseClient()
+            supabase
+                .from('activity_logs')
+                .insert({
+                    id: newLog.id,
+                    store_id: storeId,
+                    user_id: userId,
+                    action,
+                    details,
+                    related_id: relatedId,
+                    timestamp: newLog.timestamp,
+                    user_agent: newLog.user_agent
+                } as any)
+                .then(({ error }) => {
+                    if (error) console.warn('Error saving remote activity:', error.message)
+                })
+        } catch (e) {
+            console.warn('Remote activity logger unavailable:', e)
+        }
     } catch (e) {
         console.warn('Error logging activity:', e)
     }
@@ -86,8 +119,15 @@ export const ACTIVITY_TYPES = {
     CATEGORY_UPDATED: 'CATEGORY_UPDATED',
     CATEGORY_DELETED: 'CATEGORY_DELETED',
 
+    // Expenses
+    EXPENSE_CREATED: 'EXPENSE_CREATED',
+    EXPENSE_DELETED: 'EXPENSE_DELETED',
+
     // System
     STORE_SETTINGS_UPDATED: 'STORE_SETTINGS_UPDATED',
+    BACKUP_EXPORTED: 'BACKUP_EXPORTED',
+    BACKUP_IMPORTED: 'BACKUP_IMPORTED',
+    ACCOUNT_DATA_DELETED: 'ACCOUNT_DATA_DELETED',
     USER_LOGIN: 'USER_LOGIN',
     USER_LOGOUT: 'USER_LOGOUT',
     CASH_REGISTER_OPENED: 'CASH_REGISTER_OPENED',

@@ -131,12 +131,14 @@ export const useDataBackup = () => {
         data[table] = await fetchTable(table);
       }
 
+      const { owner_pin_hash, owner_pin_salt, ...safeStore } = store.value as any;
+
       const backup: StoreBackupFile = {
         app: "kasir-simple",
         version: BACKUP_VERSION,
         exported_at: new Date().toISOString(),
         store_id: store.value.id,
-        store: store.value as any,
+        store: safeStore,
         data,
         local_activity_logs: getLocalActivityLogs(),
       };
@@ -176,6 +178,43 @@ export const useDataBackup = () => {
     return rows.map((row) => ({ ...row, store_id: store.value!.id }));
   };
 
+  const deleteCurrentStoreData = async () => {
+    if (!store.value?.id) throw new Error("Toko belum siap");
+
+    const transactionIds = await getTransactionIds();
+    const productIds = await getProductIds();
+
+    if (productIds.length) {
+      const { error } = await (supabase.from("stock_movements") as any)
+        .delete()
+        .in("product_id", productIds);
+      if (error) throw error;
+    }
+
+    if (transactionIds.length) {
+      const { error } = await (supabase.from("transaction_items") as any)
+        .delete()
+        .in("transaction_id", transactionIds);
+      if (error) throw error;
+    }
+
+    for (const table of ["expenses", "shifts", "printer_settings", "transactions", "products", "categories"] as const) {
+      const { error } = await (supabase.from(table) as any)
+        .delete()
+        .eq("store_id", store.value.id);
+      if (error) throw error;
+    }
+
+    if (process.client) {
+      const raw = localStorage.getItem(ACTIVITY_STORAGE_KEY);
+      const existing = raw ? JSON.parse(raw) : [];
+      const otherStores = Array.isArray(existing)
+        ? existing.filter((log) => log.store_id !== store.value?.id)
+        : [];
+      localStorage.setItem(ACTIVITY_STORAGE_KEY, JSON.stringify(otherStores));
+    }
+  };
+
   const importBackup = async () => {
     if (!store.value?.id) throw new Error("Toko belum siap");
     if (!importPreview.value) throw new Error("Pilih file backup dulu");
@@ -196,6 +235,7 @@ export const useDataBackup = () => {
         discount_tax_settings: backup.store.discount_tax_settings,
       };
       await updateStore(store.value.id, storeUpdate as any);
+      await deleteCurrentStoreData();
 
       const categories = rowsForCurrentStore(backup.data.categories);
       if (categories.length) {
@@ -279,6 +319,17 @@ export const useDataBackup = () => {
     }
   };
 
+  const resetStoreData = async () => {
+    if (!store.value?.id) throw new Error("Toko belum siap");
+    loading.value = true;
+    try {
+      await deleteCurrentStoreData();
+      await fetchStore();
+    } finally {
+      loading.value = false;
+    }
+  };
+
   return {
     loading,
     importPreview,
@@ -289,5 +340,6 @@ export const useDataBackup = () => {
     downloadBackup,
     readBackupFile,
     importBackup,
+    resetStoreData,
   };
 };

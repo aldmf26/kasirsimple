@@ -7,6 +7,7 @@ const toast = useToast();
 
 // Load store when layout mounted
 const { store, fetchStore } = useStore();
+const { hasOwnerPin, isOwnerPinEnabled, isOwnerUnlocked, lockOwnerAccess } = useOwnerPin();
 const isSuperAdmin = computed(() => (store.value as any)?.is_admin === true);
 const storeName = computed(() => store.value?.name || "KasirOK");
 const accountName = computed(
@@ -56,6 +57,7 @@ const isActiveRoute = (path: string) =>
 const handleLogout = async () => {
   if (confirm("Ibu yakin ingin keluar dari aplikasi?")) {
     try {
+      lockOwnerAccess();
       console.log("🔓 Logging out...");
       const { error } = await supabase.auth.signOut();
 
@@ -104,6 +106,16 @@ const handleLogout = async () => {
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
+        <button
+          v-if="isOwnerPinEnabled && hasOwnerPin && isOwnerUnlocked"
+          @click="lockOwnerAccess"
+          class="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 transition-all hover:bg-amber-100 active:scale-95"
+          title="Kunci menu admin"
+        >
+          <UIcon name="i-heroicons-lock-closed" class="w-5 h-5" />
+          <span class="hidden sm:inline">Kunci Admin</span>
+        </button>
+
         <NuxtLink
           v-if="isSuperAdmin"
           to="/admin"

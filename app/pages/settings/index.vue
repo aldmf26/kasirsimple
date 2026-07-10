@@ -16,7 +16,16 @@ const {
   downloadBackup,
   readBackupFile,
   importBackup,
+  resetStoreData,
 } = useDataBackup();
+const {
+  isOwnerPinEnabled,
+  isOwnerUnlocked,
+  isOwnerAccessAllowed,
+  loading: ownerPinLoading,
+  setOwnerPinEnabled,
+  lockOwnerAccess,
+} = useOwnerPin();
 
 // Store settings form
 const storeSettings = reactive({
@@ -584,6 +593,7 @@ const helpTabs = [
         items: [
           "<b>Pengaturan Profil</b>: Lengkapi nama, jenis usaha, alamat, no telepon, tampilan produk.",
           "<b>Keamanan Data</b>: Data Anda tersimpan secara otomatis dan rapi. Setiap pemilik toko hanya bisa melihat data miliknya sendiri.",
+          "<b>PIN Owner Opsional</b>: Bisa diaktifkan atau dimatikan dari Pengaturan > Akun. Jika aktif, Barang, Backup/Import, dan Zona Bahaya dikunci PIN.",
           "<b>Backup Mandiri</b>: Buka Pengaturan > Backup Data, lalu klik Export Backup. Simpan file di HP/laptop/Google Drive.",
           "<b>Multi-Perangkat</b>: Anda bisa membuka akun kasir ini dari beberapa HP atau laptop sekaligus secara bersamaan.",
         ],
@@ -659,7 +669,7 @@ const helpTabs = [
         title: "Jaga Data Toko:",
         items: [
           "<b>Export Backup</b>: Simpan data toko ke file JSON. Isi file: produk, kategori, transaksi, stok, shift, pengeluaran, pengaturan struk, dan riwayat aktivitas lokal.",
-          "<b>Import Backup</b>: Pakai file JSON untuk memulihkan data di toko yang sedang login. Sistem akan menimpa data dengan ID yang sama.",
+          "<b>Import Backup</b>: Mode Restore Replace. Data toko saat ini dihapus dulu, lalu diganti isi file backup.",
           "<b>Pengingat Backup</b>: Jika belum backup atau sudah lebih dari 7 hari, sistem menampilkan peringatan di halaman pengaturan.",
           "<b>Saran Aman</b>: Backup minimal seminggu sekali dan simpan file di tempat berbeda seperti Google Drive.",
         ],
@@ -741,7 +751,7 @@ const handleExportBackup = async () => {
 };
 
 const handleImportBackup = async () => {
-  if (!confirm("Import backup akan menimpa data dengan ID yang sama. Lanjutkan?")) {
+  if (!confirm("Import backup akan mengganti data toko saat ini dengan isi file backup. Data setelah backup akan hilang. Lanjutkan?")) {
     return;
   }
 
@@ -765,6 +775,39 @@ const backupPreviewCounts = computed(() => {
     { label: "Shift", count: data.shifts?.length || 0 },
   ];
 });
+
+const handleToggleOwnerPin = async () => {
+  const nextEnabled = !isOwnerPinEnabled.value;
+  try {
+    await setOwnerPinEnabled(nextEnabled);
+    showAlert(
+      "success",
+      nextEnabled ? "PIN Owner diaktifkan" : "PIN Owner dimatikan",
+    );
+  } catch (e: any) {
+    showAlert("error", e.message || "Gagal mengubah status PIN Owner");
+  }
+};
+
+const dangerConfirm = ref("");
+const handleResetStoreData = async () => {
+  if (dangerConfirm.value !== "HAPUS DATA") {
+    showAlert("error", "Ketik HAPUS DATA untuk konfirmasi");
+    return;
+  }
+
+  if (!confirm("Reset data toko sekarang? Akun login tetap ada, tetapi produk, kategori, transaksi, stok, pengeluaran, shift, dan pengaturan struk akan dihapus.")) {
+    return;
+  }
+
+  try {
+    await resetStoreData();
+    dangerConfirm.value = "";
+    showAlert("success", "Data toko berhasil direset");
+  } catch (e: any) {
+    showAlert("error", e.message || "Gagal reset data toko");
+  }
+};
 </script>
 
 <template>
@@ -1581,6 +1624,13 @@ const backupPreviewCounts = computed(() => {
 
         <!-- Backup Data -->
         <div v-if="activeSection === 'backup'" class="max-w-3xl space-y-6">
+          <OwnerPinGate
+            v-if="!isOwnerAccessAllowed"
+            title="Backup Data Terkunci"
+            description="Masukkan PIN Owner untuk export, import, dan restore data toko."
+          />
+
+          <template v-else>
           <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -1675,6 +1725,7 @@ const backupPreviewCounts = computed(() => {
               </div>
             </div>
           </div>
+          </template>
         </div>
 
         <!-- Printer & Receipt Settings -->
@@ -1870,6 +1921,49 @@ const backupPreviewCounts = computed(() => {
             <!-- Change Password Form -->
             <div class="space-y-4">
               <h3 class="font-bold text-gray-900">Keamanan & Password</h3>
+              <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p class="font-black text-emerald-900">PIN Owner</p>
+                    <p class="mt-1 text-sm text-emerald-800">
+                      {{ isOwnerPinEnabled ? "Aktif untuk mengunci menu sensitif." : "Mati. Semua menu bisa dibuka tanpa PIN." }}
+                    </p>
+                  </div>
+                  <button
+                    class="relative inline-flex h-7 w-12 items-center rounded-full transition-colors"
+                    :class="isOwnerPinEnabled ? 'bg-emerald-600' : 'bg-gray-300'"
+                    :disabled="ownerPinLoading"
+                    @click="handleToggleOwnerPin"
+                  >
+                    <span
+                      class="inline-block h-5 w-5 transform rounded-full bg-white transition"
+                      :class="isOwnerPinEnabled ? 'translate-x-6' : 'translate-x-1'"
+                    />
+                  </button>
+                </div>
+
+                <div v-if="!isOwnerPinEnabled" class="rounded-xl bg-white/70 p-3 text-sm font-bold text-emerald-900">
+                  PIN sedang mati. Barang, Backup, Import, dan Zona Bahaya tidak akan minta PIN.
+                </div>
+                <div v-else-if="isOwnerUnlocked" class="flex flex-col gap-3 rounded-xl bg-white/70 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p class="text-sm font-bold text-emerald-900">
+                    Admin sedang terbuka di sesi ini.
+                  </p>
+                  <button
+                    class="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white hover:bg-emerald-800"
+                    @click="lockOwnerAccess"
+                  >
+                    <UIcon name="i-heroicons-lock-closed" class="h-5 w-5" />
+                    Kunci Admin
+                  </button>
+                </div>
+                <OwnerPinGate
+                  v-else
+                  compact
+                  title="PIN Owner"
+                  description="Buat atau masukkan PIN Owner untuk membuka menu sensitif."
+                />
+              </div>
               <div class="grid gap-4">
                 <div>
                   <label class="block text-xs font-bold text-gray-600 mb-1">Password Baru</label>
@@ -1919,14 +2013,31 @@ const backupPreviewCounts = computed(() => {
           <div class="bg-red-50 rounded-2xl border border-red-100 p-6">
             <h3 class="text-lg font-bold text-red-600 mb-1">Zona Bahaya</h3>
             <p class="text-xs text-red-500 mb-4 leading-relaxed">
-              Menghapus akun akan menghilangkan seluruh data toko, produk, dan transaksi Anda secara permanen. Tindakan ini tidak dapat dibatalkan.
+              Reset data toko akan menghapus produk, kategori, transaksi, stok, pengeluaran, shift, dan pengaturan struk. Akun login tetap ada.
             </p>
+            <OwnerPinGate
+              v-if="!isOwnerAccessAllowed"
+              compact
+              title="Zona Bahaya Terkunci"
+              description="Masukkan PIN Owner sebelum reset data toko."
+            />
+            <div v-else class="space-y-3">
+              <label class="block text-xs font-black uppercase text-red-500">
+                Ketik HAPUS DATA
+              </label>
+              <input
+                v-model="dangerConfirm"
+                class="w-full max-w-sm rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                placeholder="HAPUS DATA"
+              />
             <button
+                @click="handleResetStoreData"
               class="w-full sm:w-auto py-2.5 px-6 border-2 border-red-200 text-red-600 hover:bg-red-600 hover:text-white font-bold rounded-xl transition-all text-sm flex items-center justify-center gap-2"
             >
               <UIcon name="i-heroicons-trash" class="w-4 h-4" />
-              Hapus Seluruh Data Akun
+                Reset Data Toko
             </button>
+            </div>
           </div>
         </div>
       </div>

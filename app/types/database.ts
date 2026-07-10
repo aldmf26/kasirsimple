@@ -24,6 +24,9 @@ export interface Database {
                     subscription_status: string
                     subscription_until: string | null
                     subscription_plan: string
+                    owner_pin_enabled: boolean
+                    owner_pin_hash: string | null
+                    owner_pin_salt: string | null
                     created_at: string
                     updated_at: string
                 }
@@ -41,6 +44,9 @@ export interface Database {
                     subscription_status?: string
                     subscription_until?: string | null
                     subscription_plan?: string
+                    owner_pin_enabled?: boolean
+                    owner_pin_hash?: string | null
+                    owner_pin_salt?: string | null
                     created_at?: string
                     updated_at?: string
                 }
@@ -58,6 +64,9 @@ export interface Database {
                     subscription_status?: string
                     subscription_until?: string | null
                     subscription_plan?: string
+                    owner_pin_enabled?: boolean
+                    owner_pin_hash?: string | null
+                    owner_pin_salt?: string | null
                     created_at?: string
                     updated_at?: string
                 }

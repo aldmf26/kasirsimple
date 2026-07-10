@@ -25,6 +25,7 @@ const {
   deleteCategory,
 } = useCategories();
 const { store } = useStore();
+const { isOwnerAccessAllowed } = useOwnerPin();
 
 // Show product images setting
 const showProductImages = computed(() => {
@@ -843,6 +844,16 @@ watch(
       :message="alert.message"
       @close="alert.show = false"
     />
+
+    <div
+      v-if="!isOwnerAccessAllowed"
+      class="fixed inset-0 z-[55] flex items-center justify-center bg-slate-50/95 backdrop-blur-sm"
+    >
+      <OwnerPinGate
+        title="Barang Terkunci"
+        description="Masukkan PIN Owner untuk tambah, edit, hapus produk, kategori, dan stok."
+      />
+    </div>
 
     <!-- Toolbar -->
     <div

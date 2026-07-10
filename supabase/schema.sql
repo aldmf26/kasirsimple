@@ -31,7 +31,10 @@ CREATE TABLE stores (
     enabled_payment_methods TEXT DEFAULT '["cash"]',   -- JSON array: ["cash", "qris", "card"]
     bank_accounts TEXT DEFAULT '[]',                   -- JSON array: [{"id","accountName","bank","accountNumber"}]
     show_product_images BOOLEAN DEFAULT true,
-    discount_tax_settings JSONB                        -- JSON: {discount_global, discount_nominal, tax, ppn}
+    discount_tax_settings JSONB,                       -- JSON: {discount_global, discount_nominal, tax, ppn}
+    owner_pin_enabled BOOLEAN DEFAULT false,           -- Aktifkan/matikan PIN Owner
+    owner_pin_hash TEXT,                               -- Hash PIN Owner untuk menu sensitif
+    owner_pin_salt TEXT                                -- Salt PIN Owner
 );
 
 -- ============================================
