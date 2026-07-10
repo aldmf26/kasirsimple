@@ -395,13 +395,13 @@ const closeMenu = () => {
   openMenuId.value = null;
 };
 
-// Close menu on any outside click
-if (typeof window !== 'undefined') {
-  document.addEventListener('click', closeMenu);
-  onUnmounted(() => {
-    document.removeEventListener('click', closeMenu);
-  });
-}
+// Close mobile overflow menu on any outside click.
+onMounted(() => {
+  document.addEventListener("click", closeMenu);
+});
+onUnmounted(() => {
+  document.removeEventListener("click", closeMenu);
+});
 
 const filteredProducts = computed(() => {
   let result = products.value || [];
@@ -1072,10 +1072,11 @@ watch(
         <div
           v-for="(product, index) in filteredProducts"
           :key="product.id"
-          class="bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-2.5 relative overflow-hidden"
+          class="bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-2.5 relative isolate"
+          :class="openMenuId === product.id ? 'z-30 shadow-md border-gray-200' : 'z-0'"
         >
           <!-- Background Watermark Number (No) -->
-          <div class="absolute bottom-1 left-1 text-4xl font-black text-slate-100 pointer-events-none select-none z-0">
+          <div class="absolute bottom-1 left-2 text-4xl font-black text-slate-100/70 pointer-events-none select-none z-0">
             {{ index + 1 }}
           </div>
 
@@ -1121,62 +1122,68 @@ watch(
             </div>
 
             <!-- Row 3: Harga Jual & Beli (Modal) + Laba (kecil) + Action Buttons -->
-            <div class="flex items-center justify-between mt-1.5 pl-5">
-              <div class="flex flex-col gap-0.5">
+            <div class="flex items-end justify-between gap-3 mt-2 pl-5">
+              <div class="min-w-0 flex-1 flex flex-col gap-0.5">
                 <div class="flex items-baseline gap-1">
                   <span class="text-[10px] text-gray-400 font-medium">Jual:</span>
                   <span class="text-sm font-bold text-gray-900">{{ formatCurrency(product.price) }}</span>
                 </div>
-                <div class="flex items-center gap-1.5">
-                  <span class="text-[9px] text-gray-400">Beli: {{ formatCurrency(product.buy_price || 0) }}</span>
-                  <span class="text-[9px] text-emerald-600 font-medium bg-emerald-50 px-1 rounded">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <span class="text-[9px] text-gray-400 truncate">Beli: {{ formatCurrency(product.buy_price || 0) }}</span>
+                  <span class="text-[9px] text-emerald-600 font-medium bg-emerald-50 px-1 rounded whitespace-nowrap">
                     Laba: +{{ formatCurrency((product.price || 0) - (product.buy_price || 0)) }}
                   </span>
                 </div>
               </div>
 
               <!-- Action: Edit + Stok + ⋮ overflow -->
-              <div class="flex items-center gap-1">
+              <div class="flex flex-shrink-0 items-center gap-1">
                 <button
                   @click="openEdit(product)"
-                  class="px-2.5 py-1 text-[11px] font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                  class="h-8 w-8 inline-flex items-center justify-center text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  title="Edit Produk"
                 >
-                  Edit
+                  <UIcon name="i-heroicons-pencil-square" class="w-4 h-4" />
                 </button>
                 <button
                   @click="openStockModal(product)"
-                  class="px-2.5 py-1 text-[11px] font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                  class="h-8 w-8 inline-flex items-center justify-center text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  title="Kelola Stok"
                 >
-                  Stok
+                  <UIcon name="i-heroicons-archive-box-arrow-down" class="w-4 h-4" />
                 </button>
                 <!-- Overflow menu ⋮ -->
                 <div class="relative">
                   <button
                     @click="toggleMenu(product.id, $event)"
-                    class="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
+                    class="h-8 w-8 inline-flex items-center justify-center rounded-lg border transition-colors"
+                    :class="openMenuId === product.id ? 'border-gray-300 bg-gray-900 text-white shadow-sm' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-100'"
+                    title="Menu lainnya"
                   >
                     <UIcon name="i-heroicons-ellipsis-vertical" class="w-4 h-4" />
                   </button>
                   <!-- Dropdown -->
                   <div
                     v-if="openMenuId === product.id"
-                    class="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-30 min-w-[130px]"
+                    class="absolute right-0 top-full mt-2 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl ring-1 ring-black/5 z-50"
                     @click.stop
                   >
+                    <div class="px-3 py-2 border-b border-gray-100">
+                      <p class="text-[10px] font-bold uppercase tracking-wide text-gray-400">Aksi produk</p>
+                    </div>
                     <button
                       @click="openLabelModal(product); closeMenu();"
                       :disabled="!hasPrintableSku(product)"
-                      class="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      class="w-full px-3 py-2.5 text-left text-xs font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
-                      <UIcon name="i-heroicons-printer" class="w-3.5 h-3.5" />
+                      <UIcon name="i-heroicons-printer" class="w-4 h-4 text-gray-400" />
                       Cetak Label
                     </button>
-                    <div class="border-t border-gray-100 my-1"></div>
                     <button
                       @click="openDeleteConfirm(product); closeMenu();"
-                      class="w-full px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                      class="w-full px-3 py-2.5 text-left text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
                     >
-                      <UIcon name="i-heroicons-trash" class="w-3.5 h-3.5" />
+                      <UIcon name="i-heroicons-trash" class="w-4 h-4 text-red-400" />
                       Hapus Produk
                     </button>
                   </div>

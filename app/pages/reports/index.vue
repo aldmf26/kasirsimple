@@ -1,30 +1,5 @@
 <script setup lang="ts">
 import { formatCurrency, formatDateTime } from "~/utils/helpers";
-import { Line, Bar, Pie, Doughnut } from "vue-chartjs";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement,
-} from "chart.js";
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement,
-);
 
 definePageMeta({
   layout: "default",
@@ -38,7 +13,6 @@ const {
   getSalesByDate,
   getSalesByPaymentMethod,
   getTopSellingProducts,
-  getTransactionCountByMethod,
   getAllItemsSold,
 } = useCharts();
 // Initialize expenses composable
@@ -143,30 +117,6 @@ const averageTransaction = computed(() => {
   return totalSales.value / totalTransactions.value;
 });
 
-// Chart Data
-const salesByDateData = computed(() => {
-  const { dates, sales } = getSalesByDate(transactions.value);
-  return {
-    labels: dates,
-    datasets: [
-      {
-        label: "Penjualan Harian",
-        data: sales,
-        borderColor: "#3b82f6",
-        backgroundColor: "rgba(59, 130, 246, 0.1)",
-        borderWidth: 2,
-        fill: true,
-        tension: 0.4,
-        pointBackgroundColor: "#3b82f6",
-        pointBorderColor: "#fff",
-        pointBorderWidth: 2,
-        pointRadius: 4,
-        pointHoverRadius: 6,
-      },
-    ],
-  };
-});
-
 const paymentMethodData = computed(() => {
   const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
   const { methods, amounts } = getSalesByPaymentMethod(activeTransactions);
@@ -209,59 +159,91 @@ const topProductsData = computed(() => {
   };
 });
 
-const paymentMethodCountData = computed(() => {
-  const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
-  const { methods, counts } = getTransactionCountByMethod(activeTransactions);
-  return {
-    labels: methods,
-    datasets: [
-      {
-        data: counts,
-        backgroundColor: ["#06b6d4", "#f43f5e"],
-        borderColor: ["#0891b2", "#be185d"],
-        borderWidth: 2,
-      },
-    ],
-  };
-});
-
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: true,
-      position: "bottom" as const,
-    },
-  },
-};
-
-const lineChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: true,
-      position: "bottom" as const,
-    },
-  },
-  scales: {
-    y: {
-      beginAtZero: true,
-      ticks: {
-        callback: function (value: any) {
-          return "Rp " + value.toLocaleString("id-ID");
-        },
-      },
-    },
-  },
-};
-
-// Top Selling Items Computed
 // Top Selling Items Computed
 const allItemsSold = computed(() => {
   const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
   return getAllItemsSold(activeTransactions);
+});
+
+const activeTransactions = computed(() =>
+  transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]")),
+);
+
+const salesTrendRows = computed(() => {
+  const { dates, sales } = getSalesByDate(activeTransactions.value);
+  return dates.map((date: string, index: number) => ({
+    date,
+    sales: Number(sales[index]) || 0,
+  }));
+});
+
+const maxTrendSales = computed(() =>
+  Math.max(...salesTrendRows.value.map((item) => item.sales), 1),
+);
+
+const salesTrendPoints = computed(() => {
+  const rows = salesTrendRows.value;
+  if (!rows.length) return "";
+
+  return rows
+    .map((row, index) => {
+      const x = rows.length === 1 ? 50 : (index / (rows.length - 1)) * 100;
+      const y = 92 - (row.sales / maxTrendSales.value) * 76;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+});
+
+const salesTrendAreaPoints = computed(() => {
+  if (!salesTrendPoints.value) return "";
+  return `0,100 ${salesTrendPoints.value} 100,100`;
+});
+
+const bestSalesDay = computed(() => {
+  return salesTrendRows.value.reduce(
+    (best, item) => (item.sales > best.sales ? item : best),
+    { date: "-", sales: 0 },
+  );
+});
+
+const totalItemsSold = computed(() =>
+  (allItemsSold.value.quantities || []).reduce((sum: number, qty: number) => sum + qty, 0),
+);
+
+const topProductInsightRows = computed(() => {
+  const labels = topProductsData.value.labels || [];
+  const values = topProductsData.value.datasets?.[0]?.data || [];
+  const max = Math.max(...values.map((value: any) => Number(value) || 0), 1);
+
+  return labels.map((label: string, index: number) => {
+    const quantity = Number(values[index]) || 0;
+    return {
+      label,
+      quantity,
+      percent: Math.round((quantity / max) * 100),
+    };
+  });
+});
+
+const paymentMethodInsightRows = computed(() => {
+  const labels = paymentMethodData.value.labels || [];
+  const values = paymentMethodData.value.datasets?.[0]?.data || [];
+  const total = values.reduce((sum: number, value: any) => sum + (Number(value) || 0), 0);
+  const palette = [
+    { dot: "bg-emerald-500", bar: "bg-emerald-500", text: "text-emerald-700", bg: "bg-emerald-50" },
+    { dot: "bg-sky-500", bar: "bg-sky-500", text: "text-sky-700", bg: "bg-sky-50" },
+    { dot: "bg-violet-500", bar: "bg-violet-500", text: "text-violet-700", bg: "bg-violet-50" },
+  ];
+
+  return labels.map((label: string, index: number) => {
+    const amount = Number(values[index]) || 0;
+    return {
+      label,
+      amount,
+      percent: total > 0 ? Math.round((amount / total) * 100) : 0,
+      ...palette[index % palette.length],
+    };
+  });
 });
 
 // ============ TAB STATE ============
@@ -859,13 +841,13 @@ watch(
 </script>
 
 <template>
-  <div class="h-full flex flex-col bg-gray-50 overflow-auto">
+  <div class="h-full flex flex-col bg-slate-50 overflow-auto">
     <!-- Header -->
-    <div class="px-8 py-6 border-b border-gray-200 bg-white shadow-sm shrink-0">
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div class="bg-white border-b border-gray-200 shrink-0">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 class="text-2xl font-bold text-gray-900">Laporan Penjualan</h1>
-          <p class="text-sm text-gray-500">Ringkasan performa toko anda</p>
+          <h1 class="text-2xl font-black text-gray-950">Laporan</h1>
+          <p class="text-sm text-gray-500">Ringkasan penjualan, laba, pengeluaran, dan shift.</p>
         </div>
         <div class="flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 no-scrollbar">
           <UButton
@@ -903,12 +885,12 @@ watch(
     </div>
 
     <!-- Filter Bar -->
-    <div class="px-8 py-4 bg-white border-b border-gray-200">
+    <div class="bg-slate-50 border-b border-gray-200">
       <div
-        class="flex flex-col md:flex-row gap-4 items-end md:items-center justify-between"
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col lg:flex-row gap-4 items-stretch lg:items-end justify-between"
       >
         <!-- Shortcuts -->
-        <div class="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 no-scrollbar">
+        <div class="flex gap-2 overflow-x-auto w-full lg:w-auto pb-2 lg:pb-0 no-scrollbar">
           <UButton
             size="xs"
             :color="activeFilter === 'today' ? 'primary' : 'neutral'"
@@ -945,7 +927,7 @@ watch(
 
         <!-- Manual Filter -->
         <div
-          class="flex flex-wrap items-end gap-3 w-full md:w-auto p-2 bg-gray-50 rounded-xl border border-gray-200"
+          class="flex flex-wrap items-end gap-3 w-full lg:w-auto p-3 bg-white rounded-xl border border-gray-200 shadow-sm"
         >
           <div class="flex flex-col gap-1">
             <span class="text-xs font-semibold text-gray-500 ml-1"
@@ -998,245 +980,219 @@ watch(
     </div>
 
     <!-- Tab Navigation -->
-    <div class="px-8 py-3 bg-white border-b border-gray-200 overflow-x-auto no-scrollbar">
-      <div class="flex gap-1 bg-gray-100 p-1 rounded-xl w-max md:w-auto md:inline-flex">
-        <button
-          @click="activeTab = 'sales'"
-          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
-          :class="activeTab === 'sales' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-        >
-          <UIcon name="i-heroicons-chart-bar-square" class="w-4 h-4" />
-          Penjualan
-        </button>
-        <button
-          @click="activeTab = 'profit'"
-          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
-          :class="activeTab === 'profit' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-        >
-          <UIcon name="i-heroicons-banknotes" class="w-4 h-4" />
-          Laba / Rugi
-        </button>
-        <button
-          @click="activeTab = 'daily'"
-          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
-          :class="activeTab === 'daily' ? 'bg-white text-violet-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-        >
-          <UIcon name="i-heroicons-calendar-days" class="w-4 h-4" />
-          Laporan Harian
-        </button>
-        <button
-          @click="activeTab = 'expenses'"
-          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
-          :class="activeTab === 'expenses' ? 'bg-white text-rose-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-        >
-          <UIcon name="i-heroicons-banknotes" class="w-4 h-4" />
-          Pengeluaran
-        </button>
-        <button
-          @click="activeTab = 'shifts'"
-          class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
-          :class="activeTab === 'shifts' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-        >
-          <UIcon name="i-heroicons-clock" class="w-4 h-4" />
-          Shift
-        </button>
+    <div class="bg-white border-b border-gray-200 overflow-x-auto no-scrollbar">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+        <div class="flex gap-1 bg-gray-100 p-1 rounded-xl w-max lg:w-auto lg:inline-flex">
+          <button
+            @click="activeTab = 'sales'"
+            class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
+            :class="activeTab === 'sales' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+          >
+            <UIcon name="i-heroicons-chart-bar-square" class="w-4 h-4" />
+            Penjualan
+          </button>
+          <button
+            @click="activeTab = 'profit'"
+            class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
+            :class="activeTab === 'profit' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+          >
+            <UIcon name="i-heroicons-banknotes" class="w-4 h-4" />
+            Laba / Rugi
+          </button>
+          <button
+            @click="activeTab = 'daily'"
+            class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
+            :class="activeTab === 'daily' ? 'bg-white text-violet-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+          >
+            <UIcon name="i-heroicons-calendar-days" class="w-4 h-4" />
+            Laporan Harian
+          </button>
+          <button
+            @click="activeTab = 'expenses'"
+            class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
+            :class="activeTab === 'expenses' ? 'bg-white text-rose-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+          >
+            <UIcon name="i-heroicons-banknotes" class="w-4 h-4" />
+            Pengeluaran
+          </button>
+          <button
+            @click="activeTab = 'shifts'"
+            class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex-none whitespace-nowrap justify-center"
+            :class="activeTab === 'shifts' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+          >
+            <UIcon name="i-heroicons-clock" class="w-4 h-4" />
+            Shift
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- ============ TAB: PENJUALAN ============ -->
-    <div v-if="activeTab === 'sales'" class="p-8 space-y-8">
+    <div v-if="activeTab === 'sales'" class="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
       <!-- Stats Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div
-          class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4"
-        >
-          <div
-            class="w-14 h-14 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center"
-          >
-            <UIcon name="i-heroicons-banknotes-20-solid" class="w-8 h-8" />
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+        <div class="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-gray-200">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Penjualan</p>
+            <UIcon name="i-heroicons-banknotes" class="w-5 h-5 text-emerald-500" />
           </div>
-          <div>
-            <p class="text-sm font-medium text-gray-500">Total Penjualan</p>
-            <p class="text-2xl font-bold text-gray-900">
-              {{ formatCurrency(totalSales) }}
-            </p>
-          </div>
+          <p class="mt-3 text-xl sm:text-2xl font-black text-gray-950 leading-tight">
+            {{ formatCurrency(totalSales) }}
+          </p>
+          <p class="mt-1 text-xs text-gray-500">Total transaksi valid</p>
         </div>
 
-        <div
-          class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4"
-        >
-          <div
-            class="w-14 h-14 rounded-full bg-success-100 text-success-600 flex items-center justify-center"
-          >
-            <UIcon name="i-heroicons-shopping-bag-20-solid" class="w-8 h-8" />
+        <div class="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-gray-200">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Transaksi</p>
+            <UIcon name="i-heroicons-receipt-percent" class="w-5 h-5 text-sky-500" />
           </div>
-          <div>
-            <p class="text-sm font-medium text-gray-500">Total Transaksi</p>
-            <p class="text-2xl font-bold text-gray-900">
-              {{ totalTransactions }}
-            </p>
-          </div>
+          <p class="mt-3 text-xl sm:text-2xl font-black text-gray-950 leading-tight">
+            {{ totalTransactions }}
+          </p>
+          <p class="mt-1 text-xs text-gray-500">Nota dalam periode ini</p>
         </div>
 
-        <div
-          class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4"
-        >
-          <div
-            class="w-14 h-14 rounded-full bg-secondary-100 text-secondary-600 flex items-center justify-center"
-          >
-            <UIcon name="i-heroicons-chart-pie-20-solid" class="w-8 h-8" />
+        <div class="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-gray-200">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Rata-rata</p>
+            <UIcon name="i-heroicons-scale" class="w-5 h-5 text-violet-500" />
           </div>
-          <div>
-            <p class="text-sm font-medium text-gray-500">Rata-rata Keranjang</p>
-            <p class="text-2xl font-bold text-gray-900">
-              {{ formatCurrency(averageTransaction) }}
-            </p>
+          <p class="mt-3 text-xl sm:text-2xl font-black text-gray-950 leading-tight">
+            {{ formatCurrency(averageTransaction) }}
+          </p>
+          <p class="mt-1 text-xs text-gray-500">Per keranjang belanja</p>
+        </div>
+
+        <div class="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-gray-200">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Item Terjual</p>
+            <UIcon name="i-heroicons-cube" class="w-5 h-5 text-amber-500" />
           </div>
+          <p class="mt-3 text-xl sm:text-2xl font-black text-gray-950 leading-tight">
+            {{ totalItemsSold }}
+          </p>
+          <p class="mt-1 text-xs text-gray-500">Akumulasi qty produk</p>
         </div>
       </div>
 
-      <!-- Charts Section -->
-      <div class="flex items-center justify-between mb-2">
-        <h2 class="text-lg font-bold text-gray-900 flex items-center gap-2">
-          <UIcon name="i-heroicons-chart-bar-square" class="w-5 h-5 text-primary-500" />
-          Grafik & Analisis
-        </h2>
-        <button
-          @click="toggleCharts"
-          class="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-200 shadow-sm"
-          :class="showCharts ? 'bg-primary-50 text-primary-600 hover:bg-primary-100 border border-primary-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-200'"
-        >
-          <UIcon :name="showCharts ? 'i-heroicons-eye-slash' : 'i-heroicons-eye'" class="w-4 h-4" />
-          {{ showCharts ? 'Sembunyikan Grafik' : 'Tampilkan Grafik' }}
-        </button>
-      </div>
+      <!-- Insights Section -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="p-4 sm:p-5 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base sm:text-lg font-black text-gray-950">Analisis Penjualan</h2>
+            <p class="text-sm text-gray-500">Trend, kontribusi produk, dan metode pembayaran dalam satu tampilan.</p>
+          </div>
+          <button
+            @click="toggleCharts"
+            class="h-9 px-3 inline-flex items-center gap-2 text-xs font-bold rounded-lg border transition-colors self-start sm:self-auto"
+            :class="showCharts ? 'bg-gray-950 text-white border-gray-950 hover:bg-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
+          >
+            <UIcon :name="showCharts ? 'i-heroicons-eye-slash' : 'i-heroicons-eye'" class="w-4 h-4" />
+            {{ showCharts ? 'Sembunyikan' : 'Tampilkan' }}
+          </button>
+        </div>
 
-      <Transition name="chart-toggle">
-        <div v-if="showCharts" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- Sales Trend Chart -->
-          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
-            <h3 class="text-lg font-bold text-gray-900 mb-4">Tren Penjualan</h3>
-            <div class="h-80">
-              <Line
-                :data="salesByDateData"
-                :options="lineChartOptions"
-                v-if="salesByDateData.labels.length > 0"
-              />
-              <div
-                v-else
-                class="flex items-center justify-center h-full text-gray-400"
-              >
-                <p>Tidak ada data penjualan</p>
+        <Transition name="chart-toggle">
+          <div v-if="showCharts" class="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-0">
+            <div class="p-4 sm:p-6 border-b xl:border-b-0 xl:border-r border-gray-200">
+              <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div>
+                  <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Trend Penjualan</p>
+                  <p class="mt-1 text-2xl sm:text-3xl font-black text-gray-950">
+                    {{ formatCurrency(bestSalesDay.sales) }}
+                  </p>
+                  <p class="text-sm text-gray-500">Hari terbaik: {{ bestSalesDay.date }}</p>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-right">
+                  <div class="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
+                    <p class="text-[10px] font-bold uppercase tracking-wide text-gray-500">Periode</p>
+                    <p class="text-sm font-bold text-gray-900">{{ salesTrendRows.length }} hari</p>
+                  </div>
+                  <div class="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
+                    <p class="text-[10px] font-bold uppercase tracking-wide text-gray-500">Omset</p>
+                    <p class="text-sm font-bold text-gray-900">{{ formatCurrency(totalSales) }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-6 h-64 sm:h-72 rounded-xl bg-gray-950 overflow-hidden relative">
+                <div class="absolute inset-0 opacity-[0.08] bg-[linear-gradient(to_right,#fff_1px,transparent_1px),linear-gradient(to_bottom,#fff_1px,transparent_1px)] bg-[size:48px_48px]"></div>
+                <svg v-if="salesTrendRows.length" viewBox="0 0 100 100" preserveAspectRatio="none" class="absolute inset-0 w-full h-full">
+                  <polygon :points="salesTrendAreaPoints" fill="rgba(16,185,129,0.20)" />
+                  <polyline :points="salesTrendPoints" fill="none" stroke="#34d399" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+                </svg>
+                <div v-else class="absolute inset-0 flex items-center justify-center text-sm font-semibold text-gray-400">
+                  Tidak ada data penjualan
+                </div>
+                <div class="absolute left-4 right-4 bottom-4 flex justify-between gap-3 text-[11px] font-semibold text-gray-400">
+                  <span>{{ salesTrendRows[0]?.date || '-' }}</span>
+                  <span>{{ salesTrendRows[salesTrendRows.length - 1]?.date || '-' }}</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Top Products Chart -->
-          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
-            <h3 class="text-lg font-bold text-gray-900 mb-4">
-              Produk Terlaris (Top 5)
-            </h3>
-            <div class="h-80">
-              <Bar
-                :data="topProductsData"
-                :options="chartOptions"
-                v-if="topProductsData.labels.length > 0"
-              />
-              <div
-                v-else
-                class="flex items-center justify-center h-full text-gray-400"
-              >
-                <p>Tidak ada data produk</p>
+            <div class="divide-y divide-gray-200">
+              <div class="p-4 sm:p-5">
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Produk Teratas</p>
+                    <h3 class="text-base font-black text-gray-950">Kontribusi Qty</h3>
+                  </div>
+                  <UIcon name="i-heroicons-trophy" class="w-5 h-5 text-amber-500" />
+                </div>
+
+                <div v-if="topProductInsightRows.length" class="space-y-4">
+                  <div v-for="(item, idx) in topProductInsightRows" :key="item.label" class="space-y-1.5">
+                    <div class="flex items-center justify-between gap-3 text-sm">
+                      <div class="min-w-0 flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-md bg-gray-100 text-gray-600 text-xs font-black flex items-center justify-center">{{ idx + 1 }}</span>
+                        <span class="font-semibold text-gray-900 truncate">{{ item.label }}</span>
+                      </div>
+                      <span class="text-xs font-black text-gray-700 whitespace-nowrap">{{ item.quantity }} unit</span>
+                    </div>
+                    <div class="h-2 rounded-full bg-gray-100 overflow-hidden">
+                      <div class="h-full rounded-full bg-gray-950" :style="{ width: `${item.percent}%` }"></div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="py-8 text-center text-sm font-semibold text-gray-400">
+                  Belum ada data produk
+                </div>
               </div>
-            </div>
-          </div>
 
-          <!-- Payment Method Pie Chart -->
-          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
-            <h3 class="text-lg font-bold text-gray-900 mb-4">
-              Penjualan Berdasarkan Metode Pembayaran
-            </h3>
-            <div class="h-80 flex items-center justify-center">
-              <div class="w-full h-full">
-                <Pie
-                  :data="paymentMethodData"
-                  :options="chartOptions"
-                  v-if="paymentMethodData.labels.length > 0"
-                />
-                <div
-                  v-else
-                  class="flex items-center justify-center h-full text-gray-400"
-                >
-                  <p>Tidak ada data pembayaran</p>
+              <div class="p-4 sm:p-5">
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Metode Bayar</p>
+                    <h3 class="text-base font-black text-gray-950">Distribusi Omset</h3>
+                  </div>
+                  <UIcon name="i-heroicons-credit-card" class="w-5 h-5 text-sky-500" />
+                </div>
+
+                <div v-if="paymentMethodInsightRows.length" class="space-y-3">
+                  <div v-for="method in paymentMethodInsightRows" :key="method.label" class="rounded-lg border border-gray-200 p-3">
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full" :class="method.dot"></span>
+                        <span class="text-sm font-bold text-gray-900">{{ method.label }}</span>
+                      </div>
+                      <span class="text-xs font-black" :class="method.text">{{ method.percent }}%</span>
+                    </div>
+                    <div class="mt-2 h-2 rounded-full bg-gray-100 overflow-hidden">
+                      <div class="h-full rounded-full" :class="method.bar" :style="{ width: `${method.percent}%` }"></div>
+                    </div>
+                    <p class="mt-2 text-xs font-semibold text-gray-500">{{ formatCurrency(method.amount) }}</p>
+                  </div>
+                </div>
+                <div v-else class="py-8 text-center text-sm font-semibold text-gray-400">
+                  Belum ada data pembayaran
                 </div>
               </div>
             </div>
           </div>
-
-          <!-- Top Selling Items Table -->
-          <div
-            class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 flex flex-col"
-          >
-            <h3 class="text-lg font-bold text-gray-900 mb-4">Item Terjual</h3>
-            <div
-              v-if="allItemsSold.products && allItemsSold.products.length > 0"
-              class="overflow-y-auto flex-1"
-            >
-              <table class="w-full">
-                <thead class="sticky top-0 bg-white">
-                  <tr class="border-b border-gray-200">
-                    <th class="text-left py-3 px-4 font-semibold text-gray-700">
-                      No
-                    </th>
-                    <th class="text-left py-3 px-4 font-semibold text-gray-700">
-                      Nama Produk
-                    </th>
-                    <th class="text-right py-3 px-4 font-semibold text-gray-700">
-                      Jumlah Terjual
-                    </th>
-                    <th class="text-right py-3 px-4 font-semibold text-gray-700">
-                      Total Penjualan
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="(product, idx) in allItemsSold.products"
-                    :key="idx"
-                    class="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                  >
-                    <td class="py-3 px-4 text-gray-900 font-medium">
-                      {{ idx + 1 }}
-                    </td>
-                    <td class="py-3 px-4 text-gray-900">{{ product }}</td>
-                    <td class="py-3 px-4 text-right text-gray-900 font-semibold">
-                      {{ allItemsSold.quantities[idx] }} unit
-                    </td>
-                    <td class="py-3 px-4 text-right text-gray-900 font-semibold">
-                      {{
-                        formatCurrency((allItemsSold.sales?.[idx] || 0) as number)
-                      }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div
-              v-else
-              class="flex items-center justify-center flex-1 text-gray-400 py-8"
-            >
-              <div class="text-center">
-                <UIcon
-                  name="i-heroicons-chart-bar"
-                  class="w-12 h-12 mx-auto mb-2 opacity-20"
-                />
-                <p class="font-medium">Belum ada item terjual</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
+        </Transition>
+      </div>
 
       <div
         class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6"
