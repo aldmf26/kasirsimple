@@ -385,6 +385,24 @@ const selectedCategory = ref("all");
 const selectedStockStatus = ref("all");
 const sortBy = ref("newest");
 
+// Mobile overflow menu state
+const openMenuId = ref<string | null>(null);
+const toggleMenu = (id: string, event: Event) => {
+  event.stopPropagation();
+  openMenuId.value = openMenuId.value === id ? null : id;
+};
+const closeMenu = () => {
+  openMenuId.value = null;
+};
+
+// Close menu on any outside click
+if (typeof window !== 'undefined') {
+  document.addEventListener('click', closeMenu);
+  onUnmounted(() => {
+    document.removeEventListener('click', closeMenu);
+  });
+}
+
 const filteredProducts = computed(() => {
   let result = products.value || [];
 
@@ -742,21 +760,21 @@ watch(
   <div class="min-h-screen bg-slate-50 pb-20">
     <!-- Statistik Header -->
     <div
-      class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 md:p-6 max-w-5xl mx-auto"
+      class="grid grid-cols-3 gap-2 md:gap-4 mb-3 md:mb-6 p-3 md:p-6 max-w-5xl mx-auto"
     >
       <!-- Total Produk -->
-      <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-        <div class="flex items-center justify-between">
-          <div>
+      <div class="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl shadow-sm border border-gray-100">
+        <div class="flex items-center justify-center md:justify-between text-center md:text-left">
+          <div class="min-w-0">
             <p
-              class="text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider"
+              class="text-[10px] md:text-xs font-bold text-gray-500 uppercase mb-1 md:mb-2 leading-tight tracking-normal md:tracking-wider"
             >
               Total Produk
             </p>
-            <p class="text-4xl font-black text-gray-900">{{ totalProducts }}</p>
+            <p class="text-2xl md:text-4xl font-black text-gray-900 leading-none">{{ totalProducts }}</p>
           </div>
           <div
-            class="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center"
+            class="hidden md:flex w-12 h-12 rounded-xl bg-blue-100 text-blue-600 items-center justify-center"
           >
             <UIcon name="i-heroicons-cube-20-solid" class="w-6 h-6" />
           </div>
@@ -764,20 +782,20 @@ watch(
       </div>
 
       <!-- Total Kategori -->
-      <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-        <div class="flex items-center justify-between">
-          <div>
+      <div class="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl shadow-sm border border-gray-100">
+        <div class="flex items-center justify-center md:justify-between text-center md:text-left">
+          <div class="min-w-0">
             <p
-              class="text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider"
+              class="text-[10px] md:text-xs font-bold text-gray-500 uppercase mb-1 md:mb-2 leading-tight tracking-normal md:tracking-wider"
             >
               Total Kategori
             </p>
-            <p class="text-4xl font-black text-gray-900">
+            <p class="text-2xl md:text-4xl font-black text-gray-900 leading-none">
               {{ totalCategories }}
             </p>
           </div>
           <div
-            class="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center"
+            class="hidden md:flex w-12 h-12 rounded-xl bg-purple-100 text-purple-600 items-center justify-center"
           >
             <UIcon name="i-heroicons-tag-20-solid" class="w-6 h-6" />
           </div>
@@ -785,29 +803,29 @@ watch(
       </div>
 
       <!-- Stok Menipis (Pengganti Rincian Kategori) -->
-      <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-        <div class="flex items-center justify-between">
-          <div>
+      <div class="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl shadow-sm border border-gray-100">
+        <div class="flex items-center justify-center md:justify-between text-center md:text-left">
+          <div class="min-w-0">
             <p
-              class="text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider"
+              class="text-[10px] md:text-xs font-bold text-gray-500 uppercase mb-1 md:mb-2 leading-tight tracking-normal md:tracking-wider"
             >
               Perlu Restock
             </p>
-            <div class="flex items-baseline gap-2">
-              <p class="text-4xl font-black text-orange-600">
+            <div class="flex items-baseline justify-center md:justify-start gap-1 md:gap-2">
+              <p class="text-2xl md:text-4xl font-black text-orange-600 leading-none">
                 {{ lowStockCount }}
               </p>
-              <span class="text-sm text-gray-400 font-medium">Item</span>
+              <span class="hidden sm:inline text-sm text-gray-400 font-medium">Item</span>
             </div>
             <p
               v-if="outOfStockCount > 0"
-              class="text-xs font-bold text-red-500 mt-1"
+              class="text-[10px] md:text-xs font-bold text-red-500 mt-1 leading-tight"
             >
-              {{ outOfStockCount }} Produk Habis!
+              {{ outOfStockCount }} Habis
             </p>
           </div>
           <div
-            class="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center"
+            class="hidden md:flex w-12 h-12 rounded-xl bg-orange-100 text-orange-600 items-center justify-center"
           >
             <UIcon
               name="i-heroicons-exclamation-triangle-20-solid"
@@ -901,33 +919,51 @@ watch(
         <table class="w-full text-left text-sm">
           <thead class="bg-gray-900 text-white">
             <tr>
-              <th class="p-4 font-bold text-center">No</th>
-              <th class="p-4 font-bold">Nama Produk</th>
-              <th class="p-4 font-bold">Kategori</th>
-              <th class="p-4 font-bold">Harga Beli</th>
-              <th class="p-4 font-bold">Harga Jual</th>
-              <th class="p-4 font-bold">Laba</th>
-              <th class="p-4 font-bold">Stok</th>
-              <th class="p-4 font-bold">Satuan</th>
-              <th class="p-4 font-bold text-center">Favorit</th>
-              <th class="p-4 font-bold text-center">Aksi</th>
+              <th class="px-4 py-3 font-bold text-center w-[60px]">No</th>
+              <th class="px-4 py-3 font-bold">Produk</th>
+              <th class="px-4 py-3 font-bold">Kategori</th>
+              <th class="px-4 py-3 font-bold text-right">Beli</th>
+              <th class="px-4 py-3 font-bold text-right">Jual</th>
+              <th class="px-4 py-3 font-bold text-right">Laba</th>
+              <th class="px-4 py-3 font-bold text-center">Stok</th>
+              <th class="px-4 py-3 font-bold text-center w-[140px]">Aksi</th>
             </tr>
           </thead>
           <tbody>
             <tr
               v-for="(product, index) in filteredProducts"
               :key="product.id"
-              class="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+              class="border-b border-gray-100 hover:bg-gray-100/70 transition-colors group"
+              :class="index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'"
             >
-              <td class="p-4 font-bold text-center text-gray-500">
+              <!-- No -->
+              <td class="px-4 py-3 text-center text-gray-400 font-medium">
                 {{ index + 1 }}
               </td>
-              <td class="p-4 font-semibold text-gray-900">
-                {{ product.name }}
+              <!-- Produk: nama + favorit star -->
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-1.5">
+                  <button
+                    @click="handleToggleFavorite(product.id, $event)"
+                    class="text-base transition-all hover:scale-125 active:scale-95 flex-shrink-0"
+                    :class="
+                      product.is_favorite ? 'text-yellow-500' : 'text-gray-300 opacity-0 group-hover:opacity-100'
+                    "
+                    :title="
+                      product.is_favorite
+                        ? 'Hapus dari favorit'
+                        : 'Tambah ke favorit'
+                    "
+                  >
+                    {{ product.is_favorite ? "★" : "☆" }}
+                  </button>
+                  <span class="font-semibold text-gray-900 truncate">{{ product.name }}</span>
+                </div>
               </td>
-              <td class="p-4">
+              <!-- Kategori -->
+              <td class="px-4 py-3">
                 <span
-                  class="px-3 py-1 rounded-lg text-xs font-bold border"
+                  class="px-2.5 py-0.5 rounded-md text-xs font-bold border"
                   :style="{
                     backgroundColor: product.category?.color + '20',
                     color: product.category?.color,
@@ -937,20 +973,24 @@ watch(
                   {{ product.category?.name || "Tanpa Kategori" }}
                 </span>
               </td>
-              <td class="p-4 text-gray-700">
+              <!-- Harga Beli (de-emphasized) -->
+              <td class="px-4 py-3 text-right text-gray-400 text-xs">
                 {{ formatCurrency(product.buy_price || 0) }}
               </td>
-              <td class="p-4 font-bold text-gray-900">
+              <!-- Harga Jual -->
+              <td class="px-4 py-3 text-right font-bold text-gray-900">
                 {{ formatCurrency(product.price) }}
               </td>
-              <td class="p-4 text-emerald-600 font-bold">
-                {{
+              <!-- Laba -->
+              <td class="px-4 py-3 text-right text-emerald-600 font-semibold text-xs">
+                +{{
                   formatCurrency(
                     (product.price || 0) - (product.buy_price || 0),
                   )
                 }}
               </td>
-              <td class="p-4">
+              <!-- Stok + satuan inline -->
+              <td class="px-4 py-3 text-center">
                 <span
                   class="font-bold"
                   :class="{
@@ -958,61 +998,50 @@ watch(
                     'text-orange-600':
                       product.stock > 0 &&
                       product.stock <= (product.min_stock || 5),
-                    'text-emerald-600': product.stock > 10,
+                    'text-gray-900': product.stock > (product.min_stock || 5),
                   }"
                 >
                   {{ product.stock }}
                 </span>
+                <span class="text-gray-400 text-xs ml-0.5">{{ product.unit || 'pcs' }}</span>
               </td>
-              <td class="p-4 text-gray-700">{{ product.unit || "pcs" }}</td>
-              <td class="p-4 text-center">
-                <button
-                  @click="handleToggleFavorite(product.id, $event)"
-                  class="text-2xl transition-all hover:scale-125 active:scale-95"
-                  :class="
-                    product.is_favorite ? 'text-yellow-500' : 'text-gray-300'
-                  "
-                  :title="
-                    product.is_favorite
-                      ? 'Hapus dari favorit'
-                      : 'Tambah ke favorit'
-                  "
-                >
-                  {{ product.is_favorite ? "★" : "☆" }}
-                </button>
-              </td>
-              <td class="p-4 text-center flex justify-center gap-2">
-                <button
-                  @click="openLabelModal(product)"
-                  :disabled="!hasPrintableSku(product)"
-                  class="px-3 py-1 bg-emerald-600 text-white rounded font-bold mr-2 hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed text-xs transition-colors"
-                  title="Cetak Label Barcode"
-                >
-                  LABEL
-                </button>
-                <button
-                  @click="openStockModal(product)"
-                  class="px-3 py-1 bg-purple-600 text-white rounded font-bold mr-2 hover:bg-purple-700 text-xs transition-colors"
-                  title="Kelola Stok"
-                >
-                  STOK
-                </button>
-                <button
-                  @click="openEdit(product)"
-                  class="px-3 py-1 bg-blue-600 text-white rounded font-bold mr-2 hover:bg-blue-700 text-xs transition-colors"
-                >
-                  EDIT
-                </button>
-                <button
-                  @click="openDeleteConfirm(product)"
-                  class="px-3 py-1 bg-red-600 text-white rounded font-bold hover:bg-red-700 text-xs transition-colors"
-                >
-                  HAPUS
-                </button>
+              <!-- Aksi: icon buttons -->
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-center gap-1">
+                  <button
+                    @click="openEdit(product)"
+                    class="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Edit Produk"
+                  >
+                    <UIcon name="i-heroicons-pencil-square" class="w-4 h-4" />
+                  </button>
+                  <button
+                    @click="openStockModal(product)"
+                    class="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                    title="Kelola Stok"
+                  >
+                    <UIcon name="i-heroicons-archive-box-arrow-down" class="w-4 h-4" />
+                  </button>
+                  <button
+                    @click="openLabelModal(product)"
+                    :disabled="!hasPrintableSku(product)"
+                    class="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Cetak Label Barcode"
+                  >
+                    <UIcon name="i-heroicons-printer" class="w-4 h-4" />
+                  </button>
+                  <button
+                    @click="openDeleteConfirm(product)"
+                    class="p-1.5 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                    title="Hapus Produk"
+                  >
+                    <UIcon name="i-heroicons-trash" class="w-4 h-4" />
+                  </button>
+                </div>
               </td>
             </tr>
             <tr v-if="!filteredProducts.length && !productsLoading">
-              <td colspan="10" class="p-8 text-center text-gray-400">
+              <td colspan="8" class="p-8 text-center text-gray-400">
                 Tidak ada produk ditemukan
               </td>
             </tr>
@@ -1024,135 +1053,136 @@ watch(
         </div>
       </div>
 
-      <!-- Mobile Cards -->
-      <div class="md:hidden space-y-3">
+      <!-- Mobile Cards (Compact) -->
+      <div class="md:hidden space-y-2">
         <div
           v-if="!filteredProducts.length && !productsLoading"
-          class="bg-white rounded-2xl p-8 text-center text-gray-400 shadow-sm border border-gray-100"
+          class="bg-white rounded-xl p-8 text-center text-gray-400 shadow-sm border border-gray-100"
         >
           Tidak ada produk ditemukan
         </div>
 
         <div
           v-if="productsLoading"
-          class="bg-white rounded-2xl p-8 text-center text-gray-500 shadow-sm border border-gray-100"
+          class="bg-white rounded-xl p-8 text-center text-gray-500 shadow-sm border border-gray-100"
         >
           Memuat produk...
         </div>
 
         <div
-          v-for="product in filteredProducts"
+          v-for="(product, index) in filteredProducts"
           :key="product.id"
-          class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3"
+          class="bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-2.5 relative overflow-hidden"
         >
-          <!-- Nama & Kategori -->
-          <div class="flex items-start justify-between gap-2">
-            <div class="flex-1 min-w-0">
-              <p class="font-bold text-gray-900 truncate">{{ product.name }}</p>
+          <!-- Background Watermark Number (No) -->
+          <div class="absolute -bottom-2 -right-1 text-5xl font-black text-slate-100 pointer-events-none select-none z-0">
+            {{ index + 1 }}
+          </div>
+
+          <!-- Content Wrapper to stay above watermark -->
+          <div class="relative z-10">
+            <!-- Row 1: Nama + Favorit + Stok Badge -->
+            <div class="flex items-center gap-2">
+              <button
+                @click="handleToggleFavorite(product.id, $event)"
+                class="text-sm transition-all active:scale-90 flex-shrink-0 leading-none"
+                :class="product.is_favorite ? 'text-yellow-500' : 'text-gray-300'"
+              >
+                {{ product.is_favorite ? "★" : "☆" }}
+              </button>
+              <p class="font-semibold text-gray-900 text-sm truncate flex-1 leading-tight">{{ product.name }}</p>
               <span
-                class="inline-block px-2 py-1 rounded-lg text-xs font-bold border mt-1"
+                class="flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded-full leading-tight"
+                :class="{
+                  'bg-red-100 text-red-700': product.stock === 0,
+                  'bg-orange-100 text-orange-700':
+                    product.stock > 0 &&
+                    product.stock <= (product.min_stock || 5),
+                  'bg-gray-100 text-gray-700': product.stock > (product.min_stock || 5),
+                }"
+              >
+                Stok {{ product.stock }}
+              </span>
+            </div>
+
+            <!-- Row 2: Kategori + Satuan -->
+            <div class="flex items-center gap-2 mt-1 pl-5">
+              <span
+                class="px-2 py-0.5 rounded text-[10px] font-bold border leading-tight"
                 :style="{
-                  backgroundColor: product.category?.color + '20',
+                  backgroundColor: product.category?.color + '15',
                   color: product.category?.color,
-                  borderColor: product.category?.color,
+                  borderColor: product.category?.color + '40',
                 }"
               >
                 {{ product.category?.name || "Tanpa Kategori" }}
               </span>
+              <span class="text-[10px] text-gray-400">{{ product.unit || 'pcs' }}</span>
             </div>
-            <div class="flex items-center gap-2">
-              <button
-                @click="handleToggleFavorite(product.id, $event)"
-                class="text-3xl transition-all hover:scale-125 active:scale-95"
-                :class="
-                  product.is_favorite ? 'text-yellow-500' : 'text-gray-300'
-                "
-                :title="
-                  product.is_favorite
-                    ? 'Hapus dari favorit'
-                    : 'Tambah ke favorit'
-                "
-              >
-                {{ product.is_favorite ? "★" : "☆" }}
-              </button>
-              <span
-                class="font-bold flex-shrink-0"
-                :class="{
-                  'text-red-600 text-lg': product.stock === 0,
-                  'text-orange-600 text-lg':
-                    product.stock > 0 &&
-                    product.stock <= (product.min_stock || 5),
-                  'text-emerald-600 text-lg': product.stock > 10,
-                }"
-              >
-                {{ product.stock }}
-              </span>
-            </div>
-          </div>
 
-          <!-- Harga Grid -->
-          <div class="grid grid-cols-3 gap-2 text-sm">
-            <div class="bg-gray-50 p-2 rounded-lg">
-              <p class="text-xs text-gray-500 font-medium">Beli</p>
-              <p class="font-bold text-gray-900">
-                {{ formatCurrency(product.buy_price || 0) }}
-              </p>
-            </div>
-            <div class="bg-gray-50 p-2 rounded-lg">
-              <p class="text-xs text-gray-500 font-medium">Jual</p>
-              <p class="font-bold text-gray-900">
-                {{ formatCurrency(product.price) }}
-              </p>
-            </div>
-            <div class="bg-emerald-50 p-2 rounded-lg">
-              <p class="text-xs text-emerald-600 font-medium">Laba</p>
-              <p class="font-bold text-emerald-600">
-                {{
-                  formatCurrency(
-                    (product.price || 0) - (product.buy_price || 0),
-                  )
-                }}
-              </p>
-            </div>
-          </div>
+            <!-- Row 3: Harga Jual & Beli (Modal) + Laba (kecil) + Action Buttons -->
+            <div class="flex items-center justify-between mt-1.5 pl-5">
+              <div class="flex flex-col gap-0.5">
+                <div class="flex items-baseline gap-1">
+                  <span class="text-[10px] text-gray-400 font-medium">Jual:</span>
+                  <span class="text-sm font-bold text-gray-900">{{ formatCurrency(product.price) }}</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[9px] text-gray-400">Beli: {{ formatCurrency(product.buy_price || 0) }}</span>
+                  <span class="text-[9px] text-emerald-600 font-medium bg-emerald-50 px-1 rounded">
+                    Laba: +{{ formatCurrency((product.price || 0) - (product.buy_price || 0)) }}
+                  </span>
+                </div>
+              </div>
 
-          <!-- Satuan & Stok Info -->
-          <div class="flex items-center justify-between text-xs text-gray-500">
-            <span
-              >Satuan:
-              <span class="font-bold text-gray-700">{{
-                product.unit || "pcs"
-              }}</span></span
-            >
-          </div>
-
-          <!-- Action Buttons -->
-          <div class="grid grid-cols-2 gap-2">
-            <button
-              @click="openLabelModal(product)"
-              :disabled="!hasPrintableSku(product)"
-              class="py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed text-xs transition-colors"
-            >
-              LABEL
-            </button>
-            <button
-              @click="openEdit(product)"
-              class="py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 text-xs transition-colors"
-            >
-              EDIT
-            </button>
-            <button
-              @click="openStockModal(product)"
-              class="py-2 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 text-xs transition-colors"
-            >
-              STOK
-            </button>
-            <button
-              @click="openDeleteConfirm(product)"
-              class="py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 text-xs transition-colors"
-            >
-              HAPUS
-            </button>
+              <!-- Action: Edit + Stok + ⋮ overflow -->
+              <div class="flex items-center gap-1">
+                <button
+                  @click="openEdit(product)"
+                  class="px-2.5 py-1 text-[11px] font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                >
+                  Edit
+                </button>
+                <button
+                  @click="openStockModal(product)"
+                  class="px-2.5 py-1 text-[11px] font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                >
+                  Stok
+                </button>
+                <!-- Overflow menu ⋮ -->
+                <div class="relative">
+                  <button
+                    @click="toggleMenu(product.id, $event)"
+                    class="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
+                  >
+                    <UIcon name="i-heroicons-ellipsis-vertical" class="w-4 h-4" />
+                  </button>
+                  <!-- Dropdown -->
+                  <div
+                    v-if="openMenuId === product.id"
+                    class="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-30 min-w-[130px]"
+                    @click.stop
+                  >
+                    <button
+                      @click="openLabelModal(product); closeMenu();"
+                      :disabled="!hasPrintableSku(product)"
+                      class="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <UIcon name="i-heroicons-printer" class="w-3.5 h-3.5" />
+                      Cetak Label
+                    </button>
+                    <div class="border-t border-gray-100 my-1"></div>
+                    <button
+                      @click="openDeleteConfirm(product); closeMenu();"
+                      class="w-full px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                    >
+                      <UIcon name="i-heroicons-trash" class="w-3.5 h-3.5" />
+                      Hapus Produk
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
