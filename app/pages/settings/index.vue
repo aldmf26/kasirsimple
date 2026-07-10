@@ -7,6 +7,16 @@ definePageMeta({
 
 const { store, printerSettings: globalPrinterSettings, updateStore, fetchStore } = useStore();
 const supabase = useSupabaseClient();
+const {
+  loading: backupLoading,
+  importPreview,
+  needsBackup,
+  backupAgeText,
+  loadLastBackupAt,
+  downloadBackup,
+  readBackupFile,
+  importBackup,
+} = useDataBackup();
 
 // Store settings form
 const storeSettings = reactive({
@@ -24,6 +34,7 @@ const logoPreview = ref<string | null>(null);
 // Force refresh store data when entering settings page to ensure latest data
 onMounted(async () => {
   await fetchStore();
+  loadLastBackupAt();
 });
 
 // Sync form with store data
@@ -91,6 +102,7 @@ watch(
 
       // Load printer settings
       fetchPrinterSettings();
+      loadLastBackupAt();
     }
   },
   { immediate: true },
@@ -262,6 +274,11 @@ const sections = [
     id: "printer",
     label: "Pengaturan Struk",
     icon: "i-heroicons-printer",
+  },
+  {
+    id: "backup",
+    label: "Backup Data",
+    icon: "i-heroicons-arrow-down-tray",
   },
   {
     id: "help",
@@ -604,6 +621,7 @@ const helpTabs = [
         items: [
           "<b>Pengaturan Profil</b>: Lengkapi nama, jenis usaha, alamat, no telepon, tampilan produk.",
           "<b>Keamanan Data</b>: Data Anda tersimpan secara otomatis dan rapi. Setiap pemilik toko hanya bisa melihat data miliknya sendiri.",
+          "<b>Backup Mandiri</b>: Buka Pengaturan > Backup Data, lalu klik Export Backup. Simpan file di HP/laptop/Google Drive.",
           "<b>Multi-Perangkat</b>: Anda bisa membuka akun kasir ini dari beberapa HP atau laptop sekaligus secara bersamaan.",
         ],
       },
@@ -669,6 +687,22 @@ const helpTabs = [
       },
     ],
   },
+  {
+    id: "backup",
+    title: "6. BACKUP & PINDAH DATA",
+    content: [
+      {
+        type: "list",
+        title: "Jaga Data Toko:",
+        items: [
+          "<b>Export Backup</b>: Simpan data toko ke file JSON. Isi file: produk, kategori, transaksi, stok, shift, pengeluaran, pengaturan struk, dan riwayat aktivitas lokal.",
+          "<b>Import Backup</b>: Pakai file JSON untuk memulihkan data di toko yang sedang login. Sistem akan menimpa data dengan ID yang sama.",
+          "<b>Pengingat Backup</b>: Jika belum backup atau sudah lebih dari 7 hari, sistem menampilkan peringatan di halaman pengaturan.",
+          "<b>Saran Aman</b>: Backup minimal seminggu sekali dan simpan file di tempat berbeda seperti Google Drive.",
+        ],
+      },
+    ],
+  },
 ];
 
 // Account & Password Actions
@@ -712,6 +746,62 @@ const handleLogout = () => {
   dummyAuth.value = null;
   navigateTo("/auth/login");
 };
+
+const backupFileInput = ref<HTMLInputElement | null>(null);
+
+const triggerBackupImport = () => {
+  backupFileInput.value?.click();
+};
+
+const handleBackupFileSelect = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  if (!file) return;
+
+  try {
+    await readBackupFile(file);
+    showAlert("success", "File backup siap diimport");
+  } catch (e: any) {
+    showAlert("error", e.message || "File backup tidak bisa dibaca");
+  } finally {
+    target.value = "";
+  }
+};
+
+const handleExportBackup = async () => {
+  try {
+    await downloadBackup();
+    showAlert("success", "Backup berhasil dibuat");
+  } catch (e: any) {
+    showAlert("error", e.message || "Backup gagal");
+  }
+};
+
+const handleImportBackup = async () => {
+  if (!confirm("Import backup akan menimpa data dengan ID yang sama. Lanjutkan?")) {
+    return;
+  }
+
+  try {
+    await importBackup();
+    showAlert("success", "Import backup selesai");
+  } catch (e: any) {
+    showAlert("error", e.message || "Import backup gagal");
+  }
+};
+
+const backupPreviewCounts = computed(() => {
+  const data = importPreview.value?.data || {};
+  return [
+    { label: "Kategori", count: data.categories?.length || 0 },
+    { label: "Produk", count: data.products?.length || 0 },
+    { label: "Transaksi", count: data.transactions?.length || 0 },
+    { label: "Item Transaksi", count: data.transaction_items?.length || 0 },
+    { label: "Stok", count: data.stock_movements?.length || 0 },
+    { label: "Pengeluaran", count: data.expenses?.length || 0 },
+    { label: "Shift", count: data.shifts?.length || 0 },
+  ];
+});
 </script>
 
 <template>
@@ -775,6 +865,32 @@ const handleLogout = () => {
 
       <!-- Content -->
       <div class="flex-1 overflow-y-auto p-4 md:p-8">
+        <div
+          v-if="needsBackup"
+          class="mb-6 max-w-3xl rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm"
+        >
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex gap-3">
+              <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                <UIcon name="i-heroicons-exclamation-triangle" class="h-5 w-5" />
+              </div>
+              <div>
+                <p class="font-black text-amber-900">Backup data toko disarankan</p>
+                <p class="mt-1 text-sm text-amber-800">
+                  {{ backupAgeText }}. Simpan file backup agar data produk dan transaksi mudah dipulihkan.
+                </p>
+              </div>
+            </div>
+            <button
+              class="rounded-xl bg-amber-600 px-4 py-2 text-sm font-black text-white hover:bg-amber-700"
+              :disabled="backupLoading"
+              @click="activeSection = 'backup'"
+            >
+              Backup Sekarang
+            </button>
+          </div>
+        </div>
+
         <!-- Store Profile -->
         <div v-if="activeSection === 'store'" class="max-w-2xl space-y-6">
           <div
@@ -1190,6 +1306,9 @@ const handleLogout = () => {
             <p class="text-sm text-gray-500 mb-6">
               Atur diskon dan pajak yang berlaku untuk semua transaksi
             </p>
+            <div class="mb-6 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+              Aktifkan di sini, lalu nilai diskon/pajak otomatis masuk ke total kasir, transaksi, laporan, dan struk.
+            </div>
 
             <div class="space-y-6">
               <!-- Diskon Global -->
@@ -1401,6 +1520,104 @@ const handleLogout = () => {
                     placeholder="0"
                   />
                   <span class="text-sm font-bold text-gray-600">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Backup Data -->
+        <div v-if="activeSection === 'backup'" class="max-w-3xl space-y-6">
+          <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 class="text-xl font-bold text-gray-900">Backup Data Mandiri</h2>
+                <p class="mt-2 text-sm text-gray-500">
+                  Export data toko ke file JSON. File ini bisa disimpan di HP, laptop, Google Drive, atau flashdisk.
+                </p>
+                <p class="mt-3 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-800">
+                  {{ backupAgeText }}
+                </p>
+              </div>
+              <button
+                class="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-60"
+                :disabled="backupLoading"
+                @click="handleExportBackup"
+              >
+                <UIcon name="i-heroicons-arrow-down-tray" class="h-5 w-5" />
+                Export Backup
+              </button>
+            </div>
+
+            <div class="mt-6 grid gap-3 sm:grid-cols-3">
+              <div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                <p class="text-xs font-black uppercase text-gray-500">Isi Backup</p>
+                <p class="mt-1 text-sm font-bold text-gray-900">Produk, kategori, transaksi, stok, shift, pengeluaran</p>
+              </div>
+              <div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                <p class="text-xs font-black uppercase text-gray-500">Keamanan</p>
+                <p class="mt-1 text-sm font-bold text-gray-900">Hanya data toko login saat ini</p>
+              </div>
+              <div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                <p class="text-xs font-black uppercase text-gray-500">Saran</p>
+                <p class="mt-1 text-sm font-bold text-gray-900">Backup minimal 1x seminggu</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            <h3 class="text-lg font-bold text-gray-900">Import Backup</h3>
+            <p class="mt-2 text-sm text-gray-500">
+              Pakai saat pindah database/project, ganti perangkat, atau memulihkan data. Pilih file backup lalu cek ringkasan sebelum import.
+            </p>
+
+            <input
+              ref="backupFileInput"
+              type="file"
+              accept="application/json,.json"
+              class="hidden"
+              @change="handleBackupFileSelect"
+            />
+
+            <div class="mt-5 flex flex-col gap-3 sm:flex-row">
+              <button
+                class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-5 py-3 text-sm font-black text-gray-800 hover:bg-gray-100"
+                :disabled="backupLoading"
+                @click="triggerBackupImport"
+              >
+                <UIcon name="i-heroicons-folder-open" class="h-5 w-5" />
+                Pilih File Backup
+              </button>
+              <button
+                class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50"
+                :disabled="backupLoading || !importPreview"
+                @click="handleImportBackup"
+              >
+                <UIcon name="i-heroicons-arrow-up-tray" class="h-5 w-5" />
+                Import ke Toko Ini
+              </button>
+            </div>
+
+            <div v-if="importPreview" class="mt-6 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="font-black text-blue-950">
+                    File: {{ importPreview.store?.name || "Backup toko" }}
+                  </p>
+                  <p class="text-xs font-semibold text-blue-800">
+                    Dibuat: {{ new Date(importPreview.exported_at).toLocaleString("id-ID") }}
+                  </p>
+                </div>
+                <UIcon name="i-heroicons-document-check" class="h-7 w-7 text-blue-700" />
+              </div>
+              <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div
+                  v-for="item in backupPreviewCounts"
+                  :key="item.label"
+                  class="rounded-xl bg-white p-3"
+                >
+                  <p class="text-[10px] font-black uppercase text-gray-500">{{ item.label }}</p>
+                  <p class="mt-1 text-lg font-black text-gray-900">{{ item.count }}</p>
                 </div>
               </div>
             </div>
