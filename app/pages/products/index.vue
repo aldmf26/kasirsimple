@@ -64,6 +64,281 @@ const stockModal = reactive({
   loading: false,
 });
 
+const labelModal = reactive({
+  open: false,
+  product: null as any,
+  quantity: 1,
+});
+
+const code128Patterns = [
+  "212222",
+  "222122",
+  "222221",
+  "121223",
+  "121322",
+  "131222",
+  "122213",
+  "122312",
+  "132212",
+  "221213",
+  "221312",
+  "231212",
+  "112232",
+  "122132",
+  "122231",
+  "113222",
+  "123122",
+  "123221",
+  "223211",
+  "221132",
+  "221231",
+  "213212",
+  "223112",
+  "312131",
+  "311222",
+  "321122",
+  "321221",
+  "312212",
+  "322112",
+  "322211",
+  "212123",
+  "212321",
+  "232121",
+  "111323",
+  "131123",
+  "131321",
+  "112313",
+  "132113",
+  "132311",
+  "211313",
+  "231113",
+  "231311",
+  "112133",
+  "112331",
+  "132131",
+  "113123",
+  "113321",
+  "133121",
+  "313121",
+  "211331",
+  "231131",
+  "213113",
+  "213311",
+  "213131",
+  "311123",
+  "311321",
+  "331121",
+  "312113",
+  "312311",
+  "332111",
+  "314111",
+  "221411",
+  "431111",
+  "111224",
+  "111422",
+  "121124",
+  "121421",
+  "141122",
+  "141221",
+  "112214",
+  "112412",
+  "122114",
+  "122411",
+  "142112",
+  "142211",
+  "241211",
+  "221114",
+  "413111",
+  "241112",
+  "134111",
+  "111242",
+  "121142",
+  "121241",
+  "114212",
+  "124112",
+  "124211",
+  "411212",
+  "421112",
+  "421211",
+  "212141",
+  "214121",
+  "412121",
+  "111143",
+  "111341",
+  "131141",
+  "114113",
+  "114311",
+  "411113",
+  "411311",
+  "113141",
+  "114131",
+  "311141",
+  "411131",
+  "211412",
+  "211214",
+  "211232",
+  "2331112",
+];
+
+const getSkuValue = (product: any) => String(product?.sku || "").trim();
+
+const hasPrintableSku = (product: any) => Boolean(getSkuValue(product));
+
+const code128Values = (value: string) => {
+  const values = [104];
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (code < 32 || code > 126) {
+      throw new Error("SKU hanya bisa berisi huruf, angka, dan simbol umum.");
+    }
+    values.push(code - 32);
+  }
+
+  const checksum =
+    values[0] + values.slice(1).reduce((sum, item, index) => sum + item * (index + 1), 0);
+  values.push(checksum % 103, 106);
+  return values;
+};
+
+const barcodeSvg = (value: string) => {
+  const modules: string[] = [];
+  code128Values(value).forEach((item) => {
+    const pattern = code128Patterns[item];
+    for (let i = 0; i < pattern.length; i++) {
+      const width = Number(pattern[i]);
+      modules.push((i % 2 === 0 ? "1" : "0").repeat(width));
+    }
+  });
+
+  const bits = modules.join("");
+  const height = 52;
+  const bars = [];
+  let x = 0;
+  for (const bit of bits) {
+    if (bit === "1") {
+      bars.push(`<rect x="${x}" y="0" width="1" height="${height}" />`);
+    }
+    x += 1;
+  }
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${x} ${height}" preserveAspectRatio="none">${bars.join("")}</svg>`,
+  )}`;
+};
+
+const escapeHtml = (value: unknown) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+const openLabelModal = (product: any) => {
+  if (!hasPrintableSku(product)) {
+    showAlert("error", "Isi SKU dulu agar bisa cetak barcode.");
+    return;
+  }
+  try {
+    barcodeSvg(getSkuValue(product));
+    labelModal.product = product;
+    labelModal.quantity = 1;
+    labelModal.open = true;
+  } catch (e: any) {
+    showAlert("error", e.message || "SKU tidak bisa dibuat barcode.");
+  }
+};
+
+const printBarcodeLabels = () => {
+  if (!labelModal.product) return;
+  const sku = getSkuValue(labelModal.product);
+  const qty = Math.max(1, Math.min(200, Number(labelModal.quantity) || 1));
+  const image = barcodeSvg(sku);
+  const price = formatCurrency(labelModal.product.price || 0);
+  const safeName = escapeHtml(labelModal.product.name);
+  const safeSku = escapeHtml(sku);
+  const safePrice = escapeHtml(price);
+  const labels = Array.from({ length: qty })
+    .map(
+      () => `
+        <div class="label">
+          <div class="name">${safeName}</div>
+          <img src="${image}" alt="${safeSku}">
+          <div class="sku">${safeSku}</div>
+          <div class="price">${safePrice}</div>
+        </div>
+      `,
+    )
+    .join("");
+
+  const printWindow = window.open("", "", "height=700,width=520");
+  if (!printWindow) {
+    showAlert("error", "Popup print diblokir browser.");
+    return;
+  }
+
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>Cetak Label Barcode</title>
+        <style>
+          @page { margin: 6mm; }
+          body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            color: #111827;
+          }
+          .sheet {
+            display: grid;
+            grid-template-columns: repeat(3, 38mm);
+            gap: 4mm;
+            align-items: start;
+          }
+          .label {
+            width: 38mm;
+            min-height: 25mm;
+            padding: 2mm;
+            border: 1px dashed #d1d5db;
+            box-sizing: border-box;
+            text-align: center;
+            overflow: hidden;
+            page-break-inside: avoid;
+          }
+          .name {
+            height: 9mm;
+            overflow: hidden;
+            font-size: 8px;
+            font-weight: 700;
+            line-height: 1.15;
+          }
+          img {
+            display: block;
+            width: 100%;
+            height: 12mm;
+            margin-top: 1mm;
+          }
+          .sku {
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            margin-top: 1mm;
+          }
+          .price {
+            font-size: 9px;
+            font-weight: 800;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="sheet">${labels}</div>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+};
+
 const openStockModal = (product: any) => {
   stockModal.product = product;
   stockModal.type = "in"; // default
@@ -708,6 +983,14 @@ watch(
               </td>
               <td class="p-4 text-center flex justify-center gap-2">
                 <button
+                  @click="openLabelModal(product)"
+                  :disabled="!hasPrintableSku(product)"
+                  class="px-3 py-1 bg-emerald-600 text-white rounded font-bold mr-2 hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed text-xs transition-colors"
+                  title="Cetak Label Barcode"
+                >
+                  LABEL
+                </button>
+                <button
                   @click="openStockModal(product)"
                   class="px-3 py-1 bg-purple-600 text-white rounded font-bold mr-2 hover:bg-purple-700 text-xs transition-colors"
                   title="Kelola Stok"
@@ -729,7 +1012,7 @@ watch(
               </td>
             </tr>
             <tr v-if="!filteredProducts.length && !productsLoading">
-              <td colspan="9" class="p-8 text-center text-gray-400">
+              <td colspan="10" class="p-8 text-center text-gray-400">
                 Tidak ada produk ditemukan
               </td>
             </tr>
@@ -844,22 +1127,29 @@ watch(
           </div>
 
           <!-- Action Buttons -->
-          <div class="flex gap-2">
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              @click="openLabelModal(product)"
+              :disabled="!hasPrintableSku(product)"
+              class="py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed text-xs transition-colors"
+            >
+              LABEL
+            </button>
             <button
               @click="openEdit(product)"
-              class="flex-1 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 text-xs transition-colors"
+              class="py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 text-xs transition-colors"
             >
               EDIT
             </button>
             <button
               @click="openStockModal(product)"
-              class="flex-1 py-2 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 text-xs transition-colors"
+              class="py-2 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 text-xs transition-colors"
             >
               STOK
             </button>
             <button
               @click="openDeleteConfirm(product)"
-              class="flex-1 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 text-xs transition-colors"
+              class="py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 text-xs transition-colors"
             >
               HAPUS
             </button>
@@ -1061,6 +1351,78 @@ watch(
             class="flex-1 py-3 bg-emerald-600 text-white border border-emerald-700 rounded-xl font-bold hover:bg-emerald-700 transition-colors"
           >
             {{ isEdit ? "UPDATE" : "SIMPAN" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Cetak Label Barcode -->
+    <div
+      v-if="labelModal.open && labelModal.product"
+      class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      @click.self="labelModal.open = false"
+    >
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+        <div class="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+          <div>
+            <h3 class="text-lg font-bold text-gray-900">Cetak Label Barcode</h3>
+            <p class="text-xs text-gray-500">Barcode dibuat dari SKU produk.</p>
+          </div>
+          <button
+            @click="labelModal.open = false"
+            class="text-gray-400 hover:text-gray-600"
+          >
+            <UIcon name="i-heroicons-x-mark" class="w-6 h-6" />
+          </button>
+        </div>
+
+        <div class="p-5 space-y-4">
+          <div class="rounded-xl border border-gray-200 p-4 text-center">
+            <p class="font-black text-gray-900 leading-tight">
+              {{ labelModal.product.name }}
+            </p>
+            <img
+              :src="barcodeSvg(getSkuValue(labelModal.product))"
+              :alt="getSkuValue(labelModal.product)"
+              class="w-full h-20 object-fill my-3"
+            />
+            <p class="font-mono text-sm font-black tracking-widest text-gray-900">
+              {{ getSkuValue(labelModal.product) }}
+            </p>
+            <p class="text-lg font-black text-emerald-700">
+              {{ formatCurrency(labelModal.product.price || 0) }}
+            </p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-bold text-gray-700 mb-2">
+              Jumlah label
+            </label>
+            <input
+              v-model.number="labelModal.quantity"
+              type="number"
+              min="1"
+              max="200"
+              class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+            <p class="mt-2 text-xs text-gray-500">
+              Cocok untuk kertas stiker. Ukuran label bawaan: 38mm x 25mm.
+            </p>
+          </div>
+        </div>
+
+        <div class="p-5 border-t border-gray-100 flex gap-3 bg-gray-50">
+          <button
+            @click="labelModal.open = false"
+            class="flex-1 py-3 bg-gray-200 border border-gray-300 rounded-xl font-bold hover:bg-gray-300 transition-colors"
+          >
+            BATAL
+          </button>
+          <button
+            @click="printBarcodeLabels"
+            class="flex-1 py-3 bg-emerald-600 text-white border border-emerald-700 rounded-xl font-bold hover:bg-emerald-700 transition-colors"
+          >
+            CETAK
           </button>
         </div>
       </div>
