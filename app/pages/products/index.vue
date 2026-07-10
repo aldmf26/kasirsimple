@@ -1075,7 +1075,7 @@ watch(
           class="bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-2.5 relative overflow-hidden"
         >
           <!-- Background Watermark Number (No) -->
-          <div class="absolute -bottom-2 -right-1 text-5xl font-black text-slate-100 pointer-events-none select-none z-0">
+          <div class="absolute bottom-1 left-1 text-4xl font-black text-slate-100 pointer-events-none select-none z-0">
             {{ index + 1 }}
           </div>
 
