@@ -9,35 +9,7 @@ function closeMenu() {
   mobileMenuOpen.value = false
 }
 
-// Load GSAP from CDN
-useHead({
-  script: [
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js',
-      defer: true
-    },
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js',
-      defer: true
-    }
-  ]
-})
-
-onMounted(() => {
-  // Animate navbar on load
-  const waitForGsap = setInterval(() => {
-    if (typeof window !== 'undefined' && (window as any).gsap) {
-      clearInterval(waitForGsap)
-      const gsap = (window as any).gsap
-      gsap.from('.landing-nav', {
-        y: -20,
-        opacity: 0,
-        duration: 0.6,
-        ease: 'power2.out'
-      })
-    }
-  }, 50)
-})
+const instagramDmUrl = 'https://ig.me/m/kasir.ok'
 </script>
 
 <template>
@@ -58,7 +30,9 @@ onMounted(() => {
 
         <div class="nav-actions">
           <NuxtLink to="/auth/login" class="nav-login">Masuk</NuxtLink>
-          <NuxtLink to="/auth/register" class="nav-register">Daftar Gratis</NuxtLink>
+          <a :href="instagramDmUrl" target="_blank" rel="noopener" class="nav-register">
+            DM Instagram
+          </a>
         </div>
 
         <!-- Mobile hamburger -->
@@ -76,7 +50,15 @@ onMounted(() => {
           <a href="#pricing" class="mobile-link" @click="closeMenu">Harga</a>
           <div class="mobile-actions">
             <NuxtLink to="/auth/login" class="mobile-login" @click="closeMenu">Masuk</NuxtLink>
-            <NuxtLink to="/auth/register" class="mobile-register" @click="closeMenu">Daftar Gratis</NuxtLink>
+            <a
+              :href="instagramDmUrl"
+              target="_blank"
+              rel="noopener"
+              class="mobile-register"
+              @click="closeMenu"
+            >
+              DM Instagram
+            </a>
           </div>
         </div>
       </Transition>
@@ -108,7 +90,7 @@ onMounted(() => {
         </div>
 
         <p class="footer-copy">
-          © {{ new Date().getFullYear() }} KasirOK. All rights reserved.
+          &copy; {{ new Date().getFullYear() }} KasirOK. All rights reserved.
         </p>
       </div>
     </footer>
@@ -193,13 +175,13 @@ onMounted(() => {
   left: 0;
   width: 0;
   height: 2px;
-  background: #2563eb;
+  background: #6d28d9;
   border-radius: 9999px;
   transition: width 0.3s ease;
 }
 
 .nav-link:hover {
-  color: #2563eb;
+  color: #6d28d9;
 }
 
 .nav-link:hover::after {
@@ -221,24 +203,24 @@ onMounted(() => {
 }
 
 .nav-login:hover {
-  color: #2563eb;
+  color: #6d28d9;
 }
 
 .nav-register {
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  background: #6d28d9;
   color: #fff;
   padding: 0.5rem 1.25rem;
   border-radius: 9999px;
   font-size: 0.85rem;
   font-weight: 700;
   text-decoration: none;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 4px 14px rgba(109, 40, 217, 0.22);
   transition: all 0.3s;
 }
 
 .nav-register:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 6px 20px rgba(109, 40, 217, 0.3);
 }
 
 /* Hamburger */
@@ -297,7 +279,7 @@ onMounted(() => {
 }
 
 .mobile-link:hover {
-  color: #2563eb;
+  color: #6d28d9;
 }
 
 .mobile-actions {
@@ -329,10 +311,10 @@ onMounted(() => {
   font-size: 0.95rem;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  background: #6d28d9;
   border-radius: 0.75rem;
   text-decoration: none;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 4px 14px rgba(109, 40, 217, 0.22);
 }
 
 /* Menu animation */

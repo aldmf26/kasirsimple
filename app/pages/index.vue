@@ -1,1080 +1,552 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
-
 definePageMeta({
-  layout: 'landing'
-})
+  layout: "landing",
+});
 
-let interval: any
-let scrollTriggers: any[] = []
+const instagramDmUrl = "https://ig.me/m/kasir.ok";
 
-onMounted(() => {
-  // Wait for BOTH GSAP and ScrollTrigger to load from CDN
-  interval = setInterval(() => {
-    const w = window as any
-    if (w.gsap && w.ScrollTrigger) {
-      clearInterval(interval)
-      // Small delay to ensure DOM is fully painted
-      setTimeout(() => {
-        initAnimations(w.gsap, w.ScrollTrigger)
-      }, 150)
-    }
-  }, 50)
-})
+const features = [
+  {
+    icon: "i-heroicons-shopping-cart-20-solid",
+    title: "Kasir cepat",
+    text: "Klik barang, scan barcode, atau input harga cepat saat barang belum didata.",
+  },
+  {
+    icon: "i-heroicons-cube-20-solid",
+    title: "Barang dan stok",
+    text: "Catat nama barang, harga jual, modal, SKU, dan stok tanpa format rumit.",
+  },
+  {
+    icon: "i-heroicons-chart-bar-20-solid",
+    title: "Laporan harian",
+    text: "Lihat penjualan hari ini, transaksi terakhir, barang laris, dan pengeluaran.",
+  },
+  {
+    icon: "i-heroicons-printer-20-solid",
+    title: "Struk sederhana",
+    text: "Struk bisa dicetak lewat menu print bawaan HP, tablet, atau komputer.",
+  },
+  {
+    icon: "i-heroicons-arrow-down-tray-20-solid",
+    title: "Backup mandiri",
+    text: "Pemilik toko bisa export data sendiri untuk jaga-jaga saat pindah perangkat.",
+  },
+  {
+    icon: "i-heroicons-building-storefront-20-solid",
+    title: "Cocok banyak usaha",
+    text: "Bisa dipakai toko kecil, warung, cafe, barber, laundry, dan jasa harian.",
+  },
+];
 
-onUnmounted(() => {
-  if (interval) clearInterval(interval)
-  scrollTriggers.forEach(st => st.kill())
-})
-
-function initAnimations(gsap: any, ScrollTrigger: any) {
-  gsap.registerPlugin(ScrollTrigger)
-
-  // --- Hero Section Animations ---
-  const heroTl = gsap.timeline({ defaults: { ease: 'power3.out' } })
-
-  heroTl
-    .fromTo('.hero-badge', 
-      { y: 30, opacity: 0 }, 
-      { y: 0, opacity: 1, duration: 0.7 }
-    )
-    .fromTo('.hero-title', 
-      { y: 50, opacity: 0 }, 
-      { y: 0, opacity: 1, duration: 0.8 }, 
-      '-=0.4'
-    )
-    .fromTo('.hero-subtitle', 
-      { y: 30, opacity: 0 }, 
-      { y: 0, opacity: 1, duration: 0.6 }, 
-      '-=0.4'
-    )
-    .fromTo('.hero-cta', 
-      { y: 30, opacity: 0 }, 
-      { y: 0, opacity: 1, duration: 0.6 }, 
-      '-=0.3'
-    )
-    .fromTo('.hero-social-proof', 
-      { y: 20, opacity: 0 }, 
-      { y: 0, opacity: 1, duration: 0.5 }, 
-      '-=0.2'
-    )
-    .fromTo('.hero-image-wrap', 
-      { x: 80, opacity: 0 }, 
-      { x: 0, opacity: 1, duration: 1, ease: 'power2.out' }, 
-      '-=0.8'
-    )
-    .fromTo('.hero-float-badge', 
-      { scale: 0, opacity: 0 }, 
-      { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(1.7)' }, 
-      '-=0.3'
-    )
-
-  // Floating animation for the badge
-  gsap.to('.hero-float-badge', {
-    y: -10,
-    duration: 2,
-    repeat: -1,
-    yoyo: true,
-    ease: 'sine.inOut'
-  })
-
-  // Parallax glow
-  gsap.to('.hero-glow', {
-    scale: 1.1,
-    duration: 3,
-    repeat: -1,
-    yoyo: true,
-    ease: 'sine.inOut'
-  })
-
-  // --- Feature Section Header ---
-  const headerTrig1 = ScrollTrigger.create({
-    trigger: '#features',
-    start: 'top 85%',
-    animation: gsap.fromTo('.features-header', 
-      { y: 40, opacity: 0 }, 
-      { y: 0, opacity: 1, duration: 0.8, ease: 'power2.out' }
-    )
-  })
-  scrollTriggers.push(headerTrig1)
-
-  // --- Feature Cards Stagger ---
-  const cardsTrig1 = ScrollTrigger.create({
-    trigger: '.features-grid',
-    start: 'top 80%',
-    animation: gsap.fromTo('.feature-card', 
-      { y: 60, opacity: 0 }, 
-      { y: 0, opacity: 1, duration: 0.7, stagger: 0.12, ease: 'power2.out' }
-    )
-  })
-  scrollTriggers.push(cardsTrig1)
-
-  // --- Pricing Section Header ---
-  const headerTrig2 = ScrollTrigger.create({
-    trigger: '#pricing',
-    start: 'top 85%',
-    animation: gsap.fromTo('.pricing-header', 
-      { y: 40, opacity: 0 }, 
-      { y: 0, opacity: 1, duration: 0.8, ease: 'power2.out' }
-    )
-  })
-  scrollTriggers.push(headerTrig2)
-
-  // --- Pricing Cards Stagger ---
-  const cardsTrig2 = ScrollTrigger.create({
-    trigger: '.pricing-grid',
-    start: 'top 80%',
-    animation: gsap.fromTo('.pricing-card', 
-      { y: 60, opacity: 0 }, 
-      { y: 0, opacity: 1, duration: 0.7, stagger: 0.15, ease: 'power2.out' }
-    )
-  })
-  scrollTriggers.push(cardsTrig2)
-
-  // Force ScrollTrigger to recalculate layout
-  setTimeout(() => {
-    ScrollTrigger.refresh()
-  }, 500)
-}
+const simpleSteps = [
+  "Daftar akun",
+  "Isi nama toko",
+  "Tambah barang sedikit-sedikit",
+  "Langsung mulai jualan",
+];
 </script>
 
 <template>
   <div class="landing-page">
-    <!-- Hero Section -->
     <section class="hero-section">
-      <div class="hero-bg-shapes">
-        <div class="hero-shape hero-shape-1" />
-        <div class="hero-shape hero-shape-2" />
-        <div class="hero-shape hero-shape-3" />
-      </div>
+      <div class="page-container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Kasir web untuk toko kecil</p>
+          <h1>Jualan lebih rapi tanpa ribet belajar sistem besar.</h1>
+          <p class="hero-text">
+            KasirOK dibuat untuk pemilik toko yang biasa pakai kalkulator dan catatan kertas.
+            Buka dari HP, tambah barang, catat transaksi, lalu lihat laporan harian.
+          </p>
 
-      <div class="hero-container">
-        <div class="hero-content">
-          <div class="hero-text">
-            <div class="hero-badge">
-              <span class="hero-badge-dot">
-                <span class="hero-badge-ping" />
-                <span class="hero-badge-core" />
-              </span>
-              Solusi Kasir #1 di Indonesia
-            </div>
-
-            <h1 class="hero-title">
-              Kelola Bisnis<br>
-              <span class="hero-title-gradient">Tanpa Ribet</span>
-            </h1>
-
-            <p class="hero-subtitle">
-              Aplikasi kasir pintar yang membantu membukukan penjualan, kelola stok, dan pantau laba rugi secara otomatis. Praktis, modern, dan mudah digunakan.
-            </p>
-
-            <div class="hero-cta">
-              <NuxtLink to="/auth/register" class="btn-primary">
-                Coba Gratis Sekarang
-                <UIcon name="i-heroicons-arrow-right-20-solid" class="btn-icon" />
-              </NuxtLink>
-            </div>
-
-            <div class="hero-social-proof">
-              <div class="avatar-stack">
-                <div class="avatar avatar-1">A</div>
-                <div class="avatar avatar-2">B</div>
-                <div class="avatar avatar-3">+</div>
-              </div>
-              <p>Bergabung dengan <strong>10.000+</strong> Pengusaha</p>
-            </div>
+          <div class="hero-actions">
+            <a :href="instagramDmUrl" target="_blank" rel="noopener" class="btn-primary">
+              DM Instagram @kasir.ok
+              <UIcon name="i-simple-icons-instagram" class="btn-icon" />
+            </a>
+            <NuxtLink to="/auth/register" class="btn-secondary">
+              Coba daftar
+            </NuxtLink>
           </div>
 
-          <div class="hero-visual">
-            <div class="hero-glow" />
-            <div class="hero-image-wrap">
-              <img src="/images/hero_pos.png" alt="Kasir Simple Illustration" class="hero-image">
-            </div>
-            <div class="hero-float-badge">
-              <div class="float-badge-icon">
-                <UIcon name="i-heroicons-check-circle-20-solid" class="w-6 h-6" />
-              </div>
-              <div>
-                <p class="float-badge-label">Status</p>
-                <p class="float-badge-value">Online & Siap Jual</p>
-              </div>
-            </div>
+          <div class="hero-notes">
+            <span>Mulai Rp20.000/bulan</span>
+            <span>Bisa dibuka di HP</span>
+            <span>Tidak perlu install</span>
           </div>
+        </div>
+
+        <div class="hero-preview" aria-label="Tampilan aplikasi kasir">
+          <img
+            src="/images/hero_pos.png"
+            alt="Tampilan KasirOK"
+            loading="eager"
+            class="hero-image"
+          >
         </div>
       </div>
     </section>
 
-    <!-- Features Section -->
     <section id="features" class="features-section">
-      <div class="section-container">
-        <div class="section-header features-header">
-          <h2 class="section-title">Fitur Lengkap untuk Bisnis Anda</h2>
-          <p class="section-subtitle">Semua yang Anda butuhkan untuk mengembangkan bisnis, ada di dalam satu aplikasi kasir yang simpel.</p>
+      <div class="page-container">
+        <div class="section-heading">
+          <p class="eyebrow">Yang sering dipakai</p>
+          <h2>Fitur fokus untuk jualan harian.</h2>
+          <p>
+            Tidak dibuat ramai. Yang penting transaksi cepat, barang rapi, laporan kebaca.
+          </p>
         </div>
 
-        <div class="features-grid">
-          <!-- Feature 1 -->
-          <div class="feature-card">
-            <div class="feature-icon feature-icon-blue">
-              <UIcon name="i-heroicons-cube-20-solid" class="w-7 h-7" />
+        <div class="feature-grid">
+          <article v-for="feature in features" :key="feature.title" class="feature-card">
+            <div class="feature-icon">
+              <UIcon :name="feature.icon" class="icon-size" />
             </div>
-            <h3 class="feature-title">Manajemen Stok</h3>
-            <p class="feature-desc">Pantau ketersediaan barang secara otomatis. Dapatkan notifikasi saat stok menipis agar tidak kehabisan barang.</p>
-          </div>
-
-          <!-- Feature 2 -->
-          <div class="feature-card">
-            <div class="feature-icon feature-icon-purple">
-              <UIcon name="i-heroicons-chart-bar-20-solid" class="w-7 h-7" />
-            </div>
-            <h3 class="feature-title">Laporan Keuangan</h3>
-            <p class="feature-desc">Analisis performa bisnis Anda dengan laporan grafik yang mudah dipahami. Pantau omset harian hingga bulanan.</p>
-          </div>
-
-          <!-- Feature 3 -->
-          <div class="feature-card">
-            <div class="feature-icon feature-icon-green">
-              <UIcon name="i-heroicons-clock-20-solid" class="w-7 h-7" />
-            </div>
-            <h3 class="feature-title">Laporan Shift</h3>
-            <p class="feature-desc">Pantau pembukaan dan penutupan kasir dengan laporan shift yang akurat. Minimalisir selisih uang kas.</p>
-          </div>
-
-          <!-- Feature 4 -->
-          <div class="feature-card">
-            <div class="feature-icon feature-icon-amber">
-              <UIcon name="i-heroicons-printer-20-solid" class="w-7 h-7" />
-            </div>
-            <h3 class="feature-title">Cetak Struk</h3>
-            <p class="feature-desc">Cetak struk lewat menu print bawaan HP, tablet, atau komputer dengan ukuran thermal 58mm dan 80mm.</p>
-          </div>
-
-          <!-- Feature 5 -->
-          <div class="feature-card">
-            <div class="feature-icon feature-icon-red">
-              <UIcon name="i-heroicons-wifi-20-solid" class="w-7 h-7" />
-            </div>
-            <h3 class="feature-title">Mode Offline</h3>
-            <p class="feature-desc">Tetap bisa berjualan meski internet mati. Data akan tersinkronisasi otomatis saat online kembali.</p>
-          </div>
-
-          <!-- Feature 6 -->
-          <div class="feature-card">
-            <div class="feature-icon feature-icon-teal">
-              <UIcon name="i-heroicons-banknotes-20-solid" class="w-7 h-7" />
-            </div>
-            <h3 class="feature-title">Manajemen Pengeluaran</h3>
-            <p class="feature-desc">Catat semua biaya operasional bisnis Anda. Pantau pengeluaran harian agar laba bersih tetap terjaga.</p>
-          </div>
+            <h3>{{ feature.title }}</h3>
+            <p>{{ feature.text }}</p>
+          </article>
         </div>
       </div>
     </section>
 
-    <!-- Pricing Section -->
+    <section class="how-section">
+      <div class="page-container how-grid">
+        <div>
+          <p class="eyebrow">Cara pakai</p>
+          <h2>Dibuat supaya orang toko cepat paham.</h2>
+          <p class="section-text">
+            KasirOK tidak memaksa semua data lengkap dari awal. Kalau barang belum ada,
+            kasir tetap bisa input harga cepat lalu transaksi jalan.
+          </p>
+        </div>
+
+        <ol class="step-list">
+          <li v-for="step in simpleSteps" :key="step">
+            <span>{{ simpleSteps.indexOf(step) + 1 }}</span>
+            {{ step }}
+          </li>
+        </ol>
+      </div>
+    </section>
+
     <section id="pricing" class="pricing-section">
-      <div class="section-container">
-        <div class="section-header pricing-header">
-          <h2 class="section-title">Pilihan Harga yang Terjangkau</h2>
-          <p class="section-subtitle">Investasi kecil untuk pertumbuhan bisnis yang besar.</p>
+      <div class="page-container">
+        <div class="section-heading">
+          <p class="eyebrow">Harga</p>
+          <h2>Pilih yang ringan dulu.</h2>
+          <p>Untuk toko kecil yang baru mulai rapiin penjualan.</p>
         </div>
 
         <div class="pricing-grid">
-          <!-- Monthly Plan -->
-          <div class="pricing-card">
-            <div class="pricing-card-inner">
-              <div class="pricing-plan-name">
-                <h3>Paket Bulanan</h3>
-                <p>Bayar fleksibel tiap bulan</p>
-              </div>
-
-              <div class="pricing-amount">
-                <span class="price">Rp 40.000</span>
-                <span class="period">/bulan</span>
-              </div>
-
-              <ul class="pricing-features">
-                <li>
-                  <UIcon name="i-heroicons-check-circle-20-solid" class="check-icon" />
-                  Semua Fitur Kasir
-                </li>
-                <li>
-                  <UIcon name="i-heroicons-check-circle-20-solid" class="check-icon" />
-                  Update Fitur Gratis
-                </li>
-                <li>
-                  <UIcon name="i-heroicons-check-circle-20-solid" class="check-icon" />
-                  Data Cloud Aman
-                </li>
-                <li>
-                  <UIcon name="i-heroicons-check-circle-20-solid" class="check-icon" />
-                  Support Teknis
-                </li>
-              </ul>
-
-              <NuxtLink to="/auth/register" class="btn-outline">
-                Pilih Paket
-              </NuxtLink>
+          <article class="price-card">
+            <div>
+              <h3>Bulanan</h3>
+              <p class="price-desc">Cocok untuk coba jalan dulu.</p>
             </div>
-          </div>
-
-          <!-- Annual Plan (Featured) -->
-          <div class="pricing-card pricing-card-featured">
-            <div class="pricing-badge-popular">Hemat 2 Bulan (17%)</div>
-            <div class="pricing-card-inner">
-              <div class="pricing-plan-name">
-                <h3>Paket Tahunan</h3>
-                <p class="italic">Hemat & Lebih Untung</p>
-              </div>
-
-              <div class="pricing-amount">
-                <span class="price price-large">Rp 400.000</span>
-                <span class="period">/tahun</span>
-              </div>
-              <p class="pricing-equivalent">Setara Rp 33.333/bulan</p>
-
-              <ul class="pricing-features pricing-features-bold">
-                <li>
-                  <UIcon name="i-heroicons-sparkles-20-solid" class="spark-icon" />
-                  Semua Fitur Kasir
-                </li>
-                <li>
-                  <UIcon name="i-heroicons-check-circle-20-solid" class="check-icon" />
-                  Update Fitur Prioritas
-                </li>
-                <li>
-                  <UIcon name="i-heroicons-check-circle-20-solid" class="check-icon" />
-                  Backup Data Mingguan
-                </li>
-                <li>
-                  <UIcon name="i-heroicons-check-circle-20-solid" class="check-icon" />
-                  Support Prioritas WA
-                </li>
-              </ul>
-
-              <NuxtLink to="/auth/register" class="btn-primary btn-full">
-                Mulai Sekarang
-              </NuxtLink>
+            <div class="price">
+              <strong>Rp20.000</strong>
+              <span>/ bulan</span>
             </div>
-          </div>
+            <ul>
+              <li>Semua fitur kasir utama</li>
+              <li>Produk, stok, laporan</li>
+              <li>Backup data mandiri</li>
+            </ul>
+            <a :href="instagramDmUrl" target="_blank" rel="noopener" class="btn-secondary full">
+              Tanya paket bulanan
+            </a>
+          </article>
 
-          <!-- Custom Plan -->
-          <div class="pricing-card pricing-card-custom">
-            <div class="pricing-card-inner">
-              <div class="pricing-plan-name">
-                <h3>Custom Aplikasi</h3>
-                <p>Whitelabel & Fitur Khusus</p>
-              </div>
-
-              <div class="pricing-amount pricing-amount-custom">
-                <span class="price-label">Mulai Dari</span>
-                <span class="price">Rp 2.000.000</span>
-              </div>
-
-              <ul class="pricing-features">
-                <li>
-                  <UIcon name="i-heroicons-sparkles-20-solid" class="spark-icon" />
-                  Logo & Brand Sendiri
-                </li>
-                <li>
-                  <UIcon name="i-heroicons-code-bracket-20-solid" class="spark-icon" />
-                  Custom Fitur Spesifik
-                </li>
-                <li>
-                  <UIcon name="i-heroicons-server-stack-20-solid" class="spark-icon" />
-                  Server Mandiri
-                </li>
-                <li>
-                  <UIcon name="i-heroicons-device-phone-mobile-20-solid" class="spark-icon" />
-                  Input Data Awal
-                </li>
-              </ul>
-
-              <a href="https://wa.me/62895413111053?text=Halo,%20saya%20tertarik%20dengan%20jasa%20Custom%20Aplikasi%20Kasir" target="_blank" class="btn-outline">
-                WhatsApp Kami
-              </a>
+          <article class="price-card featured">
+            <div class="save-badge">Lebih hemat</div>
+            <div>
+              <h3>Tahunan</h3>
+              <p class="price-desc">Bayar sekali, dipakai setahun.</p>
             </div>
-          </div>
+            <div class="price">
+              <strong>Rp150.000</strong>
+              <span>/ tahun</span>
+            </div>
+            <p class="saving-text">Setara Rp12.500/bulan.</p>
+            <ul>
+              <li>Semua fitur paket bulanan</li>
+              <li>Lebih murah untuk pemakaian rutin</li>
+              <li>Bantuan setup awal via DM</li>
+            </ul>
+            <a :href="instagramDmUrl" target="_blank" rel="noopener" class="btn-primary full">
+              DM Instagram sekarang
+            </a>
+          </article>
         </div>
+      </div>
+    </section>
 
-        <p class="pricing-footnote">
-          * Harga transparan, tanpa biaya tersembunyi lainnya.
-        </p>
+    <section class="final-cta">
+      <div class="page-container cta-box">
+        <div>
+          <p class="eyebrow">Mau coba dulu?</p>
+          <h2>Kirim DM ke @kasir.ok.</h2>
+          <p>
+            Tulis jenis usaha kamu, nanti dibantu arahkan mulai dari mana.
+          </p>
+        </div>
+        <a :href="instagramDmUrl" target="_blank" rel="noopener" class="btn-primary">
+          DM @kasir.ok
+          <UIcon name="i-simple-icons-instagram" class="btn-icon" />
+        </a>
       </div>
     </section>
   </div>
 </template>
 
 <style scoped>
-/* ========================================
-   LANDING PAGE — Professional Clean Design
-   GSAP-ready with centered mobile-first layout
-   ======================================== */
-
-/* ---------- Hero Section ---------- */
-.hero-section {
-  position: relative;
-  /* Reduced padding to avoid empty space */
-  padding: 3.5rem 0 4rem;
-  overflow: hidden;
-  background: linear-gradient(180deg, #f8faff 0%, #ffffff 100%);
-}
-
-.hero-bg-shapes {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.hero-shape {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.35;
-}
-
-.hero-shape-1 {
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, #a5b4fc, transparent 70%);
-  top: -120px;
-  right: -100px;
-}
-
-.hero-shape-2 {
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, #93c5fd, transparent 70%);
-  bottom: -80px;
-  left: -60px;
-}
-
-.hero-shape-3 {
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, #c4b5fd, transparent 70%);
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.hero-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-  position: relative;
-  z-index: 10;
-}
-
-.hero-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 3rem;
-}
-
-.hero-text {
-  max-width: 640px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-/* Badge */
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 1rem;
-  border-radius: 9999px;
-  background: rgba(239, 246, 255, 0.8);
-  border: 1px solid #dbeafe;
-  color: #2563eb;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  backdrop-filter: blur(8px);
-}
-
-.hero-badge-dot {
-  position: relative;
-  display: flex;
-  width: 8px;
-  height: 8px;
-}
-
-.hero-badge-ping {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: #60a5fa;
-  opacity: 0.75;
-  animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
-}
-
-.hero-badge-core {
-  position: relative;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #3b82f6;
-}
-
-@keyframes ping {
-  75%, 100% {
-    transform: scale(2);
-    opacity: 0;
-  }
-}
-
-/* Title */
-.hero-title {
-  font-size: 2.5rem;
-  font-weight: 900;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+.landing-page {
+  background: #f8fafc;
   color: #111827;
 }
 
-.hero-title-gradient {
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.page-container {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
 }
 
-.hero-subtitle {
+.hero-section {
+  padding: 56px 0 40px;
+  background: linear-gradient(180deg, #fff 0%, #f5f3ff 100%);
+}
+
+.hero-grid {
+  display: grid;
+  gap: 32px;
+  align-items: center;
+}
+
+.hero-copy {
+  display: grid;
+  gap: 18px;
+}
+
+.eyebrow {
+  color: #6d28d9;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  max-width: 720px;
+  color: #171717;
+  font-size: clamp(2.25rem, 8vw, 4.7rem);
+  font-weight: 900;
+  line-height: 1.02;
+}
+
+h2 {
+  color: #171717;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-weight: 900;
+  line-height: 1.08;
+}
+
+h3 {
+  color: #1f2937;
+  font-size: 1.05rem;
+  font-weight: 850;
+}
+
+.hero-text,
+.section-heading p,
+.section-text,
+.final-cta p {
+  color: #4b5563;
   font-size: 1rem;
-  color: #6b7280;
-  line-height: 1.6;
-  max-width: 520px;
+  line-height: 1.7;
 }
 
-/* CTA */
-.btn-primary {
+.hero-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.btn-primary,
+.btn-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.9rem 2rem;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
-  border-radius: 1rem;
-  border: none;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  font-weight: 850;
   text-decoration: none;
-  box-shadow: 0 8px 30px rgba(37, 99, 235, 0.3);
-  transition: all 0.3s ease;
-  cursor: pointer;
 }
 
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(37, 99, 235, 0.4);
+.btn-primary {
+  background: #6d28d9;
+  color: #fff;
+  box-shadow: 0 12px 26px rgba(109, 40, 217, 0.22);
 }
 
-.btn-primary:active {
-  transform: scale(0.97);
+.btn-secondary {
+  background: #fff;
+  color: #4c1d95;
+  border: 1px solid #ddd6fe;
 }
 
 .btn-icon {
-  width: 1.25rem;
-  height: 1.25rem;
-  transition: transform 0.3s;
+  width: 18px;
+  height: 18px;
 }
 
-.btn-primary:hover .btn-icon {
-  transform: translateX(4px);
-}
-
-.btn-outline {
+.hero-notes {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  padding: 0.75rem 1.5rem;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #1f2937;
-  background: #fff;
-  border: 2px solid #e5e7eb;
-  border-radius: 0.75rem;
-  text-decoration: none;
-  transition: all 0.25s;
-  cursor: pointer;
-}
-
-.btn-outline:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
-}
-
-.btn-full {
-  width: 100%;
-}
-
-/* Social proof */
-.hero-social-proof {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding-top: 1rem;
-  border-top: 1px solid #f3f4f6;
-  font-size: 0.9rem;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.hero-social-proof strong {
-  color: #111827;
-}
-
-.avatar-stack {
-  display: flex;
-}
-
-.avatar-stack .avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 2px solid #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  font-weight: 700;
+  flex-wrap: wrap;
+  gap: 8px;
   color: #4b5563;
-  margin-right: -8px;
+  font-size: 0.82rem;
+  font-weight: 750;
 }
 
-.avatar-1 { background: #e5e7eb; }
-.avatar-2 { background: #d1d5db; }
-.avatar-3 { background: #9ca3af; color: #fff; }
-
-/* Hero Visual */
-.hero-visual {
-  position: relative;
-  width: 100%;
-  max-width: 500px;
+.hero-notes span {
+  padding: 8px 10px;
+  border: 1px solid #e9d5ff;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
 }
 
-.hero-glow {
-  position: absolute;
-  inset: -16px;
-  background: radial-gradient(ellipse, rgba(165, 180, 252, 0.4), rgba(196, 181, 253, 0.3), transparent 70%);
-  border-radius: 50%;
-  filter: blur(40px);
-}
-
-.hero-image-wrap {
-  position: relative;
-  z-index: 2;
+.hero-preview {
+  overflow: hidden;
+  border: 1px solid #e9d5ff;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 20px 50px rgba(76, 29, 149, 0.12);
 }
 
 .hero-image {
+  display: block;
   width: 100%;
-  border-radius: 1.25rem;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  transition: transform 0.6s ease;
+  height: auto;
 }
 
-.hero-image:hover {
-  transform: scale(1.02);
+.features-section,
+.how-section,
+.pricing-section,
+.final-cta {
+  padding: 56px 0;
 }
 
-.hero-float-badge {
-  position: absolute;
-  bottom: -12px;
-  left: -8px;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
+.features-section,
+.pricing-section {
   background: #fff;
-  border-radius: 0.85rem;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
-  border: 1px solid #f3f4f6;
 }
 
-.float-badge-icon {
-  width: 40px;
-  height: 40px;
-  background: #ecfdf5;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #16a34a;
-}
-
-.float-badge-label {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: #9ca3af;
-  letter-spacing: 0.05em;
-}
-
-.float-badge-value {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #111827;
-}
-
-/* ---------- Sections Shared ---------- */
-.section-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-}
-
-.section-header {
-  text-align: center;
-  max-width: 640px;
-  margin: 0 auto 3rem;
-}
-
-.section-title {
-  font-size: 1.75rem;
-  font-weight: 800;
-  color: #111827;
-  letter-spacing: -0.01em;
-  margin-bottom: 0.75rem;
-}
-
-.section-subtitle {
-  font-size: 1.05rem;
-  color: #6b7280;
-  line-height: 1.6;
-}
-
-/* ---------- Features Section ---------- */
-.features-section {
-  /* Reduced padding */
-  padding: 4rem 0;
-  background: #fff;
-  position: relative;
-}
-
-.features-section::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(to right, transparent, #e5e7eb, transparent);
-}
-
-.features-grid {
+.section-heading {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 1.25rem;
+  max-width: 680px;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.feature-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.feature-card,
+.price-card,
+.cta-box {
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  background: #fff;
 }
 
 .feature-card {
-  background: #fafbfc;
-  padding: 2rem;
-  border-radius: 1.5rem;
-  border: 1px solid #f3f4f6;
-  text-align: center;
-  transition: all 0.35s ease;
-}
-
-.feature-card:hover {
-  background: #fff;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
-  transform: translateY(-4px);
+  display: grid;
+  gap: 10px;
+  padding: 18px;
 }
 
 .feature-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 1rem;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+  background: #f3e8ff;
+  color: #6d28d9;
+}
+
+.icon-size {
+  width: 22px;
+  height: 22px;
+}
+
+.feature-card p,
+.price-desc,
+.price-card li,
+.saving-text {
+  color: #6b7280;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.how-grid {
+  display: grid;
+  gap: 24px;
+}
+
+.step-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.step-list li {
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin: 0 auto 1.25rem;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
   background: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: all 0.35s ease;
+  color: #374151;
+  font-weight: 800;
 }
 
-.feature-card:hover .feature-icon {
-  transform: scale(1.1) rotate(3deg);
-}
-
-.feature-icon-blue { color: #2563eb; }
-.feature-card:hover .feature-icon-blue { background: #2563eb; color: #fff; }
-.feature-icon-purple { color: #7c3aed; }
-.feature-card:hover .feature-icon-purple { background: #7c3aed; color: #fff; }
-.feature-icon-green { color: #16a34a; }
-.feature-card:hover .feature-icon-green { background: #16a34a; color: #fff; }
-.feature-icon-amber { color: #d97706; }
-.feature-card:hover .feature-icon-amber { background: #d97706; color: #fff; }
-.feature-icon-red { color: #dc2626; }
-.feature-card:hover .feature-icon-red { background: #dc2626; color: #fff; }
-.feature-icon-teal { color: #0d9488; }
-.feature-card:hover .feature-icon-teal { background: #0d9488; color: #fff; }
-
-.feature-title {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #111827;
-  margin-bottom: 0.6rem;
-}
-
-.feature-desc {
-  font-size: 0.9rem;
-  color: #6b7280;
-  line-height: 1.6;
-}
-
-/* ---------- Pricing Section ---------- */
-.pricing-section {
-  /* Reduced padding */
-  padding: 4rem 0 5rem;
-  background: #f9fafb;
-  position: relative;
+.step-list span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  background: #6d28d9;
+  color: #fff;
+  font-size: 0.85rem;
 }
 
 .pricing-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 1.5rem;
-  max-width: 1000px;
-  margin: 0 auto;
+  gap: 16px;
+  max-width: 820px;
 }
 
-.pricing-card {
+.price-card {
   position: relative;
-  border-radius: 1.75rem;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  transition: all 0.35s ease;
+  display: grid;
+  gap: 18px;
+  padding: 22px;
 }
 
-.pricing-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
+.price-card.featured {
+  border-color: #6d28d9;
+  box-shadow: 0 18px 40px rgba(109, 40, 217, 0.14);
 }
 
-.pricing-card-inner {
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  text-align: center;
-}
-
-/* Featured card */
-.pricing-card-featured {
-  border: 2px solid #2563eb;
-  box-shadow: 0 16px 50px rgba(37, 99, 235, 0.12);
-}
-
-.pricing-badge-popular {
-  position: absolute;
-  top: -14px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
-  color: #fff;
-  padding: 0.4rem 1.25rem;
-  border-radius: 9999px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-}
-
-.pricing-card-custom {
-  background: rgba(249, 250, 251, 0.6);
-  border-color: #e5e7eb;
-}
-
-.pricing-plan-name h3 {
-  font-size: 1.2rem;
-  font-weight: 800;
-  color: #111827;
-  margin-bottom: 0.25rem;
-}
-
-.pricing-plan-name p {
-  font-size: 0.85rem;
-  color: #9ca3af;
-  font-weight: 500;
-}
-
-.pricing-amount {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 0.25rem;
-  margin: 1.5rem 0;
-}
-
-.pricing-amount-custom {
-  flex-direction: column;
-  align-items: center;
+.save-badge {
+  width: fit-content;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: #5b21b6;
+  font-size: 0.78rem;
+  font-weight: 900;
 }
 
 .price {
-  font-size: 1.85rem;
-  font-weight: 900;
-  color: #111827;
-}
-
-.price-large {
-  font-size: 2.15rem;
-}
-
-.price-label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #9ca3af;
-}
-
-.period {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #9ca3af;
-}
-
-.pricing-equivalent {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #2563eb;
-  margin-top: -1rem;
-  margin-bottom: 1rem;
-}
-
-.pricing-features {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 1.5rem;
   display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  text-align: left;
+  align-items: baseline;
+  gap: 6px;
 }
 
-.pricing-features li {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: 0.9rem;
-  color: #4b5563;
-  font-weight: 500;
+.price strong {
+  color: #171717;
+  font-size: clamp(2rem, 8vw, 3rem);
+  font-weight: 950;
 }
 
-.pricing-features-bold li:first-child {
-  color: #111827;
-  font-weight: 700;
+.price span {
+  color: #6b7280;
+  font-size: 0.92rem;
+  font-weight: 750;
 }
 
-.check-icon {
-  width: 20px;
-  height: 20px;
-  color: #22c55e;
-  flex-shrink: 0;
+.price-card ul {
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+  margin: 0;
 }
 
-.spark-icon {
-  width: 20px;
-  height: 20px;
-  color: #3b82f6;
-  flex-shrink: 0;
+.full {
+  width: 100%;
 }
 
-.pricing-footnote {
-  text-align: center;
-  margin-top: 2.5rem;
-  color: #9ca3af;
-  font-size: 0.85rem;
-  font-weight: 500;
-  font-style: italic;
+.final-cta {
+  background: #f8fafc;
 }
 
-.italic {
-  font-style: italic;
+.cta-box {
+  display: grid;
+  gap: 20px;
+  padding: 24px;
 }
 
-/* ========================================
-   Responsive Breakpoints
-   ======================================== */
-
-/* Tablet */
-@media (min-width: 640px) {
-  .hero-title {
-    font-size: 3.5rem;
-  }
-
-  .features-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1.5rem;
-  }
-
-  .pricing-grid {
-    gap: 1.75rem;
-  }
-
-  .section-title {
-    font-size: 2rem;
-  }
-}
-
-/* Desktop */
-@media (min-width: 1024px) {
-  .hero-section {
-    padding: 5rem 0 6rem;
-  }
-
-  .features-section {
-    padding: 5rem 0;
-  }
-
-  .pricing-section {
-    padding: 5rem 0 6rem;
-  }
-
-  .hero-content {
+@media (min-width: 720px) {
+  .hero-actions {
     flex-direction: row;
-    text-align: left;
-    gap: 4rem;
   }
 
-  .hero-text {
-    align-items: flex-start;
-    flex: 1;
-  }
-
-  .hero-visual {
-    flex: 1;
-  }
-
-  .hero-title {
-    font-size: 4rem;
-  }
-
-  .features-grid {
-    grid-template-columns: repeat(3, 1fr);
+  .feature-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .pricing-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 2rem;
+    grid-template-columns: repeat(2, 1fr);
   }
 
-  .section-title {
-    font-size: 2.25rem;
+  .cta-box {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+}
+
+@media (min-width: 980px) {
+  .hero-section {
+    padding: 78px 0 62px;
+  }
+
+  .hero-grid {
+    grid-template-columns: 0.95fr 1.05fr;
+    gap: 46px;
+  }
+
+  .features-section,
+  .how-section,
+  .pricing-section,
+  .final-cta {
+    padding: 72px 0;
+  }
+
+  .feature-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .how-grid {
+    grid-template-columns: 1fr 0.85fr;
+    align-items: start;
   }
 }
 </style>
