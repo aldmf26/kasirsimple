@@ -148,8 +148,7 @@ const showReceipt = ref(false);
 const barcodeInputRef = ref<HTMLInputElement | null>(null);
 const barcodeVideoRef = ref<HTMLVideoElement | null>(null);
 const showBarcodeScanner = ref(false);
-let barcodeStream: MediaStream | null = null;
-let barcodeScanFrame = 0;
+let barcodeControls: { stop: () => void } | null = null;
 
 interface TransactionReceipt {
   id: string;
@@ -335,57 +334,40 @@ const handleBarcodeSubmit = () => {
 };
 
 const stopBarcodeCamera = () => {
-  if (barcodeScanFrame) {
-    cancelAnimationFrame(barcodeScanFrame);
-    barcodeScanFrame = 0;
-  }
-  barcodeStream?.getTracks().forEach((track) => track.stop());
-  barcodeStream = null;
+  barcodeControls?.stop();
+  barcodeControls = null;
   showBarcodeScanner.value = false;
 };
 
 const startBarcodeCamera = async () => {
   if (!process.client) return;
-  const BarcodeDetector = (window as any).BarcodeDetector;
-  if (!BarcodeDetector) {
-    showAlert("error", "Browser ini belum support scan kamera");
-    return;
-  }
 
   try {
     showBarcodeScanner.value = true;
     await nextTick();
-    barcodeStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" },
-      audio: false,
-    });
-
     if (!barcodeVideoRef.value) return;
-    barcodeVideoRef.value.srcObject = barcodeStream;
-    await barcodeVideoRef.value.play();
 
-    const detector = new BarcodeDetector({
-      formats: ["ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e"],
-    });
-
-    const scan = async () => {
-      if (!showBarcodeScanner.value || !barcodeVideoRef.value) return;
-      try {
-        const codes = await detector.detect(barcodeVideoRef.value);
-        const rawValue = codes?.[0]?.rawValue;
+    const { BrowserMultiFormatReader } = await import("@zxing/browser");
+    const reader = new BrowserMultiFormatReader();
+    barcodeControls = await reader.decodeFromConstraints(
+      {
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      },
+      barcodeVideoRef.value,
+      (result: any) => {
+        const rawValue = result?.getText?.();
         if (rawValue) {
           barcodeQuery.value = rawValue;
           stopBarcodeCamera();
           handleBarcodeSubmit();
-          return;
         }
-      } catch (e) {
-        // Kamera belum siap pada frame awal.
-      }
-      barcodeScanFrame = requestAnimationFrame(scan);
-    };
-
-    scan();
+      },
+    );
   } catch (e) {
     stopBarcodeCamera();
     showAlert("error", "Kamera tidak bisa dibuka");
