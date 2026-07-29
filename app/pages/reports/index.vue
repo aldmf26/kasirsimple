@@ -181,23 +181,25 @@ const maxTrendSales = computed(() =>
   Math.max(...salesTrendRows.value.map((item) => item.sales), 1),
 );
 
-const salesTrendPoints = computed(() => {
-  const rows = salesTrendRows.value;
-  if (!rows.length) return "";
+const salesTrendChartRows = computed(() =>
+  salesTrendRows.value.map((item) => ({
+    ...item,
+    height: Math.max((item.sales / maxTrendSales.value) * 100, item.sales > 0 ? 5 : 0),
+  })),
+);
 
-  return rows
-    .map((row, index) => {
-      const x = rows.length === 1 ? 50 : (index / (rows.length - 1)) * 100;
-      const y = 92 - (row.sales / maxTrendSales.value) * 76;
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" ");
-});
+const trendAxisTicks = computed(() =>
+  [1, 0.75, 0.5, 0.25, 0].map((ratio) => ({
+    ratio,
+    value: maxTrendSales.value * ratio,
+  })),
+);
 
-const salesTrendAreaPoints = computed(() => {
-  if (!salesTrendPoints.value) return "";
-  return `0,100 ${salesTrendPoints.value} 100,100`;
-});
+const formatCompactCurrency = (value: number) =>
+  new Intl.NumberFormat("id-ID", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
 
 const bestSalesDay = computed(() => {
   return salesTrendRows.value.reduce(
@@ -1099,35 +1101,78 @@ watch(
               <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div>
                   <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Trend Penjualan</p>
-                  <p class="mt-1 text-2xl sm:text-3xl font-black text-gray-950">
-                    {{ formatCurrency(bestSalesDay.sales) }}
-                  </p>
-                  <p class="text-sm text-gray-500">Hari terbaik: {{ bestSalesDay.date }}</p>
+                  <h3 class="mt-1 text-lg font-black text-gray-950">Omset per Hari</h3>
+                  <p class="text-sm text-gray-500">Mengikuti periode laporan yang dipilih.</p>
                 </div>
-                <div class="grid grid-cols-2 gap-2 text-right">
-                  <div class="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
-                    <p class="text-[10px] font-bold uppercase tracking-wide text-gray-500">Periode</p>
-                    <p class="text-sm font-bold text-gray-900">{{ salesTrendRows.length }} hari</p>
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="min-w-28 rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2">
+                    <div class="flex items-center gap-1.5">
+                      <span class="h-2 w-2 rounded-full bg-amber-500"></span>
+                      <p class="text-[10px] font-bold uppercase tracking-wide text-gray-500">Total Omset</p>
+                    </div>
+                    <p class="mt-1 text-sm font-black text-gray-950">{{ formatCurrency(totalSales) }}</p>
                   </div>
-                  <div class="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
-                    <p class="text-[10px] font-bold uppercase tracking-wide text-gray-500">Omset</p>
-                    <p class="text-sm font-bold text-gray-900">{{ formatCurrency(totalSales) }}</p>
+                  <div class="min-w-28 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                    <p class="text-[10px] font-bold uppercase tracking-wide text-gray-500">Hari Terbaik</p>
+                    <p class="mt-1 truncate text-sm font-black text-gray-950">{{ bestSalesDay.date }}</p>
+                    <p class="text-[10px] font-semibold text-gray-500">{{ formatCurrency(bestSalesDay.sales) }}</p>
                   </div>
                 </div>
               </div>
 
-              <div class="mt-6 h-64 sm:h-72 rounded-xl bg-gray-950 overflow-hidden relative">
-                <div class="absolute inset-0 opacity-[0.08] bg-[linear-gradient(to_right,#fff_1px,transparent_1px),linear-gradient(to_bottom,#fff_1px,transparent_1px)] bg-[size:48px_48px]"></div>
-                <svg v-if="salesTrendRows.length" viewBox="0 0 100 100" preserveAspectRatio="none" class="absolute inset-0 w-full h-full">
-                  <polygon :points="salesTrendAreaPoints" fill="rgba(16,185,129,0.20)" />
-                  <polyline :points="salesTrendPoints" fill="none" stroke="#34d399" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
-                </svg>
-                <div v-else class="absolute inset-0 flex items-center justify-center text-sm font-semibold text-gray-400">
-                  Tidak ada data penjualan
+              <div class="mt-6 h-72 rounded-xl border border-gray-100 bg-white p-3 sm:p-4">
+                <div v-if="salesTrendChartRows.length" class="flex h-full min-w-0">
+                  <div class="relative w-11 shrink-0 border-r border-gray-100">
+                    <span
+                      v-for="tick in trendAxisTicks"
+                      :key="tick.ratio"
+                      class="absolute right-2 -translate-y-1/2 text-[10px] font-semibold text-gray-400"
+                      :style="{ top: `${24 + (1 - tick.ratio) * 68}%` }"
+                    >
+                      {{ formatCompactCurrency(tick.value) }}
+                    </span>
+                  </div>
+
+                  <div class="min-w-0 flex-1 overflow-x-auto no-scrollbar">
+                    <div
+                      class="relative flex h-full items-end gap-2 px-3 pt-2"
+                      :style="{ minWidth: `${Math.max(salesTrendChartRows.length * 48, 420)}px` }"
+                    >
+                      <div class="pointer-events-none absolute inset-x-0 bottom-[8%] h-[68%]">
+                        <span
+                          v-for="tick in trendAxisTicks"
+                          :key="tick.ratio"
+                          class="absolute inset-x-0 border-t border-dashed border-gray-200"
+                          :style="{ top: `${(1 - tick.ratio) * 100}%` }"
+                        ></span>
+                      </div>
+
+                      <div
+                        v-for="item in salesTrendChartRows"
+                        :key="item.date"
+                        class="group relative z-10 flex h-full min-w-9 flex-1 flex-col items-center justify-end"
+                      >
+                        <div class="relative flex h-[68%] w-full max-w-9 items-end rounded-t-lg bg-amber-100/70">
+                          <div
+                            class="w-full rounded-t-lg bg-amber-400 transition-all duration-500 group-hover:bg-amber-500"
+                            :style="{ height: `${item.height}%` }"
+                          ></div>
+                          <div
+                            class="pointer-events-none absolute left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-950 px-2 py-1 text-[10px] font-bold text-white shadow-lg group-hover:block"
+                            :style="{ bottom: `calc(${item.height}% + 6px)` }"
+                          >
+                            {{ formatCurrency(item.sales) }}
+                          </div>
+                        </div>
+                        <span class="mt-2 max-w-20 truncate text-[10px] font-semibold text-gray-500" :title="item.date">
+                          {{ item.date }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div class="absolute left-4 right-4 bottom-4 flex justify-between gap-3 text-[11px] font-semibold text-gray-400">
-                  <span>{{ salesTrendRows[0]?.date || '-' }}</span>
-                  <span>{{ salesTrendRows[salesTrendRows.length - 1]?.date || '-' }}</span>
+                <div v-else class="flex h-full items-center justify-center text-sm font-semibold text-gray-400">
+                  Tidak ada data penjualan
                 </div>
               </div>
             </div>
