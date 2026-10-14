@@ -128,6 +128,9 @@ const fetchPrinterSettings = async () => {
 
     if (error) throw error;
     if (data) {
+      const savedBtName = (data as any).bluetooth_device_name || ''
+      let localBtName = ''
+      try { localBtName = localStorage.getItem('kasirok_bt_device') || '' } catch { /* abaikan */ }
       printerSettings.value = {
         printerType: "thermal",
         paperWidth: data.paper_width || 58,
@@ -135,8 +138,8 @@ const fetchPrinterSettings = async () => {
         includeLogo: data.include_logo !== false,
         includeStoreInfo: data.include_store_info !== false,
         footerText: data.footer_text || "Terima kasih atas kunjungan Anda!",
-        bluetoothDeviceName: "",
-        bluetoothDeviceAddress: "",
+        bluetoothDeviceName: savedBtName || localBtName,
+        bluetoothDeviceAddress: (data as any).bluetooth_device_address || "",
       };
       // Synchronize with global state
       if (globalPrinterSettings) {
@@ -223,6 +226,37 @@ const printerSettings = ref({
   bluetoothDeviceName: "",
   bluetoothDeviceAddress: "",
 });
+
+// Koneksi printer Bluetooth langsung (1 tombol, non-IT friendly)
+const bt = useBluetoothPrinter();
+const btBusy = ref(false);
+
+const handleBtConnect = async () => {
+  btBusy.value = true;
+  try {
+    const ok = await bt.connect();
+    if (ok && bt.deviceName.value) {
+      printerSettings.value.bluetoothDeviceName = bt.deviceName.value;
+      try { localStorage.setItem('kasirok_bt_device', bt.deviceName.value); } catch { /* abaikan */ }
+      showAlert("success", ` tersambung ke ${bt.deviceName.value}. Struk tes dikirim.`);
+      await bt.printTest({ name: storeSettings.name || store.value?.name, address: storeSettings.address, phone: storeSettings.phone });
+    } else if (!ok && bt.lastError.value) {
+      showAlert("error", bt.lastError.value);
+    }
+  } finally {
+    btBusy.value = false;
+  }
+};
+
+const handleBtTest = async () => {
+  btBusy.value = true;
+  try {
+    const r = await bt.printTest({ name: storeSettings.name || store.value?.name, address: storeSettings.address, phone: storeSettings.phone });
+    if (!r.sent) showAlert("success", `Simulasi tersimpan (${r.bytes} byte). Sambungkan printer untuk cetak langsung.`);
+  } finally {
+    btBusy.value = false;
+  }
+};
 
 // Active section
 const activeSection = ref("store");
@@ -482,8 +516,8 @@ const autoSavePrinterSettings = async () => {
         include_logo: printerSettings.value.includeLogo,
         include_store_info: printerSettings.value.includeStoreInfo,
         footer_text: printerSettings.value.footerText,
-        bluetooth_device_name: "",
-        bluetooth_device_address: "",
+        bluetooth_device_name: printerSettings.value.bluetoothDeviceName || "",
+        bluetooth_device_address: printerSettings.value.bluetoothDeviceAddress || "",
         updated_at: new Date().toISOString(),
       },
       { onConflict: "store_id" },
@@ -502,8 +536,8 @@ const autoSavePrinterSettings = async () => {
       include_logo: printerSettings.value.includeLogo,
       include_store_info: printerSettings.value.includeStoreInfo,
       footer_text: printerSettings.value.footerText,
-      bluetooth_device_name: "",
-      bluetooth_device_address: "",
+      bluetooth_device_name: printerSettings.value.bluetoothDeviceName || "",
+      bluetooth_device_address: printerSettings.value.bluetoothDeviceAddress || "",
       updated_at: new Date().toISOString(),
       created_at: globalPrinterSettings.value?.created_at || new Date().toISOString()
     } as any;
@@ -1739,10 +1773,34 @@ const handleResetStoreData = async () => {
         <div v-if="activeSection === 'printer'" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <!-- Settings Column -->
           <div class="space-y-6">
+            <!-- Kartu sambung printer: 1 tombol untuk non-IT -->
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div class="flex items-center gap-3 mb-2">
+                <span class="w-3 h-3 rounded-full" :class="bt.isConnected.value ? 'bg-emerald-500' : 'bg-red-400'"></span>
+                <h2 class="text-xl font-bold text-gray-900">Printer Thermal</h2>
+              </div>
+              <p class="text-sm text-gray-500 mb-4">
+                <span v-if="bt.isConnected.value">Tersambung ke <b>{{ bt.deviceName.value || printerSettings.bluetoothDeviceName }}</b>. Tombol PRINT di kasir langsung nyembur.</span>
+                <span v-else-if="printerSettings.bluetoothDeviceName">Terakhir: <b>{{ printerSettings.bluetoothDeviceName }}</b>. Klik Sambung Ulang.</span>
+                <span v-else>Belum tersambung. Nyalakan printer Panda, lalu klik tombol di bawah.</span>
+              </p>
+              <div class="flex flex-col sm:flex-row gap-2">
+                <button @click="handleBtConnect" :disabled="btBusy" class="flex-1 py-3 px-4 rounded-xl font-bold text-white transition-all active:scale-95 disabled:opacity-60" :class="bt.isConnected.value ? 'bg-gray-700 hover:bg-gray-800' : 'bg-emerald-600 hover:bg-emerald-700'">
+                  {{ bt.connecting.value || btBusy ? 'Menyambungkan...' : (bt.isConnected.value ? 'Sambung Ulang' : 'Hubungkan Printer') }}
+                </button>
+                <button @click="handleBtTest" :disabled="btBusy" class="flex-1 py-3 px-4 rounded-xl font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all active:scale-95 disabled:opacity-60">
+                  Test Cetak
+                </button>
+              </div>
+              <p v-if="bt.lastError.value" class="text-xs text-red-600 mt-3">{{ bt.lastError.value }}</p>
+              <p v-if="bt.lastText.value" class="text-xs text-gray-500 mt-3">Simulasi ({{ bt.lastBytes.value }} byte, teks saja tanpa logo):</p>
+              <pre v-if="bt.lastText.value" class="text-[11px] font-mono bg-gray-50 border border-gray-100 rounded-xl p-3 mt-1 whitespace-pre-wrap max-h-40 overflow-y-auto">{{ bt.lastText.value }}</pre>
+              <p class="text-xs text-gray-400 mt-3 italic">Cetak cepat = teks saja. Logo di preview tidak ikut tercetak agar cepat.</p>
+            </div>
             <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
               <h2 class="text-xl font-bold text-gray-900 mb-2">Pengaturan Struk</h2>
               <p class="text-sm text-gray-500 mb-6">
-                Koneksi printer diatur dari HP/Windows. Di sini hanya atur tampilan struk.
+                Atur tampilan struk. Untuk sambungan, cukup pakai kartu Printer Thermal di atas.
               </p>
               
               <div class="space-y-6">

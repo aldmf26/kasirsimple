@@ -19,6 +19,8 @@ const {
 } = useTransactions();
 const { categories, fetchCategories } = useCategories();
 const toast = useToast();
+const bt = useBluetoothPrinter();
+const isDirectPrinting = ref(false);
 const { activeShift, fetchActiveShift, openShift, updateShift, closeShift, calculateExpectedBalance, error: shiftError } = useShifts();
 const isEditingShift = ref(false);
 const hasPromptedShift = ref(false);
@@ -545,6 +547,26 @@ const processPayment = async () => {
 };
 
 const printReceipt = async () => {
+  // 1. Coba cetak langsung Bluetooth (nyembur, ukuran pas 58/80mm).
+  if (lastTransaction.value) {
+    isDirectPrinting.value = true;
+    try {
+      const r = await bt.printReceipt(
+        lastTransaction.value,
+        store.value,
+        (printerSettings.value as any)?.paper_width || 58
+      );
+      if (r.sent) {
+        toast.add({ title: 'Tercetak', description: 'Struk langsung terkirim ke printer.', color: 'success' });
+        return;
+      }
+    } catch (e: any) {
+      console.error('Bluetooth print gagal, fallback browser:', e?.message);
+    } finally {
+      isDirectPrinting.value = false;
+    }
+  }
+  // 2. Fallback: print browser (untuk printer WiFi/USB lewat dialog sistem).
   const content = document.getElementById("receipt-content")?.innerHTML;
   const printWindow = window.open("", "", "height=600,width=400");
   if (printWindow && content) {
@@ -1611,12 +1633,14 @@ onUnmounted(() => {
               </button>
               <button
                 @click="printReceipt"
-                class="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 flex items-center justify-center gap-2"
+                :disabled="isDirectPrinting"
+                class="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 <UIcon name="i-heroicons-printer" class="w-5 h-5" />
-                PRINT
+                {{ isDirectPrinting ? 'MENCETAK...' : 'PRINT' }}
               </button>
             </div>
+            <p class="text-[11px] text-gray-400 text-center">Logo tidak ikut di cetak cepat agar cepat. Belum sambung? Atur di Pengaturan > Struk.</p>
           </div>
         </div>
       </div>
