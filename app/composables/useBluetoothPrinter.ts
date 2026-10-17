@@ -1,20 +1,18 @@
 // Cetak langsung ke printer thermal Bluetooth (ESC/POS mentah).
-// Teks bersih tanpa perintah biner aneh agar aman di semua printer thermal (Panda, Xprinter, RPP02N, dll).
+// Teks saja tanpa logo agar cepat di Panda/Xprinter/RPP02N.
 // Device & writeChar disimpan di module-level agar tidak hilang saat pindah halaman.
 
 const LS_KEY = 'kasirok_bt_device'
 
-// Format rata tengah dengan spasi string murni
 const center = (text: string, width: number) => {
   const t = (text || '').trim().slice(0, width)
   const pad = Math.max(0, Math.floor((width - t.length) / 2))
   return ' '.repeat(pad) + t
 }
 
-// Format dua kolom (rata kiri dan kanan sempurna)
 const row = (left: string, right: string, width: number) => {
-  const l = (left || '').trim()
   const r = (right || '').trim()
+  const l = (left || '').trim()
   const maxLeft = width - r.length - 1
   if (l.length > maxLeft) {
     return l.slice(0, maxLeft) + ' ' + r
@@ -25,24 +23,24 @@ const row = (left: string, right: string, width: number) => {
 
 const rupiah = (n: number) => `Rp${Math.round(n || 0).toLocaleString('id-ID')}`
 
-// Format tanggal bersih
-const formatDateSimple = (d: any) => {
+// Format tanggal & waktu
+const formatDateTime = (dateVal: any) => {
   try {
-    const date = new Date(d || Date.now())
-    return date.toLocaleDateString('id-ID', {
+    const d = new Date(dateVal || Date.now())
+    return d.toLocaleDateString('id-ID', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
-    }) + ', ' + date.toLocaleTimeString('id-ID', {
+    }) + ', ' + d.toLocaleTimeString('id-ID', {
       hour: '2-digit',
       minute: '2-digit'
     })
   } catch {
-    return String(d || '')
+    return String(dateVal || '')
   }
 }
 
-// Module-level: device & writeChar bertahan selama tab terbuka
+// Module-level device & writeChar
 let _device: any = null
 let _writeChar: any = null
 
@@ -72,149 +70,137 @@ export const useBluetoothPrinter = () => {
     }
   }
 
-  // Format teks struk - rapi, presisi, 100% konsisten dengan preview
   const formatReceiptText = (trx: any, store: any, settings: any = {}) => {
     const paperWidth = Number(settings?.paper_width || settings?.paperWidth || (typeof settings === 'number' ? settings : 58))
     const W = paperWidth === 80 ? 48 : 32
-    const divider = '-'.repeat(W)
     const L: string[] = []
 
-    // 1. NAMA TOKO (CENTER)
-    L.push(center((store?.name || 'Kasir Simple').toUpperCase(), W))
+    // 1. Header Toko
+    L.push(center((store?.name || 'KASIR').toUpperCase(), W))
+    if (store?.address) L.push(center(String(store.address).slice(0, W), W))
+    if (store?.phone) L.push(center(String(store.phone).slice(0, W), W))
+    L.push('-'.repeat(W))
 
-    // Info toko (alamat & telp) jika diizinkan
-    const showStoreInfo = settings?.include_store_info !== undefined
-      ? Boolean(settings.include_store_info)
-      : (settings?.includeStoreInfo !== undefined ? Boolean(settings.includeStoreInfo) : true)
-
-    if (showStoreInfo) {
-      if (store?.address) L.push(center(String(store.address).slice(0, W), W))
-      if (store?.phone) L.push(center(String(store.phone).slice(0, W), W))
-    }
-
-    // 2. TANGGAL & NO TRANSAKSI (Masing-masing baris tersendiri di tengah)
-    const dateStr = formatDateSimple(trx?.created_at)
-    L.push(center(dateStr, W))
-
-    const trxNo = `No: ${trx?.transaction_number || trx?.id || '-'}`
-    L.push(center(trxNo, W))
-
+    // 2. Tanggal & No Struk (masing-masing 1 baris di tengah agar tidak terpotong)
+    L.push(center(formatDateTime(trx?.created_at), W))
+    L.push(center(`No: ${trx?.transaction_number || trx?.id || '-'}`, W))
     if (trx?.customer_name) {
-      L.push(center(`Customer: ${trx.customer_name}`, W))
+      L.push(center(`Cust: ${trx.customer_name}`, W))
     }
+    L.push('-'.repeat(W))
 
-    L.push(divider)
-
-    // 3. DAFTAR PRODUK (Dua baris per item agar harga satuan & subtotal jelas)
-    const items = trx?.items || []
-    for (const it of items) {
+    // 3. Daftar Produk (Baris 1: Nama & Subtotal, Baris 2: Qty x Harga Satuan)
+    for (const it of trx?.items || []) {
       const qty = Number(it.quantity || 1)
-      const name = String(it.product_name || it.name || 'Produk').trim()
+      const rawName = String(it.product_name || it.productName || it.name || 'Item').replace(/\r/g, '').trim()
+      // Pisahkan jika ada newline di nama produk/catatan
+      const nameParts = rawName.split('\n')
+      const primaryName = nameParts[0].trim()
       const price = Number(it.product_price ?? it.price ?? 0)
       const subtotal = Number(it.subtotal ?? (price * qty))
 
-      // Baris 1: "[qty]x [Nama Produk]" di kiri, "[Subtotal]" di kanan
-      L.push(row(`${qty}x ${name}`, rupiah(subtotal), W))
-      // Baris 2: "[qty] pcs x [Harga]" (indent 2 spasi)
+      // Baris 1: Nama dan Subtotal
+      L.push(row(`${qty}x ${primaryName}`, rupiah(subtotal), W))
+
+      // Jika ada keterangan tambahan di bawah nama produk
+      for (let p = 1; p < nameParts.length; p++) {
+        const sub = nameParts[p].trim()
+        if (sub) L.push(`  ${sub}`.slice(0, W))
+      }
+
+      // Baris 2: Rincian harga satuan
       L.push(`  ${qty} pcs x ${rupiah(price)}`.slice(0, W))
     }
+    L.push('-'.repeat(W))
 
-    L.push(divider)
-
-    // 4. SUMMARY (Subtotal, Diskon, Pajak, Total, Bayar, Kembali)
+    // 4. Subtotal, Diskon, Pajak
     L.push(row('SUBTOTAL', rupiah(Number(trx?.subtotal ?? trx?.total ?? 0)), W))
-
-    if (Number(trx?.discount || 0) > 0) {
-      L.push(row('DISKON MANUAL', `-${rupiah(Number(trx.discount))}`, W))
+    if ((trx?.discount || 0) > 0) {
+      L.push(row('DISKON', `-${rupiah(Number(trx.discount))}`, W))
     }
-    if (Number(trx?.discount_from_settings || 0) > 0) {
+    if ((trx?.discount_from_settings || 0) > 0) {
       L.push(row('DISKON SISTEM', `-${rupiah(Number(trx.discount_from_settings))}`, W))
     }
-    if (Number(trx?.tax || 0) > 0) {
-      const taxLabel = trx?.tax_percentage ? `PAJAK (${trx.tax_percentage}%)` : 'PAJAK'
-      L.push(row(taxLabel, `+${rupiah(Number(trx.tax))}`, W))
+    if ((trx?.tax || 0) > 0) {
+      L.push(row('PAJAK', `+${rupiah(Number(trx.tax))}`, W))
     }
-    if (Number(trx?.ppn || 0) > 0) {
-      const ppnLabel = trx?.ppn_percentage ? `PPN (${trx.ppn_percentage}%)` : 'PPN'
-      L.push(row(ppnLabel, `+${rupiah(Number(trx.ppn))}`, W))
+    if ((trx?.ppn || 0) > 0) {
+      L.push(row('PPN', `+${rupiah(Number(trx.ppn))}`, W))
     }
 
-    L.push(divider)
+    // 5. Total, Bayar, Kembali
+    const total = Number(trx?.total || 0)
+    L.push(row('TOTAL', rupiah(total), W))
 
-    // Total
-    const totalNum = Number(trx?.total || 0)
-    L.push(row('TOTAL', rupiah(totalNum), W))
+    const method = String(trx?.payment_method || 'cash').toLowerCase()
+    const methodLabel = method === 'cash' ? 'Tunai' : method === 'qris' ? 'QRIS' : method === 'card' ? 'Kartu' : method === 'transfer' ? 'Transfer' : method.toUpperCase()
+    const paid = Number(trx?.paid_amount || trx?.paid || total)
+    L.push(row(`BAYAR (${methodLabel})`, rupiah(paid), W))
 
-    // Bayar (QRIS/Tunai/Transfer tidak akan Rp0)
-    const m = (trx?.payment_method || '').toLowerCase()
-    const methodLabel = m === 'cash' ? 'Tunai' : m === 'qris' ? 'QRIS' : m === 'card' ? 'Kartu' : m === 'transfer' ? 'Transfer' : (trx?.payment_method || 'Tunai')
-    const paidAmount = Number(trx?.paid_amount || trx?.paid || totalNum)
-    L.push(row(`BAYAR (${methodLabel})`, rupiah(paidAmount), W))
+    const change = Math.max(0, paid - total)
+    L.push(row('KEMBALI', rupiah(change), W))
 
-    // Kembali
-    const changeAmount = Math.max(0, paidAmount - totalNum)
-    L.push(row('KEMBALI', rupiah(changeAmount), W))
-
-    // 5. FOOTER
+    // 6. Footer
     L.push('')
     const footer = settings?.footer_text || settings?.footerText || ''
     if (footer) {
-      const lines = String(footer).split('\n')
-      for (const line of lines) {
-        if (line.trim()) L.push(center(line.trim(), W))
+      const flines = String(footer).replace(/\r/g, '').split('\n')
+      for (const fl of flines) {
+        if (fl.trim()) L.push(center(fl.trim(), W))
       }
     } else {
       L.push(center('Terima kasih', W))
       L.push(center('Silahkan datang kembali', W))
     }
 
-    // 6. FEED KERTAS (3 baris kosong agar struk keluar dari pemotong)
     L.push('\n\n\n')
-
     return L.join('\n')
   }
 
-  // Konversi teks ke byte ESC/POS:
-  // HANYA ESC @ (Inisialisasi) + Teks ASCII murni.
-  // TANPA perintah Cut (0x1D 0x56) yang membuat printer 58mm berputar tanpa henti!
+  // Encoding ESC/POS persis seperti awal yang terbukti jalan di printer user
   const buildEscPosBytes = (text: string) => {
-    const clean = text.replace(/[^\x20-\x7E\nRp.,\-:()/%]/g, ' ')
+    const clean = text.replace(/[^\x20-\x7E\nRp.,\-:()/%]/g, '')
     const enc = new TextEncoder().encode(clean)
-    const out = new Uint8Array(2 + enc.length)
+    const out = new Uint8Array(3 + enc.length + 4)
     out[0] = 0x1b
-    out[1] = 0x40 // ESC @ (Reset/Init)
-    out.set(enc, 2)
+    out[1] = 0x40 // ESC @ (Reset)
+    out[2] = 0x0a // LF (Baris baru)
+    out.set(enc, 3)
+    out[out.length - 4] = 0x0a
+    out[out.length - 3] = 0x1d // GS
+    out[out.length - 2] = 0x56 // V
+    out[out.length - 1] = 0x00 // 0 (Cut / Finish feed)
     return out
   }
 
   const findWritableChar = async (dev: any) => {
-    if (!dev?.gatt) throw new Error('GATT tidak tersedia pada perangkat')
+    if (!dev?.gatt) throw new Error('GATT tidak tersedia')
     const server = dev.gatt.connected ? dev.gatt : await dev.gatt.connect()
     const services = await server?.getPrimaryServices()
     for (const svc of services || []) {
       try {
         const chars = await svc.getCharacteristics()
         for (const ch of chars) {
-          if (ch.properties?.writeWithoutResponse || ch.properties?.write) return ch
+          if (ch.properties?.write || ch.properties?.writeWithoutResponse) return ch
         }
       } catch { /* abaikan error per service */ }
     }
     throw new Error('Karakteristik tulis printer tidak ketemu')
   }
 
-  const connect = async (): Promise<boolean> => {
+  const connect = async () => {
     lastError.value = null
     if (!process.client) return false
     refreshSupport()
     if (!isSupported.value) {
-      lastError.value = 'Browser belum mendukung Web Bluetooth. Gunakan Chrome di Android atau Windows.'
+      lastError.value = 'HP/browser tidak dukung Bluetooth. Pakai Chrome Android.'
       return false
     }
     connecting.value = true
     try {
       _device = await (navigator as any).bluetooth.requestDevice({
         acceptAllDevices: true,
-        optionalServices: [0xffe0, 0x18f0, 0xff00, 0x1800, 0x1801, '0000ffe0-0000-1000-8000-00805f9b34fb', '000018f0-0000-1000-8000-00805f9b34fb']
+        optionalServices: [0xffe0, 0x18f0, '0000ffe0-0000-1000-8000-00805f9b34fb', '000018f0-0000-1000-8000-00805f9b34fb']
       })
       _writeChar = await findWritableChar(_device)
       deviceName.value = _device?.name || 'Printer Thermal'
@@ -246,7 +232,7 @@ export const useBluetoothPrinter = () => {
         isConnected.value = true
         return true
       } catch {
-        /* gagal reconnect device existing */
+        /* coba getDevices */
       }
     }
     try {
@@ -260,7 +246,6 @@ export const useBluetoothPrinter = () => {
             _writeChar = await findWritableChar(_device)
             deviceName.value = _device.name || 'Printer Thermal'
             isConnected.value = true
-            try { localStorage.setItem(LS_KEY, deviceName.value) } catch {}
             _device.addEventListener?.('gattserverdisconnected', () => {
               isConnected.value = false
               _writeChar = null
@@ -279,11 +264,8 @@ export const useBluetoothPrinter = () => {
     const CHUNK = 100
     for (let i = 0; i < bytes.length; i += CHUNK) {
       const part = bytes.slice(i, i + CHUNK)
-      if (_writeChar?.writeValueWithoutResponse) {
-        await _writeChar.writeValueWithoutResponse(part)
-      } else if (_writeChar?.writeValue) {
-        await _writeChar.writeValue(part)
-      }
+      if (_writeChar?.writeValueWithoutResponse) await _writeChar.writeValueWithoutResponse(part)
+      else await _writeChar?.writeValue(part)
     }
   }
 
@@ -302,8 +284,7 @@ export const useBluetoothPrinter = () => {
   }
 
   const printReceipt = async (trx: any, store: any, settings: any = {}) => {
-    const text = formatReceiptText(trx, store, settings)
-    return printText(text)
+    return printText(formatReceiptText(trx, store, settings))
   }
 
   const smartPrint = async (
