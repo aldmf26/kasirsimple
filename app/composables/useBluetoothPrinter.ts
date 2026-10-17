@@ -1,5 +1,5 @@
 // Cetak langsung ke printer thermal Bluetooth (ESC/POS mentah).
-// Teks saja tanpa logo agar cepat di Panda/Xprinter/RPP02N.
+// Dilengkapi chunk transmission aman (40 byte + delay 35ms) untuk mencegah packet loss buffer overflow.
 // Device & writeChar disimpan di module-level agar tidak hilang saat pindah halaman.
 
 const LS_KEY = 'kasirok_bt_device'
@@ -27,14 +27,16 @@ const rupiah = (n: number) => `Rp${Math.round(n || 0).toLocaleString('id-ID')}`
 const formatDateTime = (dateVal: any) => {
   try {
     const d = new Date(dateVal || Date.now())
-    return d.toLocaleDateString('id-ID', {
+    const dateStr = d.toLocaleDateString('id-ID', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
-    }) + ', ' + d.toLocaleTimeString('id-ID', {
+    })
+    const timeStr = d.toLocaleTimeString('id-ID', {
       hour: '2-digit',
       minute: '2-digit'
-    })
+    }).replace(':', '.')
+    return `${dateStr}, ${timeStr}`
   } catch {
     return String(dateVal || '')
   }
@@ -73,27 +75,27 @@ export const useBluetoothPrinter = () => {
   const formatReceiptText = (trx: any, store: any, settings: any = {}) => {
     const paperWidth = Number(settings?.paper_width || settings?.paperWidth || (typeof settings === 'number' ? settings : 58))
     const W = paperWidth === 80 ? 48 : 32
+    const divider = '-'.repeat(W)
     const L: string[] = []
 
     // 1. Header Toko
-    L.push(center((store?.name || 'KASIR').toUpperCase(), W))
+    L.push(center((store?.name || 'Kasir Simple').toUpperCase(), W))
     if (store?.address) L.push(center(String(store.address).slice(0, W), W))
     if (store?.phone) L.push(center(String(store.phone).slice(0, W), W))
-    L.push('-'.repeat(W))
+    L.push(divider)
 
-    // 2. Tanggal & No Struk (masing-masing 1 baris di tengah agar tidak terpotong)
+    // 2. Tanggal & No Struk (masing-masing 1 baris di tengah agar utuh)
     L.push(center(formatDateTime(trx?.created_at), W))
     L.push(center(`No: ${trx?.transaction_number || trx?.id || '-'}`, W))
     if (trx?.customer_name) {
       L.push(center(`Cust: ${trx.customer_name}`, W))
     }
-    L.push('-'.repeat(W))
+    L.push(divider)
 
     // 3. Daftar Produk (Baris 1: Nama & Subtotal, Baris 2: Qty x Harga Satuan)
     for (const it of trx?.items || []) {
       const qty = Number(it.quantity || 1)
       const rawName = String(it.product_name || it.productName || it.name || 'Item').replace(/\r/g, '').trim()
-      // Pisahkan jika ada newline di nama produk/catatan
       const nameParts = rawName.split('\n')
       const primaryName = nameParts[0].trim()
       const price = Number(it.product_price ?? it.price ?? 0)
@@ -102,7 +104,7 @@ export const useBluetoothPrinter = () => {
       // Baris 1: Nama dan Subtotal
       L.push(row(`${qty}x ${primaryName}`, rupiah(subtotal), W))
 
-      // Jika ada keterangan tambahan di bawah nama produk
+      // Keterangan tambahan jika ada newline di nama
       for (let p = 1; p < nameParts.length; p++) {
         const sub = nameParts[p].trim()
         if (sub) L.push(`  ${sub}`.slice(0, W))
@@ -111,21 +113,23 @@ export const useBluetoothPrinter = () => {
       // Baris 2: Rincian harga satuan
       L.push(`  ${qty} pcs x ${rupiah(price)}`.slice(0, W))
     }
-    L.push('-'.repeat(W))
+    L.push(divider)
 
     // 4. Subtotal, Diskon, Pajak
     L.push(row('SUBTOTAL', rupiah(Number(trx?.subtotal ?? trx?.total ?? 0)), W))
-    if ((trx?.discount || 0) > 0) {
-      L.push(row('DISKON', `-${rupiah(Number(trx.discount))}`, W))
+    if (Number(trx?.discount || 0) > 0) {
+      L.push(row('DISKON MANUAL', `-${rupiah(Number(trx.discount))}`, W))
     }
-    if ((trx?.discount_from_settings || 0) > 0) {
+    if (Number(trx?.discount_from_settings || 0) > 0) {
       L.push(row('DISKON SISTEM', `-${rupiah(Number(trx.discount_from_settings))}`, W))
     }
-    if ((trx?.tax || 0) > 0) {
-      L.push(row('PAJAK', `+${rupiah(Number(trx.tax))}`, W))
+    if (Number(trx?.tax || 0) > 0) {
+      const taxLabel = trx?.tax_percentage ? `PAJAK (${trx.tax_percentage}%)` : 'PAJAK'
+      L.push(row(taxLabel, `+${rupiah(Number(trx.tax))}`, W))
     }
-    if ((trx?.ppn || 0) > 0) {
-      L.push(row('PPN', `+${rupiah(Number(trx.ppn))}`, W))
+    if (Number(trx?.ppn || 0) > 0) {
+      const ppnLabel = trx?.ppn_percentage ? `PPN (${trx.ppn_percentage}%)` : 'PPN'
+      L.push(row(ppnLabel, `+${rupiah(Number(trx.ppn))}`, W))
     }
 
     // 5. Total, Bayar, Kembali
@@ -157,19 +161,19 @@ export const useBluetoothPrinter = () => {
     return L.join('\n')
   }
 
-  // Encoding ESC/POS persis seperti awal yang terbukti jalan di printer user
+  // Encoding ESC/POS teks murni
   const buildEscPosBytes = (text: string) => {
-    const clean = text.replace(/[^\x20-\x7E\nRp.,\-:()/%]/g, '')
+    const clean = text.replace(/[^\x20-\x7E\nRp.,\-:()/%]/g, ' ')
     const enc = new TextEncoder().encode(clean)
     const out = new Uint8Array(3 + enc.length + 4)
     out[0] = 0x1b
     out[1] = 0x40 // ESC @ (Reset)
-    out[2] = 0x0a // LF (Baris baru)
+    out[2] = 0x0a // LF
     out.set(enc, 3)
     out[out.length - 4] = 0x0a
     out[out.length - 3] = 0x1d // GS
     out[out.length - 2] = 0x56 // V
-    out[out.length - 1] = 0x00 // 0 (Cut / Finish feed)
+    out[out.length - 1] = 0x00 // 0 (Cut / Feed finish)
     return out
   }
 
@@ -260,12 +264,24 @@ export const useBluetoothPrinter = () => {
     return false
   }
 
+  // Pengiriman byte terbagi per 30-40 byte dengan delay 35ms untuk mencegah BLE buffer overrun
   const sendBytes = async (bytes: Uint8Array) => {
-    const CHUNK = 100
+    const CHUNK = 40
     for (let i = 0; i < bytes.length; i += CHUNK) {
       const part = bytes.slice(i, i + CHUNK)
-      if (_writeChar?.writeValueWithoutResponse) await _writeChar.writeValueWithoutResponse(part)
-      else await _writeChar?.writeValue(part)
+      try {
+        if (_writeChar?.writeValue) {
+          await _writeChar.writeValue(part)
+        } else if (_writeChar?.writeValueWithoutResponse) {
+          await _writeChar.writeValueWithoutResponse(part)
+        }
+      } catch {
+        if (_writeChar?.writeValueWithoutResponse) {
+          await _writeChar.writeValueWithoutResponse(part)
+        }
+      }
+      // Delay 35ms agar printer thermal BLE sempat memproses data tanpa kehilangan karakter
+      await new Promise(resolve => setTimeout(resolve, 35))
     }
   }
 
