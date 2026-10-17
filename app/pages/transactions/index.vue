@@ -241,7 +241,7 @@ const printReceipt = async () => {
     const r = await bt.smartPrint(
       detailModal.data,
       store.value,
-      (printerSettings.value as any)?.paper_width || 58
+      printerSettings.value
     );
     if (r.sent) {
       showAlert('success', 'Struk langsung keluar dari printer thermal');

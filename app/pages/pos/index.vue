@@ -555,7 +555,7 @@ const printReceipt = async () => {
     const r = await bt.smartPrint(
       lastTransaction.value,
       store.value,
-      (printerSettings.value as any)?.paper_width || 58
+      printerSettings.value
     );
     if (r.sent) {
       toast.add({ title: 'Tercetak', description: 'Struk langsung keluar dari printer thermal.', color: 'success' });

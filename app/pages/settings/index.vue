@@ -239,7 +239,10 @@ const handleBtConnect = async () => {
       printerSettings.value.bluetoothDeviceName = bt.deviceName.value;
       try { localStorage.setItem('kasirok_bt_device', bt.deviceName.value); } catch { /* abaikan */ }
       showAlert("success", ` tersambung ke ${bt.deviceName.value}. Struk tes dikirim.`);
-      await bt.printTest({ name: storeSettings.name || store.value?.name, address: storeSettings.address, phone: storeSettings.phone });
+      await bt.printTest(
+        { name: storeSettings.name || store.value?.name, address: storeSettings.address, phone: storeSettings.phone },
+        printerSettings.value
+      );
     } else if (!ok && bt.lastError.value) {
       showAlert("error", bt.lastError.value);
     }
@@ -251,7 +254,10 @@ const handleBtConnect = async () => {
 const handleBtTest = async () => {
   btBusy.value = true;
   try {
-    const r = await bt.printTest({ name: storeSettings.name || store.value?.name, address: storeSettings.address, phone: storeSettings.phone });
+    const r = await bt.printTest(
+      { name: storeSettings.name || store.value?.name, address: storeSettings.address, phone: storeSettings.phone },
+      printerSettings.value
+    );
     if (!r.sent) showAlert("success", `Simulasi tersimpan (${r.bytes} byte). Sambungkan printer untuk cetak langsung.`);
   } finally {
     btBusy.value = false;
