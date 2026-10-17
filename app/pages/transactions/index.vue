@@ -120,10 +120,42 @@
                  </div>
              </div>
 
+             <!-- Status Printer Bluetooth -->
+             <div
+               class="mt-4 px-3 py-2 rounded-xl text-xs flex items-center justify-between border"
+               :class="bt.isConnected.value ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-600'"
+             >
+               <div class="flex items-center gap-1.5 font-medium truncate">
+                 <span class="w-2 h-2 rounded-full shrink-0" :class="bt.isConnected.value ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'"></span>
+                 <span class="truncate">
+                   {{ bt.isConnected.value ? (bt.deviceName.value || 'Printer Thermal Terhubung') : 'Printer Thermal: Belum tersambung' }}
+                 </span>
+               </div>
+               <button
+                 v-if="!bt.isConnected.value"
+                 @click="bt.connect()"
+                 type="button"
+                 class="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 underline ml-2 shrink-0"
+               >
+                 Sambungkan
+               </button>
+             </div>
+
              <!-- Actions -->
-             <div class="flex gap-3 mt-6">
-                <UButton block color="secondary" variant="soft" @click="detailModal.open = false">Tutup</UButton>
-                <UButton block color="primary" icon="i-heroicons-printer" @click="printReceipt">Cetak Struk</UButton>
+             <div class="flex gap-3 mt-4">
+                <UButton block color="secondary" variant="soft" class="flex-1" @click="detailModal.open = false">Tutup</UButton>
+                <UButton block color="primary" class="flex-1" icon="i-heroicons-printer" :loading="isDirectPrinting" @click="printReceipt">
+                  {{ isDirectPrinting ? 'Mencetak...' : 'Cetak Struk' }}
+                </UButton>
+             </div>
+             <div class="text-right mt-2">
+                <button
+                  @click="printViaBrowser"
+                  type="button"
+                  class="text-xs text-gray-400 hover:text-gray-600 underline"
+                >
+                  Cetak Browser (PDF/Kabel)
+                </button>
              </div>
         </div>
     </UModal>
@@ -145,8 +177,10 @@ definePageMeta({
 });
 useHead({ title: "Riwayat Transaksi" });
 
-const { store } = useStore();
+const { store, printerSettings } = useStore();
 const { transactions, fetchTransactions, loading, deleteTransaction } = useTransactions();
+const bt = useBluetoothPrinter();
+const isDirectPrinting = ref(false);
 
 // Alert Config
 const alert = reactive({
@@ -199,7 +233,32 @@ const handleDelete = async (transaction: any) => {
     }
 };
 
-const printReceipt = () => {
+const printReceipt = async () => {
+  if (!detailModal.data) return;
+
+  isDirectPrinting.value = true;
+  try {
+    const r = await bt.smartPrint(
+      detailModal.data,
+      store.value,
+      (printerSettings.value as any)?.paper_width || 58
+    );
+    if (r.sent) {
+      showAlert('success', 'Struk langsung keluar dari printer thermal');
+      return;
+    }
+    if (r.error) {
+      showAlert('error', r.error);
+    }
+  } catch (e: any) {
+    console.error('Bluetooth print gagal:', e);
+    showAlert('error', e?.message || 'Gagal mencetak ke printer');
+  } finally {
+    isDirectPrinting.value = false;
+  }
+};
+
+const printViaBrowser = () => {
   const content = document.getElementById("printable-receipt")?.innerHTML;
   if (!content) return;
 

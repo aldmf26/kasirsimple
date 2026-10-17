@@ -547,29 +547,45 @@ const processPayment = async () => {
 };
 
 const printReceipt = async () => {
-  // 1. Coba cetak langsung Bluetooth (nyembur, ukuran pas 58/80mm).
-  if (lastTransaction.value) {
-    isDirectPrinting.value = true;
-    try {
-      const r = await bt.printReceipt(
-        lastTransaction.value,
-        store.value,
-        (printerSettings.value as any)?.paper_width || 58
-      );
-      if (r.sent) {
-        toast.add({ title: 'Tercetak', description: 'Struk langsung terkirim ke printer.', color: 'success' });
-        return;
-      }
-    } catch (e: any) {
-      console.error('Bluetooth print gagal, fallback browser:', e?.message);
-    } finally {
-      isDirectPrinting.value = false;
+  if (!lastTransaction.value) return;
+
+  // 1. Cetak langsung ke printer Bluetooth (nyembur ESC/POS).
+  isDirectPrinting.value = true;
+  try {
+    const r = await bt.smartPrint(
+      lastTransaction.value,
+      store.value,
+      (printerSettings.value as any)?.paper_width || 58
+    );
+    if (r.sent) {
+      toast.add({ title: 'Tercetak', description: 'Struk langsung keluar dari printer thermal.', color: 'success' });
+      return;
     }
+    if (r.error) {
+      toast.add({
+        title: 'Printer Belum Tersambung',
+        description: r.error,
+        color: 'warning'
+      });
+    }
+  } catch (e: any) {
+    console.error('Bluetooth print gagal:', e);
+    toast.add({
+      title: 'Gagal Cetak',
+      description: e?.message || 'Terjadi kesalahan saat mengirim ke printer',
+      color: 'error'
+    });
+  } finally {
+    isDirectPrinting.value = false;
   }
-  // 2. Fallback: print browser (untuk printer WiFi/USB lewat dialog sistem).
+};
+
+// Cetak alternatif via browser sistem jika user ingin cetak ke printer USB/kabel atau PDF
+const printViaBrowser = () => {
   const content = document.getElementById("receipt-content")?.innerHTML;
+  if (!content) return;
   const printWindow = window.open("", "", "height=600,width=400");
-  if (printWindow && content) {
+  if (printWindow) {
     printWindow.document.write("<html><head><title>Struk Belanja</title>");
     printWindow.document.write(
       "<style>body{font-family:monospace; font-size: 12px; text-align: center;} .flex{display:flex; justify-content:space-between;} .bold{font-weight:bold;} hr{border-top: 1px dashed #000; border-bottom: none;} img{max-width: 80px; margin: 0 auto; display: block;}</style>",
@@ -578,6 +594,7 @@ const printReceipt = async () => {
     printWindow.document.write(content);
     printWindow.document.write("</body></html>");
     printWindow.document.close();
+    printWindow.focus();
     printWindow.print();
   }
 };
@@ -1610,10 +1627,31 @@ onUnmounted(() => {
           <ThermalPrinterReceipt
             :transaction="lastTransaction"
             :store="store"
-            :settings="printerSettings || undefined"
+            :settings="(printerSettings as any)"
             :style="{ width: printerSettings?.paper_width === 80 ? '380px' : '300px' }"
             class="mb-4 mx-auto"
           />
+
+          <!-- Status Printer Bluetooth -->
+          <div
+            class="mb-3 px-3 py-2 rounded-xl text-xs flex items-center justify-between border"
+            :class="bt.isConnected.value ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-600'"
+          >
+            <div class="flex items-center gap-1.5 font-medium truncate">
+              <span class="w-2 h-2 rounded-full shrink-0" :class="bt.isConnected.value ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'"></span>
+              <span class="truncate">
+                {{ bt.isConnected.value ? (bt.deviceName.value || 'Printer Thermal Terhubung') : 'Printer Thermal: Belum tersambung' }}
+              </span>
+            </div>
+            <button
+              v-if="!bt.isConnected.value"
+              @click="bt.connect()"
+              type="button"
+              class="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 underline ml-2 shrink-0"
+            >
+              Sambungkan
+            </button>
+          </div>
 
           <!-- Actions -->
           <div class="flex flex-col gap-2">
@@ -1634,13 +1672,22 @@ onUnmounted(() => {
               <button
                 @click="printReceipt"
                 :disabled="isDirectPrinting"
-                class="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 flex items-center justify-center gap-2 disabled:opacity-60"
+                class="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 flex items-center justify-center gap-2 disabled:opacity-60 shadow-lg shadow-emerald-600/30 active:scale-95 transition-all"
               >
                 <UIcon name="i-heroicons-printer" class="w-5 h-5" />
                 {{ isDirectPrinting ? 'MENCETAK...' : 'PRINT' }}
               </button>
             </div>
-            <p class="text-[11px] text-gray-400 text-center">Logo tidak ikut di cetak cepat agar cepat. Belum sambung? Atur di Pengaturan > Struk.</p>
+            <div class="flex items-center justify-between text-[11px] text-gray-400 pt-1">
+              <span>Cetak langsung thermal (ESC/POS)</span>
+              <button
+                @click="printViaBrowser"
+                type="button"
+                class="text-gray-500 hover:text-gray-700 underline"
+              >
+                Cetak Browser (PDF/Kabel)
+              </button>
+            </div>
           </div>
         </div>
       </div>
