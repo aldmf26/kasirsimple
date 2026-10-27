@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatCurrency } from "~/utils/helpers";
+import { formatStock, formatWeight } from "~/utils/pricing";
 
 definePageMeta({
   layout: "default",
@@ -32,6 +33,11 @@ const showProductImages = computed(() => {
   if (!store.value) return true;
   const storeData = store.value as any;
   return storeData.show_product_images !== false;
+});
+
+const barcodeEnabled = computed(() => {
+  if (!store.value) return true;
+  return (store.value as any).barcode_enabled !== false;
 });
 
 // Alert State
@@ -485,9 +491,32 @@ const form = reactive({
   sell_price: 0,
   stock: 0,
   unit: "pcs",
+  sale_mode: "unit" as "unit" | "weight",
+  stock_unit: "pcs" as "pcs" | "gram",
   image_url: "",
   is_favorite: false,
 });
+
+const isWeightForm = computed(() => form.sale_mode === "weight");
+const stockInputLabel = computed(() =>
+  isWeightForm.value ? "Stok (gram)" : "Stok",
+);
+const sellPriceLabel = computed(() =>
+  isWeightForm.value ? "Harga Jual / kg" : "Harga Jual",
+);
+
+const setSaleMode = (mode: "unit" | "weight") => {
+  if (form.sale_mode === mode) return;
+  form.sale_mode = mode;
+  form.stock = 0;
+  if (mode === "weight") {
+    form.stock_unit = "gram";
+    if (form.unit === "pcs") form.unit = "kg";
+  } else {
+    form.stock_unit = "pcs";
+    if (form.unit === "kg") form.unit = "pcs";
+  }
+};
 
 const categoryOptions = computed(() => [
   { label: "Semua Kategori", value: "all" },
@@ -525,6 +554,8 @@ const openAdd = () => {
   form.sell_price = 0;
   form.stock = 0;
   form.unit = "pcs";
+  form.sale_mode = "unit";
+  form.stock_unit = "pcs";
   form.image_url = "";
   form.is_favorite = false;
   selectedProductFile.value = null;
@@ -542,6 +573,8 @@ const openEdit = (product) => {
   form.sell_price = product.price || 0;
   form.stock = product.stock;
   form.unit = product.unit || "pcs";
+  form.sale_mode = product.sale_mode === "weight" ? "weight" : "unit";
+  form.stock_unit = product.stock_unit === "gram" ? "gram" : "pcs";
   form.image_url = product.image_url || "";
   form.is_favorite = product.is_favorite || false;
   selectedProductFile.value = null;
@@ -608,6 +641,11 @@ const save = async () => {
       }
     }
 
+    if (form.sale_mode === "weight" && (!Number.isFinite(form.stock) || form.stock < 0)) {
+      showAlert("error", "Stok produk timbangan harus diisi dalam gram");
+      return;
+    }
+
     if (isEdit.value) {
       await updateProduct(form.id, {
         name: form.name,
@@ -617,6 +655,8 @@ const save = async () => {
         price: form.sell_price,
         stock: form.stock,
         unit: form.unit,
+        sale_mode: form.sale_mode,
+        stock_unit: form.stock_unit,
         image_url: imageUrl,
         is_favorite: form.is_favorite,
       });
@@ -630,6 +670,8 @@ const save = async () => {
         price: form.sell_price,
         stock: form.stock,
         unit: form.unit,
+        sale_mode: form.sale_mode,
+        stock_unit: form.stock_unit,
         image_url: imageUrl,
         has_stock: true,
         is_favorite: form.is_favorite,
@@ -1012,9 +1054,8 @@ watch(
                     'text-gray-900': product.stock > (product.min_stock || 5),
                   }"
                 >
-                  {{ product.stock }}
+                  {{ formatStock(product.stock, product.stock_unit) }}
                 </span>
-                <span class="text-gray-400 text-xs ml-0.5">{{ product.unit || 'pcs' }}</span>
               </td>
               <!-- Aksi: icon buttons -->
               <td class="px-4 py-3">
@@ -1034,6 +1075,7 @@ watch(
                     <UIcon name="i-heroicons-archive-box-arrow-down" class="w-4 h-4" />
                   </button>
                   <button
+                    v-if="barcodeEnabled"
                     @click="openLabelModal(product)"
                     :disabled="!hasPrintableSku(product)"
                     class="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -1113,7 +1155,7 @@ watch(
                   'bg-gray-100 text-gray-700': product.stock > (product.min_stock || 5),
                 }"
               >
-                Stok {{ product.stock }}
+                Stok {{ formatStock(product.stock, product.stock_unit) }}
               </span>
             </div>
 
@@ -1253,6 +1295,46 @@ watch(
             />
           </div>
 
+          <div>
+            <label class="block text-sm font-bold text-gray-700 mb-2"
+              >Mode Penjualan</label
+            >
+            <div class="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-xl">
+              <button
+                type="button"
+                @click="setSaleMode('unit')"
+                class="py-2 text-sm font-bold rounded-lg transition-all"
+                :class="
+                  form.sale_mode === 'unit'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                "
+              >
+                Satuan (pcs)
+              </button>
+              <button
+                type="button"
+                @click="setSaleMode('weight')"
+                class="py-2 text-sm font-bold rounded-lg transition-all"
+                :class="
+                  form.sale_mode === 'weight'
+                    ? 'bg-white text-emerald-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                "
+              >
+                Timbangan (kg)
+              </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">
+              {{
+                form.sale_mode === "weight"
+                  ? "Kasir akan memasukkan berat (gram) saat menjual produk ini. Harga diisi per kg."
+                  : "Produk dijual per satuan dengan harga tetap."
+              }}
+              Mengubah mode akan mereset stok.
+            </p>
+          </div>
+
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-2"
@@ -1265,9 +1347,9 @@ watch(
               />
             </div>
             <div>
-              <label class="block text-sm font-bold text-gray-700 mb-2"
-                >Harga Jual</label
-              >
+              <label class="block text-sm font-bold text-gray-700 mb-2">{{
+                sellPriceLabel
+              }}</label>
               <input
                 v-model.number="form.sell_price"
                 type="number"
@@ -1309,12 +1391,13 @@ watch(
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-sm font-bold text-gray-700 mb-2"
-                >Stok</label
-              >
+              <label class="block text-sm font-bold text-gray-700 mb-2">{{
+                stockInputLabel
+              }}</label>
               <input
                 v-model.number="form.stock"
                 type="number"
+                inputmode="numeric"
                 class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -1325,8 +1408,11 @@ watch(
               <input
                 v-model="form.unit"
                 class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="pcs / kg / dll"
+                :placeholder="isWeightForm ? 'kg / rak / ikat' : 'pcs / bks / dll'"
               />
+              <p v-if="isWeightForm" class="text-xs text-gray-500 mt-1">
+                Stok disimpan dalam gram ({{ formatWeight(form.stock || 0) }}).
+              </p>
             </div>
           </div>
 
@@ -1656,7 +1742,10 @@ watch(
             </p>
             <p class="text-sm text-gray-500">
               Stok Saat Ini:<span class="font-bold text-gray-900 ml-1">{{
-                stockModal.product?.stock || 0
+                formatStock(
+                  stockModal.product?.stock || 0,
+                  stockModal.product?.stock_unit,
+                )
               }}</span>
             </p>
           </div>
@@ -1703,7 +1792,11 @@ watch(
             <div>
               <label
                 class="block text-xs font-bold text-gray-500 uppercase mb-1"
-                >Jumlah</label
+                >{{
+                  stockModal.product?.stock_unit === "gram"
+                    ? "Jumlah (gram)"
+                    : "Jumlah"
+                }}</label
               >
               <input
                 type="number"

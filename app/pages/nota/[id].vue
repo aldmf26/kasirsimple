@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatCurrency, formatDateTime } from "~/utils/helpers";
+import { getReceiptItemParts } from "~/utils/pricing";
 
 definePageMeta({
   layout: false,
@@ -102,10 +103,10 @@ onMounted(async () => {
             </div>
             <div v-for="item in transaction.items" :key="item.id" class="space-y-1">
               <div class="flex justify-between items-start">
-                <span class="text-gray-900 font-bold leading-tight flex-1 pr-4">{{ item.product_name }}</span>
-                <span class="text-gray-900 font-bold whitespace-nowrap">{{ formatCurrency(item.subtotal) }}</span>
+                <span class="text-gray-900 font-bold leading-tight flex-1 pr-4">{{ getReceiptItemParts(item).title }}</span>
+                <span class="text-gray-900 font-bold whitespace-nowrap">{{ formatCurrency(getReceiptItemParts(item).total) }}</span>
               </div>
-              <p class="text-gray-500 text-xs">{{ item.quantity }} x {{ formatCurrency(item.product_price) }}</p>
+              <p class="text-gray-500 text-xs">{{ getReceiptItemParts(item).detail }}</p>
             </div>
           </div>
 

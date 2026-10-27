@@ -27,6 +27,10 @@ export interface Database {
                     owner_pin_enabled: boolean
                     owner_pin_hash: string | null
                     owner_pin_salt: string | null
+                    weight_mode_enabled: boolean
+                    customer_required: boolean
+                    barcode_enabled: boolean
+                    customer_enabled: boolean
                     created_at: string
                     updated_at: string
                 }
@@ -47,6 +51,10 @@ export interface Database {
                     owner_pin_enabled?: boolean
                     owner_pin_hash?: string | null
                     owner_pin_salt?: string | null
+                    weight_mode_enabled?: boolean
+                    customer_required?: boolean
+                    barcode_enabled?: boolean
+                    customer_enabled?: boolean
                     created_at?: string
                     updated_at?: string
                 }
@@ -67,6 +75,10 @@ export interface Database {
                     owner_pin_enabled?: boolean
                     owner_pin_hash?: string | null
                     owner_pin_salt?: string | null
+                    weight_mode_enabled?: boolean
+                    customer_required?: boolean
+                    barcode_enabled?: boolean
+                    customer_enabled?: boolean
                     created_at?: string
                     updated_at?: string
                 }
@@ -123,6 +135,8 @@ export interface Database {
                     has_stock: boolean
                     stock: number
                     min_stock: number
+                    sale_mode: string
+                    stock_unit: string
                     image_url: string | null
                     is_active: boolean
                     created_at: string
@@ -141,6 +155,8 @@ export interface Database {
                     has_stock?: boolean
                     stock?: number
                     min_stock?: number
+                    sale_mode?: string
+                    stock_unit?: string
                     image_url?: string | null
                     is_active?: boolean
                     created_at?: string
@@ -159,6 +175,8 @@ export interface Database {
                     has_stock?: boolean
                     stock?: number
                     min_stock?: number
+                    sale_mode?: string
+                    stock_unit?: string
                     image_url?: string | null
                     is_active?: boolean
                     created_at?: string
@@ -178,6 +196,7 @@ export interface Database {
                     paid: number
                     change: number
                     payment_method: string
+                    customer_id: string | null
                     customer_name: string | null
                     customer_phone: string | null
                     notes: string | null
@@ -196,6 +215,7 @@ export interface Database {
                     paid: number
                     change: number
                     payment_method?: string
+                    customer_id?: string | null
                     customer_name?: string | null
                     customer_phone?: string | null
                     notes?: string | null
@@ -214,6 +234,7 @@ export interface Database {
                     paid?: number
                     change?: number
                     payment_method?: string
+                    customer_id?: string | null
                     customer_name?: string | null
                     customer_phone?: string | null
                     notes?: string | null
@@ -231,6 +252,10 @@ export interface Database {
                     product_price: number
                     quantity: number
                     subtotal: number
+                    sale_mode: string
+                    weight_grams: number | null
+                    product_unit: string | null
+                    base_price: number | null
                     notes: string | null
                     created_at: string
                 }
@@ -243,6 +268,10 @@ export interface Database {
                     product_price: number
                     quantity: number
                     subtotal: number
+                    sale_mode?: string
+                    weight_grams?: number | null
+                    product_unit?: string | null
+                    base_price?: number | null
                     notes?: string | null
                     created_at?: string
                 }
@@ -255,6 +284,10 @@ export interface Database {
                     product_price?: number
                     quantity?: number
                     subtotal?: number
+                    sale_mode?: string
+                    weight_grams?: number | null
+                    product_unit?: string | null
+                    base_price?: number | null
                     notes?: string | null
                     created_at?: string
                 }
@@ -268,6 +301,7 @@ export interface Database {
                     quantity: number | null
                     stock_before: number | null
                     stock_after: number | null
+                    stock_unit: string
                     notes: string | null
                     created_by: string | null
                     created_at: string
@@ -280,6 +314,7 @@ export interface Database {
                     quantity?: number | null
                     stock_before?: number | null
                     stock_after?: number | null
+                    stock_unit?: string
                     notes?: string | null
                     created_by?: string | null
                     created_at?: string
@@ -292,6 +327,7 @@ export interface Database {
                     quantity?: number | null
                     stock_before?: number | null
                     stock_after?: number | null
+                    stock_unit?: string
                     notes?: string | null
                     created_by?: string | null
                     created_at?: string
@@ -381,6 +417,41 @@ export interface Database {
                     closing_balance_expected?: number | null
                     status?: string
                     notes?: string | null
+                    created_at?: string
+                    updated_at?: string
+                }
+            }
+            customers: {
+                Row: {
+                    id: string
+                    store_id: string
+                    name: string
+                    phone: string | null
+                    address: string | null
+                    notes: string | null
+                    is_active: boolean
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
+                    id?: string
+                    store_id: string
+                    name: string
+                    phone?: string | null
+                    address?: string | null
+                    notes?: string | null
+                    is_active?: boolean
+                    created_at?: string
+                    updated_at?: string
+                }
+                Update: {
+                    id?: string
+                    store_id?: string
+                    name?: string
+                    phone?: string | null
+                    address?: string | null
+                    notes?: string | null
+                    is_active?: boolean
                     created_at?: string
                     updated_at?: string
                 }

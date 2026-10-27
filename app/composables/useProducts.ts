@@ -318,6 +318,7 @@ export const useProducts = () => {
                 quantity: type === 'adjustment' ? Math.abs(newStock - currentStock) : quantity,
                 stock_before: currentStock,
                 stock_after: newStock,
+                stock_unit: product.stock_unit || 'pcs',
                 notes: notes,
             })
 

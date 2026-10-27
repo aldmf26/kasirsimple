@@ -39,15 +39,13 @@
         class="space-y-1"
       >
         <div class="flex justify-between text-[11px]">
-          <span class="truncate pr-2"
-            >{{ item.quantity }}x {{ item.product_name }}</span
-          >
+          <span class="truncate pr-2">{{ itemParts(item).title }}</span>
           <span class="whitespace-nowrap">{{
-            formatCurrency(item.product_price * item.quantity)
+            formatCurrency(itemParts(item).total)
           }}</span>
         </div>
         <div class="text-gray-600 text-[10px] ml-2">
-          {{ item.quantity }} pcs × {{ formatCurrency(item.product_price) }}
+          {{ itemParts(item).detail }}
         </div>
       </div>
     </div>
@@ -150,6 +148,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { formatCurrency, formatDateTime } from "~/utils/helpers";
+import { getReceiptItemParts } from "~/utils/pricing";
 
 const props = defineProps<{
   transaction: any;
@@ -181,6 +180,8 @@ const showStoreInfo = computed(() => {
 const footerText = computed(() => {
   return props.settings?.footer_text || props.settings?.footerText || "";
 });
+
+const itemParts = (item: any) => getReceiptItemParts(item);
 </script>
 
 <style scoped>

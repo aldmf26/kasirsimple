@@ -1,5 +1,11 @@
 <script setup lang="ts">
 import { formatCurrency } from "~/utils/helpers";
+import {
+  calcWeightSubtotal,
+  formatStock,
+  formatWeight,
+  validateWeightStock,
+} from "~/utils/pricing";
 
 definePageMeta({ layout: "default" });
 
@@ -13,6 +19,8 @@ const {
   cartItemsCount,
   addToCart,
   updateCartItemQuantity,
+  updateCartItemWeight,
+  updateCartItemPrice,
   removeFromCart,
   clearCart,
   createTransaction,
@@ -75,6 +83,26 @@ const showProductImages = computed(() => {
   const storeData = store.value as any;
   return storeData.show_product_images !== false;
 });
+
+const barcodeEnabled = computed(() => {
+  if (!store.value) return true;
+  return (store.value as any).barcode_enabled !== false;
+});
+
+const weightModeEnabled = computed(() => {
+  if (!store.value) return true;
+  return (store.value as any).weight_mode_enabled !== false;
+});
+
+const customerRequired = computed(() => {
+  if (!store.value) return false;
+  return (store.value as any).customer_required === true;
+});
+const customerEnabled = computed(() => {
+  if (!store.value) return true;
+  return (store.value as any).customer_enabled !== false;
+});
+const selectedCustomer = ref<any>(null);
 
 // Get discount & tax settings from store
 const discountTaxSettings = computed(() => {
@@ -153,6 +181,123 @@ const barcodeInputRef = ref<HTMLInputElement | null>(null);
 const barcodeVideoRef = ref<HTMLVideoElement | null>(null);
 const showBarcodeScanner = ref(false);
 let barcodeControls: { stop: () => void } | null = null;
+
+const parseGrams = (value: string | number) =>
+  Number(String(value ?? "").replace(/\D/g, "")) || 0;
+
+// Weight input modal
+const weightModal = reactive({
+  open: false,
+  product: null as any,
+  lineId: "",
+  grams: "",
+  pricePerKg: 0,
+  error: "",
+});
+const weightPresets = [250, 500, 750, 1000];
+const weightModalGrams = computed(() => parseGrams(weightModal.grams));
+const weightModalSubtotal = computed(() =>
+  calcWeightSubtotal(weightModalGrams.value, Number(weightModal.pricePerKg) || 0),
+);
+
+const openWeightModal = (product: any, line: any = null) => {
+  if (!weightModeEnabled.value) {
+    showAlert("error", "Mode timbangan dimatikan di Pengaturan");
+    return;
+  }
+
+  weightModal.error = "";
+  weightModal.lineId = line?.cart_line_id || "";
+
+  if (line) {
+    weightModal.product = {
+      name: line.product_name,
+      stock: line.current_stock,
+      has_stock: line.has_stock,
+      unit: line.product_unit,
+    };
+    weightModal.grams = String(line.weight_grams || "");
+    weightModal.pricePerKg = Number(line.product_price) || 0;
+  } else {
+    weightModal.product = product;
+    weightModal.grams = "";
+    weightModal.pricePerKg = Number(product.price) || 0;
+  }
+
+  weightModal.open = true;
+};
+
+const closeWeightModal = () => {
+  weightModal.open = false;
+};
+
+const setWeightPreset = (grams: number) => {
+  weightModal.grams = String(grams);
+  weightModal.error = "";
+};
+
+const confirmWeight = () => {
+  const grams = weightModalGrams.value;
+  const price = Number(weightModal.pricePerKg);
+
+  if (!Number.isFinite(price) || price < 0) {
+    weightModal.error = "Harga per kg tidak valid";
+    return;
+  }
+
+  const stockError = weightModal.product?.has_stock
+    ? validateWeightStock(grams, Number(weightModal.product.stock) || 0)
+    : grams > 0
+      ? null
+      : "Berat harus lebih dari 0 gram";
+
+  if (stockError) {
+    weightModal.error = stockError;
+    return;
+  }
+
+  try {
+    if (weightModal.lineId) {
+      updateCartItemWeight(weightModal.lineId, grams, price);
+    } else {
+      addToCart({
+        ...weightModal.product,
+        sale_mode: "weight",
+        weight_grams: grams,
+        price,
+      });
+    }
+    closeWeightModal();
+  } catch (e: any) {
+    weightModal.error = e.message || "Gagal menambahkan produk";
+  }
+};
+
+// Unit line price override
+const priceModal = reactive({
+  open: false,
+  lineId: "",
+  name: "",
+  price: 0,
+  error: "",
+});
+
+const openPriceModal = (item: any) => {
+  priceModal.lineId = item.cart_line_id;
+  priceModal.name = item.product_name;
+  priceModal.price = item.product_price;
+  priceModal.error = "";
+  priceModal.open = true;
+};
+
+const confirmPrice = () => {
+  try {
+    updateCartItemPrice(priceModal.lineId, priceModal.price);
+    priceModal.open = false;
+  } catch (e: any) {
+    priceModal.error = e.message || "Harga tidak valid";
+  }
+};
 
 interface TransactionReceipt {
   id: string;
@@ -337,10 +482,15 @@ const quickCashAmounts = computed(() => {
 });
 
 const handleAddToCart = (product: any) => {
+  if (product?.sale_mode === "weight") {
+    openWeightModal(product);
+    return;
+  }
+
   try {
     addToCart(product);
-  } catch (e) {
-    showAlert("error", "Gagal menambahkan produk");
+  } catch (e: any) {
+    showAlert("error", e?.message || "Gagal menambahkan produk");
   }
 };
 
@@ -459,6 +609,11 @@ const processPayment = async () => {
     return;
   }
 
+  if (customerRequired.value && !(selectedCustomer.value?.name || paymentForm.value.customerName?.trim())) {
+    alert("Nama pelanggan wajib diisi");
+    return;
+  }
+
   // ✅ EDIT: Snapshot cart items SEBELUM createTransaction
   // Deep copy cart untuk menghindari referensi yang berubah
   const snapshotItems = JSON.parse(JSON.stringify(cart.value.map((item) => ({
@@ -466,6 +621,9 @@ const processPayment = async () => {
     product_price: item.product_price,
     quantity: item.quantity,
     subtotal: item.subtotal,
+    sale_mode: item.sale_mode,
+    weight_grams: item.weight_grams,
+    product_unit: item.product_unit,
   }))));
 
   // Snapshot data lainnya
@@ -474,7 +632,8 @@ const processPayment = async () => {
   const currentPaid = paymentForm.value.paid;
   const currentChange = changeAmount.value;
   const currentPaymentMethod = paymentForm.value.paymentMethod;
-  const currentCustomerName = paymentForm.value.customerName;
+  const currentCustomerName = selectedCustomer.value?.name || paymentForm.value.customerName;
+  const currentCustomerId = selectedCustomer.value?.id || null;
   const currentDiscount = discountAmount.value;
   const currentSettingsDiscount = settingsDiscount.value;
   const currentTax = taxAmount.value;
@@ -482,7 +641,7 @@ const processPayment = async () => {
 
   loading.value = true;
   try {
-    const transactionPayload = {
+    const transactionPayload: any = {
       paid: currentPaid,
       payment_method: currentPaymentMethod,
       discount: currentDiscount,
@@ -493,6 +652,7 @@ const processPayment = async () => {
       ppn: currentPpn,
       ppn_percentage: discountTaxSettings.value.ppn.percent,
       customer_name: currentCustomerName,
+      customer_id: currentCustomerId,
     };
 
     const result = await createTransaction(transactionPayload);
@@ -529,6 +689,7 @@ const processPayment = async () => {
       discountType: "nominal",
       selectedBankAccount: "",
     };
+    selectedCustomer.value = null;
     displayPaid.value = "0";
     showPaymentModal.value = false;
 
@@ -846,7 +1007,7 @@ onUnmounted(() => {
       <!-- Aksi Cepat Kasir -->
       <div class="bg-white rounded-2xl shadow-sm p-3 sm:p-4 mb-4 border border-gray-100">
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
-          <form class="flex gap-2" @submit.prevent="handleBarcodeSubmit">
+          <form v-if="barcodeEnabled" class="flex gap-2" @submit.prevent="handleBarcodeSubmit">
             <div class="relative flex-1">
               <UIcon
                 name="i-heroicons-qr-code"
@@ -992,7 +1153,7 @@ onUnmounted(() => {
                   'bg-red-600 text-white': product.stock === 0,
                 }"
               >
-                {{ product.stock === 0 ? "HABIS" : `Stok: ${product.stock}` }}
+                  {{ product.stock === 0 ? "HABIS" : `Stok: ${formatStock(product.stock, product.stock_unit)}` }}
               </div>
             </div>
 
@@ -1011,8 +1172,20 @@ onUnmounted(() => {
               </p>
               <div class="space-y-2">
                 <p class="text-sm sm:text-base font-black text-primary-600">
-                  {{ formatCurrency(product.price) }}
+                  {{ formatCurrency(product.price)
+                  }}<span
+                    v-if="product.sale_mode === 'weight'"
+                    class="text-xs font-bold text-gray-500"
+                    >/kg</span
+                  >
                 </p>
+                <span
+                  v-if="product.sale_mode === 'weight'"
+                  class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full"
+                >
+                  <UIcon name="i-heroicons-scale" class="w-3 h-3" />
+                  Timbangan
+                </span>
                 <!-- Stock Info when no image -->
                 <div
                   v-if="!showProductImages && product.has_stock"
@@ -1023,7 +1196,7 @@ onUnmounted(() => {
                     'text-red-600': product.stock === 0,
                   }"
                 >
-                  {{ product.stock === 0 ? "HABIS" : `Stok: ${product.stock}` }}
+                {{ product.stock === 0 ? "HABIS" : `Stok: ${formatStock(product.stock, product.stock_unit)}` }}
                 </div>
               </div>
             </div>
@@ -1103,17 +1276,36 @@ onUnmounted(() => {
           <div
             v-for="item in cart"
             :key="item.cart_line_id"
-            class="flex items-center gap-3 bg-gray-50 p-3 rounded-xl"
+            class="flex items-center gap-2 sm:gap-3 bg-gray-50 p-2.5 sm:p-3 rounded-xl"
           >
             <div class="flex-1 min-w-0">
               <p class="font-bold text-sm text-gray-800 truncate">
                 {{ item.product_name }}
               </p>
-              <p class="text-xs text-gray-500">
-                {{ formatCurrency(item.product_price) }}
+              <button
+                v-if="item.sale_mode === 'weight'"
+                @click="openWeightModal(item, item)"
+                class="text-left text-xs text-gray-500 hover:text-primary-600"
+                title="Ubah berat / harga"
+              >
+                {{ formatWeight(item.weight_grams || 0) }} ×
+                {{ formatCurrency(item.product_price) }}/kg
+              </button>
+              <button
+                v-else
+                @click="openPriceModal(item)"
+                class="text-left text-xs text-gray-500 hover:text-primary-600"
+                title="Ubah harga"
+              >
+                {{ formatCurrency(item.product_price) }} × {{ item.quantity }}
+              </button>
+              <p class="text-sm font-black text-primary-700 mt-0.5">
+                {{ formatCurrency(item.subtotal) }}
               </p>
             </div>
+
             <div
+              v-if="item.sale_mode !== 'weight'"
               class="flex items-center bg-white rounded-lg border-2 border-gray-200"
             >
               <button
@@ -1124,7 +1316,7 @@ onUnmounted(() => {
               >
                 −
               </button>
-              <span class="w-10 text-center font-black text-sm">{{
+              <span class="w-8 sm:w-10 text-center font-black text-sm">{{
                 item.quantity
               }}</span>
               <button
@@ -1136,9 +1328,16 @@ onUnmounted(() => {
                 +
               </button>
             </div>
+            <span
+              v-else
+              class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg whitespace-nowrap"
+            >
+              {{ item.product_unit || "kg" }}
+            </span>
+
             <button
               @click="removeFromCart(item.cart_line_id)"
-              class="w-8 h-8 flex items-center justify-center text-red-600 hover:bg-red-100 rounded-lg font-bold text-lg transition-all"
+              class="w-7 h-7 shrink-0 flex items-center justify-center text-red-600 hover:bg-red-100 rounded-lg font-bold text-base transition-all"
               title="Hapus dari keranjang"
             >
               ✕
@@ -1342,10 +1541,14 @@ onUnmounted(() => {
               </p>
             </div>
 
-            <!-- Nama Pelanggan -->
-            <div>
+            <!-- Pelanggan -->
+            <CustomerSelector
+              v-if="customerEnabled"
+              v-model="selectedCustomer"
+            />
+            <div v-else-if="customerRequired || true">
               <label class="block text-sm font-bold text-gray-700 mb-2">
-                👤 Nama Pelanggan (Opsional)
+                👤 Nama Pelanggan {{ customerRequired ? '(Wajib)' : '(Opsional)' }}
               </label>
               <input
                 v-model="paymentForm.customerName"
@@ -1642,6 +1845,179 @@ onUnmounted(() => {
             </div>
             <p class="text-[11px] text-gray-400 text-center">Logo tidak ikut di cetak cepat agar cepat. Belum sambung? Atur di Pengaturan > Struk.</p>
           </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Modal Input Timbangan -->
+    <Teleport to="body" v-if="isMounted">
+      <div
+        v-if="weightModal.open"
+        class="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4"
+        @click.self="closeWeightModal"
+      >
+        <div
+          class="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto"
+        >
+          <div class="flex items-start justify-between mb-4">
+            <div class="min-w-0">
+              <p class="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                ⚖️ Timbangan
+              </p>
+              <h3 class="text-xl font-black text-gray-800 truncate">
+                {{ weightModal.product?.name }}
+              </h3>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Harga {{ formatCurrency(Number(weightModal.pricePerKg) || 0) }}/kg
+              </p>
+            </div>
+            <button
+              @click="closeWeightModal"
+              class="text-gray-400 hover:text-gray-600 p-1 shrink-0"
+            >
+              <UIcon name="i-heroicons-x-mark" class="w-6 h-6" />
+            </button>
+          </div>
+
+          <div
+            v-if="weightModal.error"
+            class="mb-3 p-2.5 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600 font-bold"
+          >
+            ⚠️ {{ weightModal.error }}
+          </div>
+
+          <label
+            class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2"
+            >Berat (gram)</label
+          >
+          <div class="relative">
+            <input
+              v-model="weightModal.grams"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder="0"
+              class="w-full px-4 py-4 pr-14 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-emerald-500 focus:bg-white transition-all outline-none text-3xl font-black text-center text-gray-800"
+            />
+            <span
+              class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400"
+              >gram</span
+            >
+          </div>
+
+          <div class="grid grid-cols-4 gap-2 mt-2">
+            <button
+              v-for="preset in weightPresets"
+              :key="preset"
+              @click="setWeightPreset(preset)"
+              class="py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
+              :class="
+                weightModalGrams === preset
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              "
+            >
+              {{ preset >= 1000 ? "1 kg" : `${preset}g` }}
+            </button>
+          </div>
+
+          <div class="mt-4">
+            <label
+              class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2"
+              >Harga per kg (Rp)</label
+            >
+            <input
+              v-model.number="weightModal.pricePerKg"
+              type="number"
+              min="0"
+              inputmode="numeric"
+              class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-emerald-500 focus:bg-white transition-all outline-none text-lg font-black text-gray-800"
+            />
+          </div>
+
+          <div
+            class="mt-4 flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3"
+          >
+            <div>
+              <p class="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                Subtotal
+              </p>
+              <p class="text-xs text-gray-500">
+                {{ formatWeight(weightModalGrams) }} ×
+                {{ formatCurrency(Number(weightModal.pricePerKg) || 0) }}/kg
+              </p>
+            </div>
+            <p class="text-2xl font-black text-emerald-700">
+              {{ formatCurrency(weightModalSubtotal) }}
+            </p>
+          </div>
+
+          <button
+            @click="confirmWeight"
+            :disabled="!weightModalGrams"
+            class="mt-4 w-full py-4 rounded-2xl font-black text-white transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+            :class="
+              weightModalGrams
+                ? 'bg-emerald-600 hover:bg-emerald-700'
+                : 'bg-gray-300'
+            "
+          >
+            {{ weightModal.lineId ? "SIMPAN PERUBAHAN" : "TAMBAH KE KERANJANG" }}
+          </button>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Modal Ubah Harga Satuan -->
+    <Teleport to="body" v-if="isMounted">
+      <div
+        v-if="priceModal.open"
+        class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        @click.self="priceModal.open = false"
+      >
+        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6">
+          <div class="flex items-start justify-between mb-4">
+            <div class="min-w-0">
+              <p class="text-[10px] font-black text-primary-600 uppercase tracking-widest">
+                Ubah Harga
+              </p>
+              <h3 class="text-xl font-black text-gray-800 truncate">
+                {{ priceModal.name }}
+              </h3>
+            </div>
+            <button
+              @click="priceModal.open = false"
+              class="text-gray-400 hover:text-gray-600 p-1 shrink-0"
+            >
+              <UIcon name="i-heroicons-x-mark" class="w-6 h-6" />
+            </button>
+          </div>
+
+          <div
+            v-if="priceModal.error"
+            class="mb-3 p-2.5 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600 font-bold"
+          >
+            ⚠️ {{ priceModal.error }}
+          </div>
+
+          <label
+            class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2"
+            >Harga jual (Rp)</label
+          >
+          <input
+            v-model.number="priceModal.price"
+            type="number"
+            min="0"
+            inputmode="numeric"
+            class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-primary-500 focus:bg-white transition-all outline-none text-2xl font-black text-center text-gray-800"
+          />
+
+          <button
+            @click="confirmPrice"
+            class="mt-4 w-full py-4 rounded-2xl font-black text-white bg-primary-600 hover:bg-primary-700 transition-all active:scale-[0.98]"
+          >
+            SIMPAN HARGA
+          </button>
         </div>
       </div>
     </Teleport>

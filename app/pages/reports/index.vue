@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatCurrency, formatDateTime } from "~/utils/helpers";
+import { formatWeight, weightInKg } from "~/utils/pricing";
 
 definePageMeta({
   layout: "default",
@@ -135,7 +136,7 @@ const paymentMethodData = computed(() => {
 
 const topProductsData = computed(() => {
   const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
-  const { products: names, quantities } = getTopSellingProducts(
+  const { products: names, sales } = getTopSellingProducts(
     activeTransactions,
     5,
   );
@@ -143,8 +144,8 @@ const topProductsData = computed(() => {
     labels: names,
     datasets: [
       {
-        label: "Jumlah Terjual",
-        data: quantities,
+        label: "Penjualan (Rp)",
+        data: sales,
         backgroundColor: [
           "#3b82f6",
           "#8b5cf6",
@@ -212,17 +213,21 @@ const totalItemsSold = computed(() =>
   (allItemsSold.value.quantities || []).reduce((sum: number, qty: number) => sum + qty, 0),
 );
 
+const totalWeightSold = computed(() =>
+  (allItemsSold.value.weightGrams || []).reduce((sum: number, grams: number) => sum + grams, 0),
+);
+
 const topProductInsightRows = computed(() => {
   const labels = topProductsData.value.labels || [];
   const values = topProductsData.value.datasets?.[0]?.data || [];
   const max = Math.max(...values.map((value: any) => Number(value) || 0), 1);
 
   return labels.map((label: string, index: number) => {
-    const quantity = Number(values[index]) || 0;
+    const amount = Number(values[index]) || 0;
     return {
       label,
-      quantity,
-      percent: Math.round((quantity / max) * 100),
+      amount,
+      percent: Math.round((amount / max) * 100),
     };
   });
 });
@@ -266,10 +271,18 @@ const profitByProduct = computed(() => {
   for (const t of activeTransactions) {
     for (const item of ((t as any).items || [])) {
       const key = item.product_id || item.product_name;
-      const existing = productMap.get(key) || { name: item.product_name, qty: 0, revenue: 0, cost: 0 };
-      existing.qty += item.quantity;
+      const existing = productMap.get(key) || { name: item.product_name, qty: 0, weightGrams: 0, revenue: 0, cost: 0 };
+      const buyPrice = buyPriceMap.value.get(item.product_id) || 0;
+
+      if (item.sale_mode === "weight") {
+        existing.weightGrams += Number(item.weight_grams) || 0;
+        existing.cost += weightInKg(Number(item.weight_grams) || 0) * buyPrice;
+      } else {
+        existing.qty += Number(item.quantity) || 0;
+        existing.cost += buyPrice * (Number(item.quantity) || 0);
+      }
+
       existing.revenue += Number(item.subtotal) || 0;
-      existing.cost += (buyPriceMap.value.get(item.product_id) || 0) * item.quantity;
       productMap.set(key, existing);
     }
   }
@@ -308,7 +321,7 @@ const dailyReport = computed(() => {
       dateLabel, dateKey,
       totalTransactions: 0, totalSales: 0,
       cashSales: 0, nonCashSales: 0,
-      totalItems: 0, totalCost: 0,
+      totalItems: 0, totalWeightGrams: 0, totalCost: 0,
     };
     existing.totalTransactions += 1;
     existing.totalSales += Number(t.total) || 0;
@@ -318,8 +331,17 @@ const dailyReport = computed(() => {
       existing.nonCashSales += Number(t.total) || 0;
     }
     for (const item of ((t as any).items || [])) {
-      existing.totalItems += item.quantity;
-      existing.totalCost += (buyPriceMap.value.get(item.product_id) || 0) * item.quantity;
+      const buyPrice = buyPriceMap.value.get(item.product_id) || 0;
+
+      if (item.sale_mode === "weight") {
+        const grams = Number(item.weight_grams) || 0;
+        existing.totalWeightGrams += grams;
+        existing.totalCost += weightInKg(grams) * buyPrice;
+      } else {
+        const qty = Number(item.quantity) || 0;
+        existing.totalItems += qty;
+        existing.totalCost += buyPrice * qty;
+      }
     }
     dayMap.set(dateKey, existing);
   }
@@ -600,7 +622,8 @@ const exportToExcel = () => {
     });
 
     // Add item sold section
-    if (allItemsSold.products && allItemsSold.products.length > 0) {
+    const itemsSold = allItemsSold.value;
+    if (itemsSold.products && itemsSold.products.length > 0) {
       htmlContent += `
         <tr>
           <td colspan="10"></td>
@@ -616,13 +639,13 @@ const exportToExcel = () => {
         </tr>
       `;
 
-      allItemsSold.products.forEach((product, idx) => {
+      itemsSold.products.forEach((product, idx) => {
         htmlContent += `
           <tr>
             <td>${idx + 1}</td>
             <td>${product}</td>
-            <td style="text-align: right;">${allItemsSold.quantities[idx]} unit</td>
-            <td style="text-align: right;">${formatCurrency(allItemsSold.sales?.[idx] || 0)}</td>
+            <td style="text-align: right;">${itemsSold.quantities[idx]} unit${itemsSold.weightGrams?.[idx] ? ` + ${formatWeight(itemsSold.weightGrams[idx])}` : ''}</td>
+            <td style="text-align: right;">${formatCurrency(itemsSold.sales?.[idx] || 0)}</td>
           </tr>
         `;
       });
@@ -1074,7 +1097,9 @@ watch(
           <p class="mt-3 text-xl sm:text-2xl font-black text-gray-950 leading-tight">
             {{ totalItemsSold }}
           </p>
-          <p class="mt-1 text-xs text-gray-500">Akumulasi qty produk</p>
+          <p class="mt-1 text-xs text-gray-500">
+            {{ totalWeightSold > 0 ? `+ ${formatWeight(totalWeightSold)} timbangan` : "Akumulasi qty produk" }}
+          </p>
         </div>
       </div>
 
@@ -1182,7 +1207,7 @@ watch(
                 <div class="flex items-center justify-between mb-4">
                   <div>
                     <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Produk Teratas</p>
-                    <h3 class="text-base font-black text-gray-950">Kontribusi Qty</h3>
+                    <h3 class="text-base font-black text-gray-950">Kontribusi Omset</h3>
                   </div>
                   <UIcon name="i-heroicons-trophy" class="w-5 h-5 text-amber-500" />
                 </div>
@@ -1194,7 +1219,7 @@ watch(
                         <span class="w-6 h-6 rounded-md bg-gray-100 text-gray-600 text-xs font-black flex items-center justify-center">{{ idx + 1 }}</span>
                         <span class="font-semibold text-gray-900 truncate">{{ item.label }}</span>
                       </div>
-                      <span class="text-xs font-black text-gray-700 whitespace-nowrap">{{ item.quantity }} unit</span>
+                      <span class="text-xs font-black text-gray-700 whitespace-nowrap">{{ formatCurrency(item.amount) }}</span>
                     </div>
                     <div class="h-2 rounded-full bg-gray-100 overflow-hidden">
                       <div class="h-full rounded-full bg-gray-950" :style="{ width: `${item.percent}%` }"></div>
@@ -1526,7 +1551,9 @@ watch(
               >
                 <td class="py-3 px-5 text-gray-500 text-sm">{{ idx + 1 }}</td>
                 <td class="py-3 px-5 font-medium text-gray-900 text-sm">{{ p.name }}</td>
-                <td class="py-3 px-5 text-right text-gray-700 text-sm">{{ p.qty }}</td>
+                <td class="py-3 px-5 text-right text-gray-700 text-sm">
+                  {{ p.qty }}<template v-if="p.weightGrams > 0"><br /><span class="text-xs text-emerald-600">{{ formatWeight(p.weightGrams) }}</span></template>
+                </td>
                 <td class="py-3 px-5 text-right text-gray-900 font-semibold text-sm">{{ formatCurrency(p.revenue) }}</td>
                 <td class="py-3 px-5 text-right text-red-600 text-sm">{{ formatCurrency(p.cost) }}</td>
                 <td class="py-3 px-5 text-right font-bold text-sm" :class="p.profit >= 0 ? 'text-emerald-600' : 'text-red-600'">{{ formatCurrency(p.profit) }}</td>
@@ -1544,7 +1571,9 @@ watch(
             <tfoot>
               <tr class="bg-gray-50 font-bold border-t-2 border-gray-200">
                 <td class="py-3 px-5" colspan="2">TOTAL</td>
-                <td class="py-3 px-5 text-right text-sm">{{ profitByProduct.reduce((s, p) => s + p.qty, 0) }}</td>
+                <td class="py-3 px-5 text-right text-sm">
+                  {{ profitByProduct.reduce((s, p) => s + p.qty, 0) }}<template v-if="totalWeightSold > 0"><br /><span class="text-xs text-emerald-600">{{ formatWeight(totalWeightSold) }}</span></template>
+                </td>
                 <td class="py-3 px-5 text-right text-sm">{{ formatCurrency(totalRevenue) }}</td>
                 <td class="py-3 px-5 text-right text-red-600 text-sm">{{ formatCurrency(totalCost) }}</td>
                 <td class="py-3 px-5 text-right text-sm" :class="grossProfit >= 0 ? 'text-emerald-600' : 'text-red-600'">{{ formatCurrency(grossProfit) }}</td>
@@ -1593,7 +1622,9 @@ watch(
               </div>
               <div>
                 <p class="font-bold text-gray-900">{{ day.dateLabel }}</p>
-                <p class="text-sm text-gray-500">{{ day.totalTransactions }} transaksi · {{ day.totalItems }} item terjual</p>
+                <p class="text-sm text-gray-500">
+                  {{ day.totalTransactions }} transaksi · {{ day.totalItems }} item terjual<template v-if="day.totalWeightGrams > 0"> · {{ formatWeight(day.totalWeightGrams) }}</template>
+                </p>
               </div>
             </div>
             <div class="text-right">
@@ -1899,7 +1930,9 @@ watch(
                     class="flex justify-between items-center text-xs"
                   >
                     <span class="text-blue-700 truncate mr-2">{{ item.product_name }}</span>
-                    <span class="text-blue-800 font-bold shrink-0">+{{ item.quantity }} {{ item.product_sku || 'pcs' }}</span>
+                    <span class="text-blue-800 font-bold shrink-0">
+                      +{{ item.sale_mode === "weight" ? formatWeight(Number(item.weight_grams) || 0) : `${item.quantity} ${item.product_sku || "pcs"}` }}
+                    </span>
                   </div>
                 </div>
                 <p v-else class="text-xs text-blue-600 italic">

@@ -1,4 +1,5 @@
 import { formatCurrency, formatDateTime } from "./helpers";
+import { getReceiptItemParts, isWeightItem } from "./pricing";
 
 export const generateTextReceipt = (transaction: any, store: any, settings: any) => {
     const paperWidth = settings.paperWidth || settings.paper_width || 58;
@@ -33,8 +34,15 @@ export const generateTextReceipt = (transaction: any, store: any, settings: any)
     text += line();
 
     transaction.items.forEach((item: any) => {
-        text += `${item.quantity}x ${item.product_name}\n`;
-        text += justify(`   @${formatCurrency(item.product_price)}`, formatCurrency(item.subtotal || item.product_price * item.quantity));
+        const { title, detail, total } = getReceiptItemParts(item);
+
+        text += `${title}\n`;
+        if (isWeightItem(item)) {
+            text += `   ${detail}\n`;
+            text += justify("", formatCurrency(total));
+        } else {
+            text += justify(`   ${detail}`, formatCurrency(total));
+        }
     });
 
     text += line();

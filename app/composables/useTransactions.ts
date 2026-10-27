@@ -1,5 +1,12 @@
 import type { Database } from '~/types/database'
 import { logToActivity, ACTIVITY_TYPES } from '~/utils/activityLogger'
+import {
+    calcWeightSubtotal,
+    formatWeight,
+    getStockQuantity,
+    isValidWeight,
+    validateWeightStock
+} from '~/utils/pricing'
 
 type Transaction = Database['public']['Tables']['transactions']['Row']
 type TransactionInsert = Database['public']['Tables']['transactions']['Insert']
@@ -17,6 +24,10 @@ export interface CartItem {
     subtotal: number
     has_stock: boolean
     current_stock: number
+    sale_mode: 'unit' | 'weight'
+    weight_grams: number | null
+    product_unit: string | null
+    base_price: number
 }
 
 export interface TransactionWithItems extends Transaction {
@@ -37,10 +48,49 @@ export const useTransactions = () => {
     // Cart operations
     const addToCart = (product: any) => {
         const isQuickSale = product.is_quick_sale === true || !product.id
-        const lineId = product.cart_line_id || product.id || `quick-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        const isWeight = product.sale_mode === 'weight'
+        const lineId = product.cart_line_id || (isWeight
+            ? `weight-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+            : (product.id || `quick-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`))
+
+        if (isWeight) {
+            const grams = Number(product.weight_grams ?? product.quantity)
+            const pricePerKg = Number(product.price)
+
+            if (!isValidWeight(grams)) {
+                throw new Error('Berat harus lebih dari 0 gram')
+            }
+            if (!Number.isFinite(pricePerKg) || pricePerKg < 0) {
+                throw new Error('Harga per kg tidak valid')
+            }
+            if (product.has_stock) {
+                const stockError = validateWeightStock(grams, Number(product.stock) || 0)
+                if (stockError) throw new Error(stockError)
+            }
+
+            // Every weighing is its own line: never merge weight items.
+            cart.value.push({
+                cart_line_id: lineId,
+                product_id: product.id,
+                product_name: product.name,
+                product_sku: product.sku || null,
+                product_price: pricePerKg,
+                product_image: product.image_url || null,
+                quantity: 1,
+                subtotal: calcWeightSubtotal(grams, pricePerKg),
+                has_stock: product.has_stock === true,
+                current_stock: Number(product.stock) || 0,
+                sale_mode: 'weight',
+                weight_grams: Math.round(grams),
+                product_unit: product.unit || 'kg',
+                base_price: Number(product.price) || 0
+            })
+            return
+        }
+
         const existingItem = isQuickSale
             ? null
-            : cart.value.find(item => item.product_id === product.id)
+            : cart.value.find(item => item.product_id === product.id && item.sale_mode !== 'weight')
 
         if (existingItem) {
             // Check stock
@@ -60,18 +110,28 @@ export const useTransactions = () => {
                 quantity: product.quantity || 1,
                 subtotal: product.price * (product.quantity || 1),
                 has_stock: product.has_stock === true,
-                current_stock: product.stock || 0
+                current_stock: product.stock || 0,
+                sale_mode: 'unit',
+                weight_grams: null,
+                product_unit: product.unit || 'pcs',
+                base_price: Number(product.price) || 0
             })
         }
     }
 
+    const findCartLine = (lineId: string) =>
+        cart.value.find(item => item.cart_line_id === lineId)
+
     const removeFromCart = (lineId: string) => {
-        cart.value = cart.value.filter(item => item.cart_line_id !== lineId && item.product_id !== lineId)
+        // Only the exact line goes: two weighings of the same product are separate lines.
+        cart.value = cart.value.filter(item => item.cart_line_id !== lineId)
     }
 
     const updateCartItemQuantity = (lineId: string, quantity: number) => {
-        const item = cart.value.find(item => item.cart_line_id === lineId || item.product_id === lineId)
+        const item = findCartLine(lineId)
         if (item) {
+            if (item.sale_mode === 'weight') return
+
             if (quantity <= 0) {
                 removeFromCart(lineId)
                 return
@@ -87,6 +147,44 @@ export const useTransactions = () => {
         }
     }
 
+    const updateCartItemWeight = (lineId: string, grams: number, pricePerKg?: number) => {
+        const item = findCartLine(lineId)
+        if (!item || item.sale_mode !== 'weight') return
+
+        const nextGrams = Math.round(Number(grams))
+        if (!isValidWeight(nextGrams)) {
+            throw new Error('Berat harus lebih dari 0 gram')
+        }
+        if (item.has_stock && nextGrams > item.current_stock) {
+            throw new Error(`Stok tidak cukup (tersisa ${formatWeight(item.current_stock)})`)
+        }
+
+        const price = pricePerKg === undefined ? item.product_price : Number(pricePerKg)
+        if (!Number.isFinite(price) || price < 0) {
+            throw new Error('Harga per kg tidak valid')
+        }
+
+        item.weight_grams = nextGrams
+        item.product_price = price
+        item.quantity = 1
+        item.subtotal = calcWeightSubtotal(nextGrams, price)
+    }
+
+    const updateCartItemPrice = (lineId: string, price: number) => {
+        const item = findCartLine(lineId)
+        if (!item) return
+
+        const nextPrice = Number(price)
+        if (!Number.isFinite(nextPrice) || nextPrice < 0) {
+            throw new Error('Harga tidak valid')
+        }
+
+        item.product_price = nextPrice
+        item.subtotal = item.sale_mode === 'weight'
+            ? calcWeightSubtotal(Number(item.weight_grams), nextPrice)
+            : item.quantity * nextPrice
+    }
+
     const clearCart = () => {
         cart.value = []
     }
@@ -96,7 +194,8 @@ export const useTransactions = () => {
     })
 
     const cartItemsCount = computed(() => {
-        return cart.value.reduce((sum, item) => sum + item.quantity, 0)
+        // A weight line is one item regardless of grams.
+        return cart.value.reduce((sum, item) => sum + (item.sale_mode === 'weight' ? 1 : item.quantity), 0)
     })
 
     // Generate transaction number
@@ -171,6 +270,45 @@ export const useTransactions = () => {
                 throw new Error('Pembayaran kurang')
             }
 
+            // Re-read stock right before saving, so a stale product list cannot oversell.
+            // Weight sales allow several lines for the same product, so aggregate first.
+            const stockSnapshot = new Map<string, { stock: number; stock_unit: string }>()
+            const requiredStock = new Map<string, number>()
+            for (const item of cart.value) {
+                if (!item.has_stock || item.product_id.startsWith('quick-')) continue
+                requiredStock.set(
+                    item.product_id,
+                    (requiredStock.get(item.product_id) || 0) + getStockQuantity(item)
+                )
+            }
+
+            for (const [productId, required] of requiredStock) {
+                const item = cart.value.find(i => i.product_id === productId)
+                // @ts-ignore
+                const { data: product, error: stockFetchError } = await supabase
+                    .from('products')
+                    .select('stock, has_stock, stock_unit')
+                    .eq('id', productId)
+                    .single()
+
+                if (stockFetchError || !product) {
+                    throw new Error(`Gagal memeriksa stok ${item?.product_name || 'produk'}`)
+                }
+
+                const available = Number(product.stock) || 0
+                if (product.has_stock && required > available) {
+                    const left = product.stock_unit === 'gram'
+                        ? formatWeight(available)
+                        : `${available} ${item?.product_unit || 'pcs'}`
+                    throw new Error(`Stok ${item?.product_name || 'produk'} tidak cukup (tersisa ${left})`)
+                }
+
+                stockSnapshot.set(productId, {
+                    stock: available,
+                    stock_unit: product.stock_unit || 'pcs'
+                })
+            }
+
             const transactionNumber = await generateTransactionNumber()
 
             // Build insert object dengan optional fields
@@ -227,8 +365,12 @@ export const useTransactions = () => {
                 product_name: item.product_name,
                 product_sku: item.product_sku,
                 product_price: item.product_price,
-                quantity: item.quantity,
-                subtotal: item.subtotal
+                quantity: item.sale_mode === 'weight' ? 1 : item.quantity,
+                subtotal: item.subtotal,
+                sale_mode: item.sale_mode,
+                weight_grams: item.weight_grams,
+                product_unit: item.product_unit,
+                base_price: item.base_price
             }))
 
             // @ts-ignore
@@ -242,10 +384,18 @@ export const useTransactions = () => {
             }
 
             // Update stock for products with stock tracking
+            const remainingStock = new Map<string, number>()
             for (const item of cart.value) {
                 if (item.has_stock && !item.product_id.startsWith('quick-')) {
                     try {
-                        const newStock = item.current_stock - item.quantity
+                        const snapshot = stockSnapshot.get(item.product_id)
+                        const beforeStock = remainingStock.get(item.product_id)
+                            ?? snapshot?.stock
+                            ?? item.current_stock
+                        const delta = getStockQuantity(item)
+                        const newStock = Math.max(0, beforeStock - delta)
+                        const stockUnit = snapshot?.stock_unit || (item.sale_mode === 'weight' ? 'gram' : 'pcs')
+                        remainingStock.set(item.product_id, newStock)
 
                         // Update product stock
                         // @ts-ignore
@@ -267,9 +417,10 @@ export const useTransactions = () => {
                                 product_id: item.product_id,
                                 transaction_id: transaction.id,
                                 type: 'out',
-                                quantity: item.quantity,
-                                stock_before: item.current_stock,
+                                quantity: delta,
+                                stock_before: beforeStock,
                                 stock_after: newStock,
+                                stock_unit: stockUnit,
                                 notes: `Penjualan: ${transactionNumber}`,
                                 created_by: user.value?.id
                             })
@@ -424,6 +575,9 @@ export const useTransactions = () => {
             // Get transaction data first
             const transaction = transactions.value.find(t => t.id === transactionId)
             if (!transaction) throw new Error('Transaksi tidak ditemukan')
+            if (transaction.notes?.startsWith('[RETUR]')) {
+                throw new Error('Transaksi ini sudah diretur')
+            }
 
             // Restore stock for each item
             if (transaction.items && transaction.items.length > 0) {
@@ -434,7 +588,7 @@ export const useTransactions = () => {
                         // @ts-ignore
                         const { data: product, error: fetchError } = await supabase
                             .from('products')
-                            .select('stock, has_stock')
+                            .select('stock, has_stock, stock_unit')
                             .eq('id', item.product_id)
                             .single()
 
@@ -446,7 +600,8 @@ export const useTransactions = () => {
                         // Only restore stock if product tracks stock
                         if (product.has_stock) {
                             const currentStock = product.stock || 0
-                            const newStock = currentStock + item.quantity
+                            const restoreQty = getStockQuantity(item)
+                            const newStock = currentStock + restoreQty
 
                             // @ts-ignore
                             const { error: stockError } = await supabase
@@ -464,7 +619,10 @@ export const useTransactions = () => {
                             await supabase.from('stock_movements').insert({
                                 product_id: item.product_id,
                                 type: 'in',
-                                quantity: item.quantity,
+                                quantity: restoreQty,
+                                stock_before: currentStock,
+                                stock_after: newStock,
+                                stock_unit: product.stock_unit || (item.sale_mode === 'weight' ? 'gram' : 'pcs'),
                                 notes: `Stok dikembalikan dari retur transaksi ${transaction.transaction_number}`,
                                 created_by: user.value?.id
                             })
@@ -531,7 +689,7 @@ export const useTransactions = () => {
                         // @ts-ignore
                         const { data: product, error: fetchError } = await supabase
                             .from('products')
-                            .select('stock, has_stock')
+                            .select('stock, has_stock, stock_unit')
                             .eq('id', item.product_id)
                             .single()
 
@@ -543,7 +701,8 @@ export const useTransactions = () => {
                         // Only restore stock if product tracks stock
                         if (product.has_stock) {
                             const currentStock = product.stock || 0
-                            const newStock = currentStock + item.quantity
+                            const restoreQty = getStockQuantity(item)
+                            const newStock = currentStock + restoreQty
 
                             // @ts-ignore
                             const { error: stockError } = await supabase
@@ -561,7 +720,10 @@ export const useTransactions = () => {
                             await supabase.from('stock_movements').insert({
                                 product_id: item.product_id,
                                 type: 'in',
-                                quantity: item.quantity,
+                                quantity: restoreQty,
+                                stock_before: currentStock,
+                                stock_after: newStock,
+                                stock_unit: product.stock_unit || (item.sale_mode === 'weight' ? 'gram' : 'pcs'),
                                 notes: `Stok dikembalikan dari penghapusan transaksi ${transaction.transaction_number}`,
                                 created_by: user.value?.id
                             })
@@ -617,6 +779,8 @@ export const useTransactions = () => {
         addToCart,
         removeFromCart,
         updateCartItemQuantity,
+        updateCartItemWeight,
+        updateCartItemPrice,
         clearCart,
         createTransaction,
         fetchTransactions,

@@ -2,6 +2,8 @@
 // Teks saja tanpa logo agar cepat di Panda/Xprinter.
 // Termasuk mode simulasi: tanpa printer pun bisa lihat hasil byte.
 
+import { formatWeight, isWeightItem, weightInKg } from '~/utils/pricing'
+
 const LS_KEY = 'kasirok_bt_device'
 
 const center = (text: string, width: number) => {
@@ -54,6 +56,15 @@ export const useBluetoothPrinter = () => {
     if (trx?.customer_name) L.push(row('Cust:', String(trx.customer_name).slice(0, W - 6), W))
     L.push('-'.repeat(W))
     for (const it of trx?.items || []) {
+      if (isWeightItem(it)) {
+        const grams = Number(it.weight_grams) || 0
+        const price = Number(it.product_price ?? it.price ?? 0)
+        const total = Number(it.subtotal) || Math.floor((grams * price + 500) / 1000)
+        L.push(`${formatWeight(grams)} ${it.product_name || 'Item'}`.slice(0, W))
+        L.push(row(` ${weightInKg(grams).toFixed(3).replace('.', ',')}kg x ${rupiah(price)}/kg`, rupiah(total), W))
+        continue
+      }
+
       const name = `${it.quantity}x ${it.product_name || it.productName || 'Item'}`
       L.push(name.slice(0, W))
       L.push(row(` ${it.quantity} x ${rupiah(it.product_price ?? it.price ?? 0)}`, rupiah((it.product_price ?? it.price ?? 0) * (it.quantity || 1)), W))

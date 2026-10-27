@@ -51,31 +51,36 @@ export const useCharts = () => {
 
     // Get top selling products
     const getTopSellingProducts = (transactions: any[], limit = 5) => {
-        if (transactions.length === 0) return { products: [], quantities: [] }
+        if (transactions.length === 0) return { products: [], quantities: [], weightGrams: [], sales: [] }
 
-        const productStats: Record<string, { quantity: number; sales: number }> = {}
+        const productStats: Record<string, { quantity: number; weightGrams: number; sales: number }> = {}
 
         transactions.forEach(t => {
             t.items?.forEach((item: any) => {
                 if (!productStats[item.product_name]) {
-                    productStats[item.product_name] = { quantity: 0, sales: 0 }
+                    productStats[item.product_name] = { quantity: 0, weightGrams: 0, sales: 0 }
                 }
                 const stat = productStats[item.product_name]
                 if (stat) {
-                    stat.quantity += item.quantity
-                    stat.sales += item.subtotal
+                    if (item.sale_mode === 'weight') {
+                        stat.weightGrams += Number(item.weight_grams) || 0
+                    } else {
+                        stat.quantity += Number(item.quantity) || 0
+                    }
+                    stat.sales += Number(item.subtotal) || 0
                 }
             })
         })
 
-        // Sort by quantity sold
+        // Rank by revenue so unit and weight products can be compared fairly
         const sorted = Object.entries(productStats)
-            .sort((a, b) => b[1].quantity - a[1].quantity)
+            .sort((a, b) => b[1].sales - a[1].sales)
             .slice(0, limit)
 
         return {
             products: sorted.map(([name]) => name),
             quantities: sorted.map(([_, stats]) => stats.quantity),
+            weightGrams: sorted.map(([_, stats]) => stats.weightGrams),
             sales: sorted.map(([_, stats]) => stats.sales)
         }
     }
@@ -100,32 +105,37 @@ export const useCharts = () => {
         }
     }
 
-    // Get all items sold (sorted by quantity)
+    // Get all items sold (sorted by revenue)
     const getAllItemsSold = (transactions: any[]) => {
-        if (transactions.length === 0) return { products: [], quantities: [], sales: [] }
+        if (transactions.length === 0) return { products: [], quantities: [], weightGrams: [], sales: [] }
 
-        const productStats: Record<string, { quantity: number; sales: number }> = {}
+        const productStats: Record<string, { quantity: number; weightGrams: number; sales: number }> = {}
 
         transactions.forEach(t => {
             t.items?.forEach((item: any) => {
                 if (!productStats[item.product_name]) {
-                    productStats[item.product_name] = { quantity: 0, sales: 0 }
+                    productStats[item.product_name] = { quantity: 0, weightGrams: 0, sales: 0 }
                 }
                 const stat = productStats[item.product_name]
                 if (stat) {
-                    stat.quantity += item.quantity
-                    stat.sales += item.subtotal
+                    if (item.sale_mode === 'weight') {
+                        stat.weightGrams += Number(item.weight_grams) || 0
+                    } else {
+                        stat.quantity += Number(item.quantity) || 0
+                    }
+                    stat.sales += Number(item.subtotal) || 0
                 }
             })
         })
 
-        // Sort by quantity sold (descending)
+        // Sort by revenue (descending) so weight and unit products rank fairly
         const sorted = Object.entries(productStats)
-            .sort((a, b) => b[1].quantity - a[1].quantity)
+            .sort((a, b) => b[1].sales - a[1].sales)
 
         return {
             products: sorted.map(([name]) => name),
             quantities: sorted.map(([_, stats]) => stats.quantity),
+            weightGrams: sorted.map(([_, stats]) => stats.weightGrams),
             sales: sorted.map(([_, stats]) => stats.sales)
         }
     }

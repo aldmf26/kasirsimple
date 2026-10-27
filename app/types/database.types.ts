@@ -28,6 +28,9 @@ export interface Database {
                     owner_pin_enabled: boolean
                     owner_pin_hash: string | null
                     owner_pin_salt: string | null
+                    weight_mode_enabled: boolean
+                    customer_required: boolean
+                    barcode_enabled: boolean
                     created_at: string
                     updated_at: string
                 }
@@ -49,6 +52,9 @@ export interface Database {
                     owner_pin_enabled?: boolean
                     owner_pin_hash?: string | null
                     owner_pin_salt?: string | null
+                    weight_mode_enabled?: boolean
+                    customer_required?: boolean
+                    barcode_enabled?: boolean
                     created_at?: string
                     updated_at?: string
                 }
@@ -70,6 +76,9 @@ export interface Database {
                     owner_pin_enabled?: boolean
                     owner_pin_hash?: string | null
                     owner_pin_salt?: string | null
+                    weight_mode_enabled?: boolean
+                    customer_required?: boolean
+                    barcode_enabled?: boolean
                     created_at?: string
                     updated_at?: string
                 }
@@ -128,6 +137,8 @@ export interface Database {
                     stock: number
                     min_stock: number
                     unit: string | null
+                    sale_mode: string
+                    stock_unit: string
                     image_url: string | null
                     is_favorite: boolean
                     is_active: boolean
@@ -149,6 +160,8 @@ export interface Database {
                     stock?: number
                     min_stock?: number
                     unit?: string | null
+                    sale_mode?: string
+                    stock_unit?: string
                     image_url?: string | null
                     is_favorite?: boolean
                     is_active?: boolean
@@ -170,6 +183,8 @@ export interface Database {
                     stock?: number
                     min_stock?: number
                     unit?: string | null
+                    sale_mode?: string
+                    stock_unit?: string
                     image_url?: string | null
                     is_favorite?: boolean
                     is_active?: boolean
@@ -255,6 +270,10 @@ export interface Database {
                     product_price: number
                     quantity: number
                     subtotal: number
+                    sale_mode: string
+                    weight_grams: number | null
+                    product_unit: string | null
+                    base_price: number | null
                     notes: string | null
                     created_at: string
                 }
@@ -279,6 +298,10 @@ export interface Database {
                     product_price?: number
                     quantity?: number
                     subtotal?: number
+                    sale_mode?: string
+                    weight_grams?: number | null
+                    product_unit?: string | null
+                    base_price?: number | null
                     notes?: string | null
                     created_at?: string
                 }
@@ -292,6 +315,7 @@ export interface Database {
                     quantity: number | null
                     stock_before: number | null
                     stock_after: number | null
+                    stock_unit: string
                     notes: string | null
                     created_by: string | null
                     created_at: string
@@ -304,6 +328,7 @@ export interface Database {
                     quantity?: number | null
                     stock_before?: number | null
                     stock_after?: number | null
+                    stock_unit?: string
                     notes?: string | null
                     created_by?: string | null
                     created_at?: string
@@ -316,6 +341,7 @@ export interface Database {
                     quantity?: number | null
                     stock_before?: number | null
                     stock_after?: number | null
+                    stock_unit?: string
                     notes?: string | null
                     created_by?: string | null
                     created_at?: string

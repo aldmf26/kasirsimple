@@ -35,6 +35,7 @@ const storeSettings = reactive({
   phone: "",
   currency: "Rp",
   logo_url: "",
+  customer_enabled: true,
 });
 
 const selectedLogoFile = ref<File | null>(null);
@@ -51,16 +52,17 @@ watch(
   () => store.value?.id,
   async (storeId) => {
     if (storeId && store.value) {
-      const newStore = store.value;
-      storeSettings.name = newStore.name;
-      storeSettings.business_type = newStore.business_type || "retail";
-      storeSettings.address = newStore.address || "";
-      storeSettings.phone = newStore.phone || "";
-      storeSettings.currency = newStore.currency || "Rp";
-      storeSettings.logo_url = newStore.logo_url || "";
+    const newStore = store.value;
+    storeSettings.name = newStore.name;
+    storeSettings.business_type = newStore.business_type || "retail";
+    storeSettings.address = newStore.address || "";
+    storeSettings.phone = newStore.phone || "";
+    storeSettings.currency = newStore.currency || "Rp";
+    storeSettings.logo_url = newStore.logo_url || "";
 
-      // Load enabled payment methods from store
-      const storeData = newStore as any;
+    // Load enabled payment methods from store
+    const storeData = newStore as any;
+    storeSettings.customer_enabled = storeData.customer_enabled !== false;
       if (storeData.enabled_payment_methods) {
         try {
           const parsed =
@@ -90,6 +92,11 @@ watch(
 
       // Load product display setting
       showProductImages.value = storeData.show_product_images !== false;
+      weightModeEnabled.value = storeData.weight_mode_enabled !== false;
+      barcodeEnabled.value = storeData.barcode_enabled !== false;
+      customerRequired.value = storeData.customer_required === true;
+      customerEnabled.value = storeData.customer_enabled !== false;
+      storeSettings.customer_enabled = customerEnabled.value;
 
       // Load discount & tax settings
       if (storeData.discount_tax_settings) {
@@ -302,6 +309,12 @@ const enabledPaymentMethods = ref(["cash", "transfer", "qris"]);
 // Product display settings
 const showProductImages = ref(true);
 
+// Sales input settings
+const weightModeEnabled = ref(true);
+const barcodeEnabled = ref(true);
+const customerRequired = ref(false);
+const customerEnabled = ref(true);
+
 // Discount & Tax settings
 const discountTaxSettings = reactive({
   discount_global: {
@@ -470,7 +483,8 @@ const autoSaveStoreSettings = async () => {
       phone: storeSettings.phone,
       currency: storeSettings.currency,
       logo_url: logoUrl,
-    });
+      customer_enabled: storeSettings.customer_enabled
+    } as any);
 
     // Reset local state
     selectedLogoFile.value = null;
@@ -492,6 +506,10 @@ const autoSavePaymentSettings = async () => {
       enabled_payment_methods: JSON.stringify(enabledPaymentMethods.value),
       bank_accounts: JSON.stringify(bankAccounts.value),
       show_product_images: showProductImages.value,
+      weight_mode_enabled: weightModeEnabled.value,
+      barcode_enabled: barcodeEnabled.value,
+      customer_required: customerRequired.value,
+      customer_enabled: storeSettings.customer_enabled,
       discount_tax_settings: JSON.stringify(discountTaxSettings),
     };
     await updateStore(store.value.id, updateData);
@@ -600,6 +618,12 @@ watch(
 
 // Watch product images setting with debounce
 watch(showProductImages, () => {
+  if (paymentSettingsDebounce) clearTimeout(paymentSettingsDebounce);
+  paymentSettingsDebounce = setTimeout(autoSavePaymentSettings, 1000);
+});
+
+// Watch sales input settings with debounce
+watch([weightModeEnabled, barcodeEnabled, customerRequired, () => storeSettings.customer_enabled], () => {
   if (paymentSettingsDebounce) clearTimeout(paymentSettingsDebounce);
   paymentSettingsDebounce = setTimeout(autoSavePaymentSettings, 1000);
 });
@@ -1143,6 +1167,196 @@ const handleResetStoreData = async () => {
                   >
                     💾 Mode hemat: Foto tidak ditampilkan di POS untuk menghemat
                     ruang
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sales Input Settings -->
+              <div
+                class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"
+              >
+                <h2 class="text-xl font-bold text-gray-900 mb-2">
+                  ⚖️ Input Penjualan
+                </h2>
+                <p class="text-sm text-gray-500 mb-6">
+                  Atur cara kasir memasukkan produk saat transaksi
+                </p>
+
+                <div class="space-y-3">
+                  <!-- Customer Master Toggle -->
+                  <div
+                    class="flex items-center justify-between gap-4 p-4 rounded-xl border-2 transition-all cursor-pointer"
+                    :class="
+                      storeSettings.customer_enabled
+                        ? 'border-emerald-200 bg-emerald-50'
+                        : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                    "
+                    @click="storeSettings.customer_enabled = !storeSettings.customer_enabled"
+                  >
+                    <div class="flex items-center gap-3">
+                      <div
+                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                        :class="
+                          storeSettings.customer_enabled
+                            ? 'bg-emerald-100 text-emerald-600'
+                            : 'bg-gray-200 text-gray-400'
+                        "
+                      >
+                        <UIcon name="i-heroicons-user-group" class="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p class="font-medium text-gray-900 text-sm">
+                          Aktifkan Data Pelanggan
+                        </p>
+                        <p class="text-xs text-gray-500 mt-0.5">
+                          Tampilkan menu Pelanggan & dropdown di kasir
+                        </p>
+                      </div>
+                    </div>
+                    <UIcon
+                      :name="
+                        storeSettings.customer_enabled
+                          ? 'i-heroicons-check-circle-solid'
+                          : 'i-heroicons-x-circle'
+                      "
+                      class="w-6 h-6 shrink-0"
+                      :class="
+                        storeSettings.customer_enabled ? 'text-emerald-600' : 'text-gray-300'
+                      "
+                    />
+                  </div>
+
+                  <!-- Weight Mode Toggle -->
+                  <div
+                    class="flex items-center justify-between gap-4 p-4 rounded-xl border-2 transition-all cursor-pointer"
+                    :class="
+                      weightModeEnabled
+                        ? 'border-emerald-200 bg-emerald-50'
+                        : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                    "
+                    @click="weightModeEnabled = !weightModeEnabled"
+                  >
+                    <div class="flex items-center gap-3">
+                      <div
+                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                        :class="
+                          weightModeEnabled
+                            ? 'bg-emerald-100 text-emerald-600'
+                            : 'bg-gray-200 text-gray-400'
+                        "
+                      >
+                        <UIcon name="i-heroicons-scale" class="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p class="font-medium text-gray-900 text-sm">
+                          Penjualan Timbangan (kg)
+                        </p>
+                        <p class="text-xs text-gray-500 mt-0.5">
+                          Produk seperti telur dapat dijual per gram/kilogram
+                        </p>
+                      </div>
+                    </div>
+                    <UIcon
+                      :name="
+                        weightModeEnabled
+                          ? 'i-heroicons-check-circle-solid'
+                          : 'i-heroicons-x-circle'
+                      "
+                      class="w-6 h-6 shrink-0"
+                      :class="
+                        weightModeEnabled ? 'text-emerald-600' : 'text-gray-300'
+                      "
+                    />
+                  </div>
+
+                  <!-- Barcode Toggle -->
+                  <div
+                    class="flex items-center justify-between gap-4 p-4 rounded-xl border-2 transition-all cursor-pointer"
+                    :class="
+                      barcodeEnabled
+                        ? 'border-blue-200 bg-blue-50'
+                        : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                    "
+                    @click="barcodeEnabled = !barcodeEnabled"
+                  >
+                    <div class="flex items-center gap-3">
+                      <div
+                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                        :class="
+                          barcodeEnabled
+                            ? 'bg-blue-100 text-blue-600'
+                            : 'bg-gray-200 text-gray-400'
+                        "
+                      >
+                        <UIcon
+                          name="i-heroicons-qr-code"
+                          class="w-5 h-5"
+                        />
+                      </div>
+                      <div>
+                        <p class="font-medium text-gray-900 text-sm">
+                          Scan Barcode
+                        </p>
+                        <p class="text-xs text-gray-500 mt-0.5">
+                          Tampilkan input barcode & kamera di halaman kasir
+                        </p>
+                      </div>
+                    </div>
+                    <UIcon
+                      :name="
+                        barcodeEnabled
+                          ? 'i-heroicons-check-circle-solid'
+                          : 'i-heroicons-x-circle'
+                      "
+                      class="w-6 h-6 shrink-0"
+                      :class="barcodeEnabled ? 'text-blue-600' : 'text-gray-300'"
+                    />
+                  </div>
+
+                  <!-- Customer Required Toggle -->
+                  <div
+                    class="flex items-center justify-between gap-4 p-4 rounded-xl border-2 transition-all cursor-pointer"
+                    :class="
+                      customerRequired
+                        ? 'border-purple-200 bg-purple-50'
+                        : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                    "
+                    @click="customerRequired = !customerRequired"
+                  >
+                    <div class="flex items-center gap-3">
+                      <div
+                        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                        :class="
+                          customerRequired
+                            ? 'bg-purple-100 text-purple-600'
+                            : 'bg-gray-200 text-gray-400'
+                        "
+                      >
+                        <UIcon
+                          name="i-heroicons-user"
+                          class="w-5 h-5"
+                        />
+                      </div>
+                      <div>
+                        <p class="font-medium text-gray-900 text-sm">
+                          Nama Pelanggan Wajib
+                        </p>
+                        <p class="text-xs text-gray-500 mt-0.5">
+                          Kasir harus mengisi nama pelanggan sebelum bayar
+                        </p>
+                      </div>
+                    </div>
+                    <UIcon
+                      :name="
+                        customerRequired
+                          ? 'i-heroicons-check-circle-solid'
+                          : 'i-heroicons-x-circle'
+                      "
+                      class="w-6 h-6 shrink-0"
+                      :class="
+                        customerRequired ? 'text-purple-600' : 'text-gray-300'
+                      "
+                    />
                   </div>
                 </div>
               </div>

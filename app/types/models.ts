@@ -12,6 +12,10 @@ export interface CartItem {
     product: Product
     quantity: number
     subtotal: number
+    sale_mode?: 'unit' | 'weight'
+    weight_grams?: number | null
+    product_unit?: string | null
+    base_price?: number
 }
 
 export interface Cart {
