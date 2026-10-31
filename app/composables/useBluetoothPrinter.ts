@@ -140,11 +140,17 @@ export const useBluetoothPrinter = () => {
 
     const method = String(trx?.payment_method || 'cash').toLowerCase()
     const methodLabel = method === 'cash' ? 'Tunai' : method === 'qris' ? 'QRIS' : method === 'card' ? 'Kartu' : method === 'transfer' ? 'Transfer' : method.toUpperCase()
-    const paid = Number(trx?.paid_amount || trx?.paid || total)
+    const paid = Number(trx?.paid_amount ?? trx?.paid ?? total)
     L.push(row(`BAYAR (${methodLabel})`, rupiah(paid), W))
 
-    const change = Math.max(0, paid - total)
-    L.push(row('KEMBALI', rupiah(change), W))
+    if (paid < total) {
+      const remaining = total - paid
+      L.push(row('SISA HUTANG', rupiah(remaining), W))
+      L.push(center('*** BELUM LUNAS ***', W))
+    } else {
+      const change = Math.max(0, paid - total)
+      L.push(row('KEMBALI', rupiah(change), W))
+    }
 
     // 6. Footer
     L.push('')

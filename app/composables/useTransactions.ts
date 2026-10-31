@@ -311,6 +311,15 @@ export const useTransactions = () => {
 
             const transactionNumber = await generateTransactionNumber()
 
+            const isDebt = paymentData.paid < total
+            const debtAmount = isDebt ? Math.max(0, total - paymentData.paid) : 0
+
+            let finalNotes = paymentData.notes || ""
+            if (isDebt) {
+                const debtTag = `[HUTANG: Rp ${debtAmount.toLocaleString("id-ID")}]`
+                finalNotes = finalNotes ? `${finalNotes} | ${debtTag}` : debtTag
+            }
+
             // Build insert object dengan optional fields
             const transactionInsert: any = {
                 store_id: store.value.id,
@@ -320,11 +329,11 @@ export const useTransactions = () => {
                 discount_type: paymentData.discount_type || 'nominal',
                 total,
                 paid: paymentData.paid,
-                change,
+                change: isDebt ? 0 : change,
                 payment_method: paymentData.payment_method,
                 customer_name: paymentData.customer_name || null,
                 customer_phone: paymentData.customer_phone || null,
-                notes: paymentData.notes || null,
+                notes: finalNotes || null,
                 created_by: user.value?.id
             }
 
@@ -769,6 +778,66 @@ export const useTransactions = () => {
         }
     }
 
+    const settleDebtTransaction = async (transactionId: string) => {
+        if (!store.value) throw new Error('Store not found')
+        loading.value = true
+        error.value = null
+
+        try {
+            const trx = transactions.value.find(t => t.id === transactionId)
+            if (!trx) throw new Error('Transaksi tidak ditemukan')
+
+            const total = Number(trx.total) || 0
+            const currentPaid = Number(trx.paid) || 0
+            const remaining = total - currentPaid
+            if (remaining <= 0) throw new Error('Transaksi ini sudah lunas')
+
+            const now = new Date()
+            const timeStr = now.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+            
+            // Bersihkan tag [HUTANG: ...] jika ada dan ganti dengan [LUNAS ...]
+            let updatedNotes = trx.notes || ""
+            if (updatedNotes.includes('[HUTANG')) {
+                updatedNotes = updatedNotes.replace(/\[HUTANG:[^\]]*\]/g, `[LUNAS ${timeStr}]`).trim()
+            } else {
+                updatedNotes = updatedNotes ? `${updatedNotes} | [LUNAS ${timeStr}]` : `[LUNAS ${timeStr}]`
+            }
+
+            // Update in Supabase
+            // @ts-ignore
+            const { data, error: updateErr } = await supabase
+                .from('transactions')
+                .update({
+                    paid: total,
+                    change: 0,
+                    notes: updatedNotes,
+                })
+                .eq('id', transactionId)
+                .select()
+                .single()
+
+            if (updateErr) throw updateErr
+
+            // Update local state
+            const idx = transactions.value.findIndex(t => t.id === transactionId)
+            if (idx > -1) {
+                transactions.value[idx] = {
+                    ...transactions.value[idx],
+                    paid: total,
+                    change: 0,
+                    notes: updatedNotes
+                }
+            }
+
+            return transactions.value[idx]
+        } catch (e: any) {
+            error.value = e.message
+            throw e
+        } finally {
+            loading.value = false
+        }
+    }
+
     return {
         transactions,
         cart,
@@ -787,6 +856,7 @@ export const useTransactions = () => {
         getTodaySummary,
         deleteTransaction,
         getTransactionByNumber,
-        returnTransaction
+        returnTransaction,
+        settleDebtTransaction
     }
 }

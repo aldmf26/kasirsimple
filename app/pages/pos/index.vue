@@ -627,8 +627,9 @@ const processPayment = async () => {
   const total = cartTotal.value;
   const paid = paymentForm.value.paid;
 
-  if (paid < total && paymentForm.value.paymentMethod === "cash") {
-    showAlert("error", "Pembayaran kurang dari total belanja");
+  // Jika bayar kurang (kasbon/hutang), wajib cantumkan nama pelanggan
+  if (paid < total && !paymentForm.value.customerName?.trim()) {
+    showAlert("error", "Nama pelanggan wajib diisi untuk transaksi kasbon / hutang");
     return;
   }
 
@@ -1706,8 +1707,22 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- Kembalian -->
-            <div class="bg-green-50 p-5 rounded-2xl border-2 border-green-200">
+            <!-- Kembalian / Sisa Hutang -->
+            <div
+              v-if="paymentForm.paid < cartTotal"
+              class="bg-amber-50 p-5 rounded-2xl border-2 border-amber-300"
+            >
+              <div class="flex justify-between items-center">
+                <div>
+                  <span class="font-black text-amber-800 text-lg">⚠️ Sisa Hutang</span>
+                  <p class="text-xs text-amber-600 font-medium">Belum Lunas (Kasbon)</p>
+                </div>
+                <span class="text-3xl sm:text-4xl font-black text-amber-700">
+                  {{ formatCurrency(cartTotal - paymentForm.paid) }}
+                </span>
+              </div>
+            </div>
+            <div v-else class="bg-green-50 p-5 rounded-2xl border-2 border-green-200">
               <div class="flex justify-between items-center">
                 <span class="font-black text-green-700 text-lg"
                   >💰 Kembalian</span
@@ -1733,24 +1748,30 @@ onUnmounted(() => {
               <button
                 @click="processPayment"
                 :disabled="
-                  (paymentForm.paid < cartTotal &&
-                    paymentForm.paymentMethod === 'cash') ||
+                  (paymentForm.paid < cartTotal && !paymentForm.customerName.trim()) ||
                   loading
                 "
                 class="flex-1 px-6 py-4 rounded-xl font-black text-lg active:scale-95 transition-all flex items-center justify-center gap-2"
                 :class="
-                  (paymentForm.paid < cartTotal &&
-                    paymentForm.paymentMethod === 'cash') ||
+                  (paymentForm.paid < cartTotal && !paymentForm.customerName.trim()) ||
                   loading
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-green-600 hover:bg-green-700 text-white'
+                    : paymentForm.paid < cartTotal
+                      ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                      : 'bg-green-600 hover:bg-green-700 text-white'
                 "
               >
                 <span v-if="loading">⏳</span>
-                <span v-else>✓</span>
-                SELESAI
+                <span v-else>{{ paymentForm.paid < cartTotal ? '⚠️' : '✓' }}</span>
+                {{ paymentForm.paid < cartTotal ? 'SIMPAN (HUTANG)' : 'SELESAI' }}
               </button>
             </div>
+            <p
+              v-if="paymentForm.paid < cartTotal && !paymentForm.customerName.trim()"
+              class="text-xs text-center text-amber-600 mt-2 font-medium"
+            >
+              *Ketik nama pelanggan di atas untuk mencatat transaksi kasbon/hutang
+            </p>
           </div>
         </div>
       </div>
