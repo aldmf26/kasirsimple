@@ -266,10 +266,6 @@ export const useTransactions = () => {
             const total = subtotalAfterDiscount + tax + ppn
             const change = paymentData.paid - total
 
-            if (paymentData.payment_method === 'cash' && change < 0) {
-                throw new Error('Pembayaran kurang')
-            }
-
             // Re-read stock right before saving, so a stale product list cannot oversell.
             // Weight sales allow several lines for the same product, so aggregate first.
             const stockSnapshot = new Map<string, { stock: number; stock_unit: string }>()

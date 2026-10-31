@@ -629,12 +629,16 @@ const processPayment = async () => {
 
   // Jika bayar kurang (kasbon/hutang), wajib cantumkan nama pelanggan
   if (paid < total && !paymentForm.value.customerName?.trim()) {
-    showAlert("error", "Nama pelanggan wajib diisi untuk transaksi kasbon / hutang");
+    showAlert("error", "Harap isi nama pelanggan untuk mencatat transaksi kasbon/hutang!");
+    const el = document.getElementById("pos-customer-input") as HTMLInputElement | null;
+    el?.focus();
     return;
   }
 
   if (customerRequired.value && !paymentForm.value.customerName?.trim()) {
     showAlert("error", "Nama pelanggan wajib diisi");
+    const el = document.getElementById("pos-customer-input") as HTMLInputElement | null;
+    el?.focus();
     return;
   }
 
@@ -1512,76 +1516,101 @@ onUnmounted(() => {
 
           <!-- Body -->
           <div class="p-6 space-y-4">
-            <!-- Breakdown Detail -->
+            <!-- Rincian Item Belanja & Total -->
             <div
-              class="bg-gray-50 rounded-2xl border border-gray-200 p-4 space-y-2 text-sm"
+              class="bg-gray-50 rounded-2xl border border-gray-200 p-4 space-y-3"
             >
-              <div class="flex justify-between">
-                <span class="text-gray-600">Subtotal</span>
-                <span class="font-bold text-gray-900">{{
-                  formatCurrency(cartSubtotal)
-                }}</span>
+              <!-- Header Item -->
+              <div class="flex items-center justify-between pb-2 border-b border-gray-200">
+                <span class="text-xs font-black text-gray-500 uppercase tracking-wider">
+                  Item Belanja
+                </span>
+                <span class="text-xs font-bold text-blue-600 bg-blue-100/70 px-2.5 py-0.5 rounded-full border border-blue-200">
+                  {{ cartItemsCount }} item
+                </span>
               </div>
 
-              <div
-                v-if="discountAmount > 0"
-                class="flex justify-between text-orange-600"
-              >
-                <span>Diskon Manual</span>
-                <span class="font-bold"
-                  >-{{ formatCurrency(discountAmount) }}</span
+              <!-- Daftar Item (Scrollable jika banyak) -->
+              <div class="max-h-48 overflow-y-auto space-y-2 pr-1 divide-y divide-gray-100">
+                <div
+                  v-for="item in cart"
+                  :key="item.cart_line_id"
+                  class="pt-2 first:pt-0 flex items-start justify-between gap-3 text-xs"
                 >
+                  <div class="min-w-0 flex-1">
+                    <p class="font-bold text-gray-800 text-sm truncate">
+                      {{ item.product_name }}
+                    </p>
+                    <p class="text-[11px] text-gray-500 mt-0.5 font-medium">
+                      <template v-if="item.sale_mode === 'weight'">
+                        {{ formatWeight(item.weight_grams) }} × {{ formatCurrency(item.product_price) }}/kg
+                      </template>
+                      <template v-else>
+                        {{ formatCurrency(item.product_price) }} × {{ item.quantity }} {{ item.product_unit || 'pcs' }}
+                      </template>
+                    </p>
+                  </div>
+                  <span class="font-bold text-blue-700 text-sm whitespace-nowrap">
+                    {{ formatCurrency(item.subtotal) }}
+                  </span>
+                </div>
               </div>
 
-              <div
-                v-if="settingsDiscount > 0"
-                class="flex justify-between text-orange-600"
-              >
-                <span>{{ settingsDiscountLabel }}</span>
-                <span class="font-bold"
-                  >-{{ formatCurrency(settingsDiscount) }}</span
+              <!-- Subtotal & Ringkasan Biaya -->
+              <div class="border-t border-gray-200 pt-2.5 space-y-1.5 text-xs">
+                <div class="flex justify-between text-gray-600">
+                  <span>Subtotal</span>
+                  <span class="font-bold text-gray-900">{{
+                    formatCurrency(cartSubtotal)
+                  }}</span>
+                </div>
+
+                <div
+                  v-if="discountAmount > 0"
+                  class="flex justify-between text-orange-600"
                 >
-              </div>
+                  <span>Diskon Manual</span>
+                  <span class="font-bold"
+                    >-{{ formatCurrency(discountAmount) }}</span
+                  >
+                </div>
 
-              <div
-                v-if="taxAmount > 0"
-                class="flex justify-between text-blue-600"
-              >
-                <span>Pajak ({{ discountTaxSettings.tax.percent }}%)</span>
-                <span class="font-bold">+{{ formatCurrency(taxAmount) }}</span>
-              </div>
+                <div
+                  v-if="settingsDiscount > 0"
+                  class="flex justify-between text-orange-600"
+                >
+                  <span>{{ settingsDiscountLabel }}</span>
+                  <span class="font-bold"
+                    >-{{ formatCurrency(settingsDiscount) }}</span
+                  >
+                </div>
 
-              <div
-                v-if="ppnAmount > 0"
-                class="flex justify-between text-blue-600"
-              >
-                <span>PPN ({{ discountTaxSettings.ppn.percent }}%)</span>
-                <span class="font-bold">+{{ formatCurrency(ppnAmount) }}</span>
-              </div>
+                <div
+                  v-if="taxAmount > 0"
+                  class="flex justify-between text-blue-600"
+                >
+                  <span>Pajak ({{ discountTaxSettings.tax.percent }}%)</span>
+                  <span class="font-bold">+{{ formatCurrency(taxAmount) }}</span>
+                </div>
 
-              <div
-                class="border-t border-gray-300 pt-2 mt-2 flex justify-between"
-              >
-                <span class="font-bold text-gray-900">Total</span>
-                <span class="font-black text-lg text-gray-900">{{
-                  formatCurrency(cartTotal)
-                }}</span>
-              </div>
-            </div>
+                <div
+                  v-if="ppnAmount > 0"
+                  class="flex justify-between text-blue-600"
+                >
+                  <span>PPN ({{ discountTaxSettings.ppn.percent }}%)</span>
+                  <span class="font-bold">+{{ formatCurrency(ppnAmount) }}</span>
+                </div>
 
-            <!-- Total Tagihan -->
-            <div
-              class="text-center p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border-2 border-blue-200"
-            >
-              <p class="text-xs font-bold text-blue-600 uppercase mb-2">
-                Total Bayar
-              </p>
-              <h2 class="text-5xl font-black text-blue-700">
-                {{ formatCurrency(cartTotal) }}
-              </h2>
-              <p class="text-sm text-blue-600 mt-2 font-medium">
-                {{ cartItemsCount }} item
-              </p>
+                <!-- Total Akhir yang Menonjol -->
+                <div
+                  class="border-t-2 border-dashed border-gray-300 pt-2.5 mt-2 flex justify-between items-center"
+                >
+                  <span class="font-black text-gray-900 text-base tracking-wide">TOTAL</span>
+                  <span class="font-black text-2xl text-blue-700">
+                    {{ formatCurrency(cartTotal) }}
+                  </span>
+                </div>
+              </div>
             </div>
 
             <!-- Pelanggan / Keterangan -->
@@ -1601,6 +1630,7 @@ onUnmounted(() => {
               </div>
               <div class="relative">
                 <input
+                  id="pos-customer-input"
                   v-model="paymentForm.customerName"
                   list="pos-customer-suggestions"
                   :placeholder="
@@ -1688,6 +1718,8 @@ onUnmounted(() => {
                 v-model="formattedPaid"
                 type="text"
                 placeholder="0"
+                @focus="($event.target as HTMLInputElement)?.select()"
+                @click="($event.target as HTMLInputElement)?.select()"
                 class="w-full px-4 text-blue-700 py-4 text-3xl font-black text-center rounded-xl border-2 border-gray-300 focus:border-blue-500 focus:outline-none"
               />
 
@@ -1747,13 +1779,9 @@ onUnmounted(() => {
               </button>
               <button
                 @click="processPayment"
-                :disabled="
-                  (paymentForm.paid < cartTotal && !paymentForm.customerName.trim()) ||
-                  loading
-                "
+                :disabled="loading"
                 class="flex-1 px-6 py-4 rounded-xl font-black text-lg active:scale-95 transition-all flex items-center justify-center gap-2"
                 :class="
-                  (paymentForm.paid < cartTotal && !paymentForm.customerName.trim()) ||
                   loading
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : paymentForm.paid < cartTotal
