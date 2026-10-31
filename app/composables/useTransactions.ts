@@ -523,23 +523,55 @@ export const useTransactions = () => {
 
             const { data, error: fetchError } = await supabase
                 .from('transactions')
-                .select('total, payment_method')
+                .select('id, total, paid, change, payment_method, notes, customer_name, created_at')
                 .eq('store_id', store.value.id)
                 .gte('created_at', startOfDay)
                 .lte('created_at', endOfDay)
 
             if (fetchError) throw fetchError
 
-            const totalSales = (data || []).reduce((sum, t) => sum + t.total, 0)
-            const totalTransactions = (data || []).length
-            const cashSales = (data || []).filter(t => t.payment_method === 'cash').reduce((sum, t) => sum + t.total, 0)
-            const nonCashSales = totalSales - cashSales
+            const activeTransactions = (data || []).filter((t: any) => !(t.notes || '').includes('[RETUR]'))
+
+            let totalSales = 0 // Total nilai faktur (omzet barang)
+            let realCash = 0 // Duit fisik / kas tunai nyata di kasir
+            let realNonCash = 0 // Uang non-tunai (transfer/qris) yang diterima
+            let totalDebt = 0 // Sisa hutang/kasbon belum lunas
+            let debtCount = 0 // Jumlah transaksi belum lunas
+
+            for (const t of activeTransactions) {
+                const total = Number(t.total) || 0
+                const paid = t.paid != null ? Number(t.paid) : total
+
+                totalSales += total
+
+                // Uang riil yang diterima (maksimal total nilai faktur)
+                const actualReceived = Math.min(paid, total)
+
+                if (t.payment_method === 'cash') {
+                    realCash += actualReceived
+                } else {
+                    realNonCash += actualReceived
+                }
+
+                if (paid < total) {
+                    totalDebt += Math.max(0, total - paid)
+                    debtCount += 1
+                }
+            }
+
+            const totalReceived = realCash + realNonCash
+            const totalTransactions = activeTransactions.length
 
             return {
                 totalSales,
                 totalTransactions,
-                cashSales,
-                nonCashSales,
+                totalReceived,
+                realCash,
+                realNonCash,
+                cashSales: realCash,
+                nonCashSales: realNonCash,
+                totalDebt,
+                debtCount,
                 averageTransaction: totalTransactions > 0 ? totalSales / totalTransactions : 0
             }
         } catch (e: any) {
@@ -780,8 +812,16 @@ export const useTransactions = () => {
         error.value = null
 
         try {
-            const trx = transactions.value.find(t => t.id === transactionId)
-            if (!trx) throw new Error('Transaksi tidak ditemukan')
+            let trx = transactions.value.find(t => t.id === transactionId)
+            if (!trx) {
+                const { data: dbTrx, error: findErr } = await (supabase as any)
+                    .from('transactions')
+                    .select('*')
+                    .eq('id', transactionId)
+                    .single()
+                if (findErr || !dbTrx) throw new Error('Transaksi tidak ditemukan')
+                trx = dbTrx
+            }
 
             const total = Number(trx.total) || 0
             const currentPaid = Number(trx.paid) || 0
