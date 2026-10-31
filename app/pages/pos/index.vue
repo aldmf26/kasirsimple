@@ -104,6 +104,28 @@ const customerEnabled = computed(() => {
 });
 const selectedCustomer = ref<any>(null);
 
+const { customers, fetchCustomers } = useCustomers();
+
+const matchedCustomerInfo = computed(() => {
+  if (!paymentForm.value.customerName?.trim() || !customers.value?.length) return null;
+  const q = paymentForm.value.customerName.trim().toLowerCase();
+  return customers.value.find((c) => (c.name || "").toLowerCase() === q) || null;
+});
+
+const handleCustomerInput = () => {
+  const match = matchedCustomerInfo.value;
+  if (match) {
+    selectedCustomer.value = { id: match.id, name: match.name, phone: match.phone };
+  } else {
+    selectedCustomer.value = null;
+  }
+};
+
+const clearCustomerInput = () => {
+  paymentForm.value.customerName = "";
+  selectedCustomer.value = null;
+};
+
 // Get discount & tax settings from store
 const discountTaxSettings = computed(() => {
   const defaults = {
@@ -585,6 +607,7 @@ const openPayment = () => {
   if (!cart.value.length) return;
   paymentForm.value.paid = cartTotal.value;
   displayPaid.value = cartTotal.value.toLocaleString("id-ID");
+  fetchCustomers(true).catch(() => {});
   showPaymentModal.value = true;
 };
 
@@ -609,8 +632,8 @@ const processPayment = async () => {
     return;
   }
 
-  if (customerRequired.value && !(selectedCustomer.value?.name || paymentForm.value.customerName?.trim())) {
-    alert("Nama pelanggan wajib diisi");
+  if (customerRequired.value && !paymentForm.value.customerName?.trim()) {
+    showAlert("error", "Nama pelanggan wajib diisi");
     return;
   }
 
@@ -632,7 +655,7 @@ const processPayment = async () => {
   const currentPaid = paymentForm.value.paid;
   const currentChange = changeAmount.value;
   const currentPaymentMethod = paymentForm.value.paymentMethod;
-  const currentCustomerName = selectedCustomer.value?.name || paymentForm.value.customerName;
+  const currentCustomerName = paymentForm.value.customerName?.trim() || selectedCustomer.value?.name || null;
   const currentCustomerId = selectedCustomer.value?.id || null;
   const currentDiscount = discountAmount.value;
   const currentSettingsDiscount = settingsDiscount.value;
@@ -934,6 +957,7 @@ onMounted(async () => {
 
   if (store.value) {
     await Promise.all([fetchCategories(), fetchProducts()]);
+    fetchCustomers(true).catch(() => {});
     await checkAndPromptShift();
   }
 });
@@ -943,6 +967,7 @@ watch(
   async (val) => {
     if (val?.id && process.client) {
        await Promise.all([fetchCategories(), fetchProducts()]);
+       fetchCustomers(true).catch(() => {});
        await checkAndPromptShift();
     }
   },
@@ -1558,20 +1583,51 @@ onUnmounted(() => {
               </p>
             </div>
 
-            <!-- Pelanggan -->
-            <CustomerSelector
-              v-if="customerEnabled"
-              v-model="selectedCustomer"
-            />
-            <div v-else-if="customerRequired || true">
-              <label class="block text-sm font-bold text-gray-700 mb-2">
-                👤 Nama Pelanggan {{ customerRequired ? '(Wajib)' : '(Opsional)' }}
-              </label>
-              <input
-                v-model="paymentForm.customerName"
-                placeholder="Masukkan nama pelanggan..."
-                class="w-full px-4 py-3 text-blue-700 rounded-xl border-2 border-gray-300 focus:border-blue-500 focus:outline-none"
-              />
+            <!-- Pelanggan / Keterangan -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <label class="block text-sm font-bold text-gray-700">
+                  👤 Pelanggan {{ customerRequired ? '(Wajib)' : '(Opsional)' }}
+                </label>
+                <button
+                  v-if="paymentForm.customerName"
+                  type="button"
+                  @click="clearCustomerInput"
+                  class="text-xs text-gray-400 hover:text-red-500 font-medium transition-colors"
+                >
+                  ✕ Hapus
+                </button>
+              </div>
+              <div class="relative">
+                <input
+                  v-model="paymentForm.customerName"
+                  list="pos-customer-suggestions"
+                  :placeholder="
+                    customerRequired
+                      ? 'Masukkan nama pelanggan (wajib)...'
+                      : 'Nama pelanggan / keterangan (opsional)...'
+                  "
+                  class="w-full px-4 py-3 text-blue-700 rounded-xl border-2 border-gray-300 focus:border-blue-500 focus:outline-none transition-colors"
+                  @input="handleCustomerInput"
+                />
+                <datalist id="pos-customer-suggestions" v-if="customers && customers.length > 0">
+                  <option
+                    v-for="c in customers"
+                    :key="c.id"
+                    :value="c.name"
+                  >
+                    {{ c.phone ? `${c.name} (${c.phone})` : c.name }}
+                  </option>
+                </datalist>
+              </div>
+              <p
+                v-if="matchedCustomerInfo"
+                class="text-xs text-emerald-600 mt-1.5 flex items-center gap-1 font-medium"
+              >
+                <span>✓ Terdaftar:</span>
+                <span>{{ matchedCustomerInfo.phone || '' }}</span>
+                <span v-if="matchedCustomerInfo.address">• {{ matchedCustomerInfo.address }}</span>
+              </p>
             </div>
 
             <!-- Metode Pembayaran -->
