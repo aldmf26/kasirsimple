@@ -1,0 +1,23 @@
+{
+  "name": "kasirok-promo-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts KasirOKPromo out/kasirok-promo.mp4",
+    "still": "remotion still src/index.ts KasirOKPromo",
+    "sfx": "node scripts/make-sfx.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.540",
+    "@remotion/google-fonts": "^4.0.540",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.540"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "typescript": "^5.9.3"
+  }
+}
