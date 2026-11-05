@@ -1,26 +1,23 @@
-import voice from './voice.json'
-
-// Story 9:16, 30 dtk. Semua waktu = frame global, diturunkan dari durasi suara
-// (scripts/make-voice.py), jadi animasi selalu jatuh di kata yang diucapkan.
+// Story 9:16, 30 dtk, tanpa suara: teks besar + efek. Semua waktu = frame global.
 export const FPS = 30
 export const W = 1080
 export const H = 1920
 export const TOTAL = 900
 
-const LEAD = 8 // jeda sebelum kalimat pertama
-const GAP = 9 // napas antar kalimat
+export type Beat = { id: string; from: number; to: number; title?: string; highlight?: string; sub?: string }
 
-export type Line = { id: string; text: string; file: string; duration: number; from: number; to: number }
+// Each beat = one message on screen. Phone beats carry their headline text.
+export const BEATS: Beat[] = [
+  { id: 'hook', from: 8, to: 105 },
+  { id: 'past', from: 114, to: 212 },
+  { id: 'debt', from: 221, to: 376, title: 'Hutang pelanggan', highlight: 'Hutang', sub: 'tercatat & bisa dicicil' },
+  { id: 'stock', from: 385, to: 485, title: 'Stok mau habis?', highlight: 'habis?', sub: 'langsung dikasih tahu' },
+  { id: 'offline', from: 494, to: 598, title: 'Internet mati?', highlight: 'mati?', sub: 'tetap bisa jualan' },
+  { id: 'report', from: 607, to: 708, title: 'Laporan jelas', highlight: 'jelas', sub: '▲ 12% minggu ini' },
+  { id: 'cta', from: 717, to: 818 }
+]
 
-let cursor = LEAD
-export const LINES: Line[] = voice.map(v => {
-  const from = cursor
-  const to = from + Math.round(v.duration * FPS)
-  cursor = to + GAP
-  return { ...v, from, to }
-})
-
-const byId = Object.fromEntries(LINES.map(l => [l.id, l])) as Record<string, Line>
+const byId = Object.fromEntries(BEATS.map(b => [b.id, b])) as Record<string, Beat>
 export const L = {
   hook: byId.hook,
   past: byId.past,
@@ -31,12 +28,8 @@ export const L = {
   cta: byId.cta
 }
 
-if (LINES[LINES.length - 1].to > TOTAL - 45) {
-  throw new Error(`Suara terlalu panjang: selesai di frame ${LINES[LINES.length - 1].to}, maks ${TOTAL - 45}`)
-}
-
-/** Frame at a share (0..1) of a spoken line; the voice is slow and even. */
-export const at = (line: { from: number; to: number }, share: number) => Math.round(line.from + (line.to - line.from) * share)
+/** Frame at a share (0..1) of a beat. */
+export const at = (beat: { from: number; to: number }, share: number) => Math.round(beat.from + (beat.to - beat.from) * share)
 
 // Rentang tampil tiap babak (beririsan agar perpindahan dibawa gerak, bukan potong)
 export const ACT = {

@@ -14,7 +14,7 @@ export const RemotionRoot: React.FC = () => (
       width={WIDTH}
       height={HEIGHT}
     />
-    {/* Story 9:16 (Instagram/WA), 30 dtk, voiceover nenek */}
+    {/* Story 9:16 (Instagram/WA), 30 dtk, teks besar tanpa suara */}
     <Composition
       id="KasirOKStory"
       component={StoryPromo}

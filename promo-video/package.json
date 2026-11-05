@@ -6,7 +6,6 @@
     "studio": "remotion studio src/index.ts",
     "render": "remotion render src/index.ts KasirOKPromo out/kasirok-promo.mp4",
     "render:story": "remotion render src/index.ts KasirOKStory out/kasirok-story.mp4",
-    "voice": "python scripts/make-voice.py",
     "still": "remotion still src/index.ts KasirOKPromo",
     "sfx": "node scripts/make-sfx.mjs",
     "typecheck": "tsc --noEmit"

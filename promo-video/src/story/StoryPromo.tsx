@@ -3,11 +3,11 @@ import { GlobalFrame } from '../utils/frame'
 import { Grain } from './fx'
 import { NotebookAct } from './NotebookAct'
 import { StoryPhone } from './StoryPhone'
-import { Captions, Ending, PhoneStage, StoryAudio } from './StoryParts'
+import { Ending, Headline, PhoneStage, StoryAudio } from './StoryParts'
 import { ACT } from './timeline'
 
 /**
- * KasirOK — story 9:16, 30 dtk, suara "nenek".
+ * KasirOK — story 9:16, 30 dtk, tanpa suara: teks besar + efek + musik.
  * Buku utang (hook) → halaman dilempar → HP muncul dari serpihan → hutang, stok,
  * offline, laporan → HP mengecil masuk ke logo. Urutan render = kedalaman.
  */
@@ -18,7 +18,7 @@ export const StoryPromo: React.FC = () => {
       <AbsoluteFill style={{ overflow: 'hidden', background: '#000' }}>
         {frame <= ACT.notebook.to && <NotebookAct />}
         <PhoneStage />
-        <Captions />
+        <Headline />
         <StoryPhone />
         <Ending />
         <Grain />

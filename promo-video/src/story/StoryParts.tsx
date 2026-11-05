@@ -5,7 +5,7 @@ import { easeOut, tween } from '../utils/animations'
 import { useGlobalFrame } from '../utils/frame'
 import { Burst, LightSweep } from './fx'
 import { PHONE, PHONE_HITS } from './StoryPhone'
-import { ACT, at, FPS, L, LINES, TOTAL } from './timeline'
+import { ACT, at, BEATS, FPS, L, TOTAL } from './timeline'
 
 /** Blue stage behind the phone; opens as a circle from the phone's centre (match cut from paper). */
 export const PhoneStage: React.FC = () => {
@@ -22,31 +22,49 @@ export const PhoneStage: React.FC = () => {
   )
 }
 
-/** Big burned-in captions for the phone acts (most stories are watched muted). */
-export const Captions: React.FC = () => {
+/** Big two-level headline above the phone: title words pop in, the sub line gets
+ * a yellow marker swipe. This carries the whole message (the story has no voice). */
+export const Headline: React.FC = () => {
   const frame = useGlobalFrame()
-  const line = LINES.find(l => ['debt', 'stock', 'offline', 'report'].includes(l.id) && frame >= l.from - 4 && frame <= l.to + 6)
-  if (!line) return null
-  const words = line.text.split(' ')
-  const inP = tween(frame, [line.from - 4, line.from + 6], [0, 1], easeOut)
-  const outP = tween(frame, [line.to, line.to + 6], [0, 1])
+  const beat = BEATS.find(b => b.title && frame >= b.from - 8 && frame <= b.to + 6)
+  if (!beat?.title) return null
+  const words = beat.title.split(' ')
+  const outP = tween(frame, [beat.to - 2, beat.to + 6], [0, 1])
+  const subAt = beat.from + 10
+  const sub = spring({ frame: frame - subAt, fps: FPS, config: { damping: 14, stiffness: 180 } })
+  const marker = tween(frame, [subAt + 4, subAt + 16], [0, 1], easeOut)
   return (
-    <div style={{ position: 'absolute', left: 50, right: 50, top: 270, height: 180, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignContent: 'center', columnGap: 16, rowGap: 6, opacity: inP * (1 - outP), transform: `translateY(${(1 - inP) * 24}px)` }}>
-      {words.map((w, i) => {
-        const wAt = line.from + ((line.to - line.from) * i) / words.length
-        const active = frame >= wAt
-        const pop = spring({ frame: frame - wAt, fps: FPS, config: { damping: 12, stiffness: 260, mass: 0.5 } })
-        return (
-          <span key={i} style={{ fontFamily: fonts.display, fontWeight: 800, fontSize: 64, lineHeight: 1.1, letterSpacing: '-0.02em', color: active ? colors.logoYellow : 'rgba(255,255,255,0.55)', transform: `scale(${active ? 0.92 + pop * 0.08 : 0.92})`, textShadow: '0 6px 18px rgba(0,0,0,0.35)', display: 'inline-block' }}>
-            {w}
-          </span>
-        )
-      })}
+    <div style={{ position: 'absolute', left: 40, right: 40, top: 228, height: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: 1 - outP, transform: `translateY(${-outP * 30}px)` }}>
+      <div style={{ display: 'flex', gap: 22, justifyContent: 'center', flexWrap: 'wrap' }}>
+        {words.map((w, i) => {
+          const pop = spring({ frame: frame - (beat.from - 6 + i * 4), fps: FPS, config: { damping: 10, stiffness: 230, mass: 0.6 } })
+          const hot = w === beat.highlight
+          return (
+            <span key={i} style={{ display: 'inline-block', fontFamily: fonts.display, fontWeight: 800, fontSize: 96, lineHeight: 1, letterSpacing: '-0.035em', color: hot ? colors.logoYellow : '#fff', transform: `translateY(${(1 - pop) * 60}px) scale(${0.6 + pop * 0.4}) rotate(${(1 - pop) * (i % 2 ? 6 : -6)}deg)`, opacity: Math.min(1, pop * 1.5), textShadow: '0 10px 28px rgba(0,0,0,0.35)' }}>
+              {w}
+            </span>
+          )
+        })}
+      </div>
+      {beat.sub && (
+        <div style={{ position: 'relative', padding: '6px 22px', transform: `translateY(${(1 - sub) * 40}px)`, opacity: Math.min(1, sub * 1.4) }}>
+          <div style={{ position: 'absolute', inset: 0, borderRadius: 14, background: colors.logoYellow, transform: `scaleX(${marker}) rotate(-1.5deg)`, transformOrigin: 'left center' }} />
+          <span style={{ position: 'relative', fontFamily: fonts.display, fontWeight: 800, fontSize: 58, color: marker > 0.5 ? colors.ink : '#fff', letterSpacing: '-0.02em' }}>{beat.sub}</span>
+        </div>
+      )}
     </div>
   )
 }
 
-/** Phone collapses into the logo; logo, name, tagline and the DM call to action. */
+/** WhatsApp mark: white speech bubble with a handset (drawn, no brand asset file). */
+const WhatsAppIcon: React.FC<{ size: number }> = ({ size }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+    <path d="M16 3C8.8 3 3 8.6 3 15.6c0 2.5.7 4.8 2 6.8L3.4 29l6.9-1.8c1.7.9 3.7 1.4 5.7 1.4 7.2 0 13-5.6 13-12.6S23.2 3 16 3z" fill="#fff" />
+    <path d="M12.2 9.6c-.3-.7-.6-.7-.9-.7h-.8c-.3 0-.7.1-1.1.5-.4.4-1.4 1.4-1.4 3.4s1.5 3.9 1.7 4.2c.2.3 2.9 4.6 7.1 6.2 3.5 1.4 4.2 1.1 5 1 .8-.1 2.4-1 2.8-1.9.3-.9.3-1.7.2-1.9-.1-.2-.4-.3-.8-.5l-2.8-1.4c-.4-.1-.6-.2-.9.2-.3.4-1.1 1.4-1.3 1.6-.2.3-.5.3-.9.1-.4-.2-1.7-.6-3.2-2-1.2-1-2-2.3-2.2-2.7-.2-.4 0-.6.2-.8l.6-.7c.2-.2.3-.4.4-.7.1-.3.1-.5 0-.7l-1.3-3.2z" fill={colors.whatsapp} />
+  </svg>
+)
+
+/** Phone collapses into the logo; logo, name, tagline and the WhatsApp call to action. */
 export const Ending: React.FC = () => {
   const frame = useGlobalFrame()
   if (frame < ACT.ending.from) return null
@@ -58,23 +76,28 @@ export const Ending: React.FC = () => {
   const cx = PHONE.x + PHONE.w / 2
   return (
     <AbsoluteFill>
-      <Burst at={logoAt + 2} x={cx} y={820} colors={[colors.logoYellow, '#fff', colors.logoBlue]} count={22} spread={420} size={16} />
+      <Burst at={logoAt + 2} x={cx} y={700} colors={[colors.logoYellow, '#fff', colors.logoBlue]} count={22} spread={420} size={16} />
       {frame >= logoAt && (
-        <Img src={staticFile('logo-kasirok.png')} style={{ position: 'absolute', left: cx - 230, top: 560, width: 460, height: 460, transform: `scale(${pop}) rotate(${(1 - pop) * -20}deg)`, filter: 'drop-shadow(0 30px 40px rgba(0,0,0,0.35))' }} />
+        <Img src={staticFile('logo-kasirok.png')} style={{ position: 'absolute', left: cx - 200, top: 470, width: 400, height: 400, transform: `scale(${pop}) rotate(${(1 - pop) * -20}deg)`, filter: 'drop-shadow(0 30px 40px rgba(0,0,0,0.35))' }} />
       )}
-      <div style={{ position: 'absolute', left: 60, right: 60, top: 1010 }}>
-        <KineticText words={[{ text: 'KasirOK', weight: 800 }]} start={logoAt + 8} size={150} color="#fff" />
-        <KineticText words={[{ text: 'Jualan' }, { text: 'tenang,' }, { text: 'siapa' }, { text: 'pun' }, { text: 'bisa.', color: colors.logoYellow }]} start={logoAt + 16} size={58} color="rgba(255,255,255,0.92)" stagger={3} style={{ marginTop: 10 }} />
+      <div style={{ position: 'absolute', left: 60, right: 60, top: 870 }}>
+        <KineticText words={[{ text: 'KasirOK', weight: 800 }]} start={logoAt + 8} size={140} color="#fff" />
+        <KineticText words={[{ text: 'Jualan' }, { text: 'tenang,' }, { text: 'siapa' }, { text: 'pun' }, { text: 'bisa.', color: colors.logoYellow }]} start={logoAt + 16} size={56} color="rgba(255,255,255,0.92)" stagger={3} style={{ marginTop: 8 }} />
       </div>
+      {/* WhatsApp CTA: the number is the biggest thing on screen so it can be read/typed */}
       {frame >= ctaAt && (
-        <div style={{ position: 'absolute', left: 140, right: 140, top: 1340, transform: `scale(${cta * breathe})`, borderRadius: 999, background: colors.logoYellow, color: colors.ink, padding: '30px 0', textAlign: 'center', fontFamily: fonts.display, fontWeight: 800, fontSize: 44, boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
-          Coba gratis · DM @kasir.ok
+        <div style={{ position: 'absolute', left: 50, right: 50, top: 1190, transform: `scale(${cta * breathe})`, borderRadius: 44, background: colors.whatsapp, padding: '26px 26px 30px', textAlign: 'center', boxShadow: '0 24px 50px rgba(0,0,0,0.35)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, fontFamily: fonts.display, fontWeight: 800, fontSize: 46, color: '#fff' }}>
+            <WhatsAppIcon size={58} />
+            Coba gratis, chat WhatsApp
+          </div>
+          <div style={{ marginTop: 16, borderRadius: 28, background: '#fff', padding: '18px 0 16px', fontFamily: fonts.display, fontWeight: 800, fontSize: 96, lineHeight: 1, letterSpacing: '0.01em', color: '#075E54' }}>
+            0895 4131 11 053
+          </div>
         </div>
       )}
       <LightSweep at={logoAt + 12} duration={20} />
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 1480, textAlign: 'center', fontFamily: fonts.ui, fontWeight: 600, fontSize: 30, color: 'rgba(255,255,255,0.8)', opacity: tween(frame, [ctaAt + 10, ctaAt + 22], [0, 1]) }}>
-        Bisa offline · Hutang pelanggan · Stok · Laporan
-      </div>
+      <LightSweep at={ctaAt + 18} duration={18} />
     </AbsoluteFill>
   )
 }
@@ -99,21 +122,12 @@ const SFX: Array<[number, string, number]> = [
 
 export const StoryAudio: React.FC = () => (
   <>
-    {/* Music stays low and dips further while grandma talks, so every word is clear */}
+    {/* No voice: music carries the mood, fades out at the end */}
     <Html5Audio
       src={staticFile('audio/music-placeholder.wav')}
       loop
-      volume={f => {
-        const speaking = LINES.some(l => f >= l.from - 4 && f <= l.to + 4)
-        const fadeOut = f > TOTAL - 30 ? (TOTAL - f) / 30 : 1
-        return (speaking ? 0.07 : 0.16) * fadeOut
-      }}
+      volume={f => 0.6 * (f > TOTAL - 30 ? (TOTAL - f) / 30 : 1)}
     />
-    {LINES.map(l => (
-      <Sequence key={l.id} from={l.from} layout="none">
-        <Html5Audio src={staticFile(l.file)} volume={1} />
-      </Sequence>
-    ))}
     {SFX.map(([f, name, vol], i) => (
       <Sequence key={i} from={Math.max(0, f)} layout="none">
         <Html5Audio src={staticFile(`audio/${name}.wav`)} volume={vol} />
@@ -121,4 +135,3 @@ export const StoryAudio: React.FC = () => (
     ))}
   </>
 )
-
