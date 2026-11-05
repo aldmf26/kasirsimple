@@ -67,6 +67,41 @@ const links = [
 
 const isOnline = useOnline();
 
+// Offline sales queue: send automatically when back online, on start, and
+// every minute while something is waiting (covers flaky "online" signals).
+const { queue: saleQueue, syncing: saleSyncing, flush: flushSales } = useSaleQueue();
+const failedSales = computed(() => saleQueue.value.filter((q) => q.error).length);
+const syncSales = async () => {
+  const { sent, failed } = await flushSales();
+  if (sent) {
+    toast.add({
+      title: `${sent} transaksi offline terkirim`,
+      color: "success",
+      icon: "i-heroicons-cloud-arrow-up",
+    });
+  }
+  if (failed) {
+    toast.add({
+      title: `${failed} transaksi gagal dikirim`,
+      description: "Cek koneksi atau hubungi admin. Datanya tetap tersimpan di HP ini.",
+      color: "error",
+    });
+  }
+};
+watch(isOnline, (online) => {
+  if (online) syncSales();
+});
+let syncTimer: ReturnType<typeof setInterval> | null = null;
+onMounted(() => {
+  syncSales();
+  syncTimer = setInterval(() => {
+    if (saleQueue.value.length) syncSales();
+  }, 60 * 1000);
+});
+onBeforeUnmount(() => {
+  if (syncTimer) clearInterval(syncTimer);
+});
+
 const isActiveRoute = (path: string) =>
   route.path === path || route.path.startsWith(`${path}/`);
 
@@ -191,7 +226,26 @@ const handleLogout = async () => {
       class="sticky top-16 z-30 flex items-center justify-center gap-2 bg-amber-100 px-4 py-2 text-center text-sm font-semibold text-amber-900 border-b border-amber-200"
     >
       <UIcon name="i-heroicons-signal-slash" class="w-5 h-5 shrink-0" />
-      Sedang offline. Data belum bisa disimpan sampai internet kembali.
+      Sedang offline. Kasir tetap bisa jualan, transaksi dikirim saat online.
+    </div>
+    <div
+      v-else-if="saleQueue.length"
+      role="status"
+      class="sticky top-16 z-30 flex items-center justify-center gap-3 px-4 py-2 text-sm font-semibold border-b"
+      :class="failedSales ? 'bg-red-50 text-red-800 border-red-200' : 'bg-blue-50 text-blue-800 border-blue-200'"
+    >
+      <span>
+        {{ saleQueue.length }} transaksi offline menunggu dikirim
+        <template v-if="failedSales">({{ failedSales }} gagal)</template>
+      </span>
+      <button
+        type="button"
+        class="rounded-lg bg-white px-3 py-1 text-xs font-bold shadow-sm disabled:opacity-60"
+        :disabled="saleSyncing"
+        @click="syncSales"
+      >
+        {{ saleSyncing ? "Mengirim..." : "Kirim sekarang" }}
+      </button>
     </div>
 
     <main class="flex-1 pb-24 md:pb-0"><slot /></main>

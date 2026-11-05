@@ -785,7 +785,12 @@ const processPayment = async () => {
     // Tampilkan Struk
     showReceipt.value = true;
 
-    showAlert("success", "Transaksi Berhasil Disimpan");
+    showAlert(
+      "success",
+      result?.offline
+        ? "Tersimpan di HP (offline), dikirim otomatis saat online"
+        : "Transaksi Berhasil Disimpan",
+    );
   } catch (error: any) {
     showAlert("error", error.message || "Gagal Memproses Transaksi");
   } finally {

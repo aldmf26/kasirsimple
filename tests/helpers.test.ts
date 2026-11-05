@@ -7,7 +7,6 @@ import {
   localDateKey,
   localDayEndISO,
   localDayStartISO,
-  nextTransactionNumber,
   allocateDebtPayment,
   buildSalesTrend,
   groupDebtsByCustomer,
@@ -25,21 +24,6 @@ describe('localDateKey', () => {
   it('day bounds round-trip to the same local day', () => {
     expect(localDateKey(new Date(localDayStartISO('2026-11-05')))).toBe('2026-11-05')
     expect(localDateKey(new Date(localDayEndISO('2026-11-05')))).toBe('2026-11-05')
-  })
-})
-
-describe('nextTransactionNumber', () => {
-  it('starts at 001', () => {
-    expect(nextTransactionNumber('2026-11-05', [])).toBe('TRX-20261105-001')
-  })
-
-  it('continues after the highest number even with gaps from deleted rows', () => {
-    const existing = ['TRX-20261105-001', 'TRX-20261105-007', 'TRX-20261105-003']
-    expect(nextTransactionNumber('2026-11-05', existing)).toBe('TRX-20261105-008')
-  })
-
-  it('ignores other days', () => {
-    expect(nextTransactionNumber('2026-11-05', ['TRX-20261104-050'])).toBe('TRX-20261105-001')
   })
 })
 

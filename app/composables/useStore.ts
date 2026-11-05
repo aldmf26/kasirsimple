@@ -45,8 +45,14 @@ export const useStore = () => {
                     updated_at: new Date().toISOString()
                 }
             }
+            saveOffline(`printer_${storeId}`, printerSettings.value);
             return printerSettings.value;
         } catch (e: any) {
+            const cached = offlineFallback<PrinterSettings>(e, `printer_${storeId}`);
+            if (cached) {
+                printerSettings.value = cached;
+                return cached;
+            }
             console.error('Error fetching printer settings:', e.message);
             return null;
         }
@@ -87,6 +93,7 @@ export const useStore = () => {
 
             if (data) {
                 store.value = data;
+                saveOffline(`store_${targetUserId}`, data);
                 // Fetch printer settings once store is loaded
                 await fetchPrinterSettings(data.id);
             } else {
@@ -95,6 +102,13 @@ export const useStore = () => {
 
             return data;
         } catch (e: any) {
+            // Offline: keep selling with the last known store settings.
+            const cached = offlineFallback<Store>(e, `store_${userId || user.value?.id}`);
+            if (cached) {
+                store.value = cached;
+                await fetchPrinterSettings(cached.id);
+                return cached;
+            }
             error.value = e.message;
             return null;
         } finally {

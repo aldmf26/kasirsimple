@@ -59,8 +59,15 @@ export const useProducts = () => {
             }
 
             products.value = data || []
+            if (!categoryId) saveOffline(`products_${store.value.id}`, products.value)
             return data
         } catch (e: any) {
+            // Offline: last saved catalog (stock includes sales made offline since).
+            const cached = categoryId ? null : offlineFallback<ProductWithCategory[]>(e, `products_${store.value.id}`)
+            if (cached) {
+                products.value = cached
+                return cached
+            }
             error.value = e.message
             return []
         } finally {

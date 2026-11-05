@@ -34,8 +34,14 @@ export const useCategories = () => {
             }
 
             categories.value = data || []
+            saveOffline(`categories_${store.value.id}`, categories.value)
             return data
         } catch (e: any) {
+            const cached = offlineFallback<any[]>(e, `categories_${store.value.id}`)
+            if (cached) {
+                categories.value = cached
+                return cached
+            }
             error.value = e.message
             return []
         } finally {

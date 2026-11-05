@@ -144,17 +144,6 @@ export const localDayEndISO = (dateKey: string): string => parseDateKey(dateKey,
 export const isReturnedTransaction = (t: { status?: string | null, notes?: string | null }): boolean =>
     t.status ? t.status === 'returned' : (t.notes || '').startsWith('[RETUR]')
 
-// Next TRX-YYYYMMDD-NNN after the highest existing number with that prefix.
-export const nextTransactionNumber = (dateKey: string, existingNumbers: string[]): string => {
-    const prefix = `TRX-${dateKey.replace(/-/g, '')}-`
-    const maxSeq = existingNumbers
-        .filter(n => n?.startsWith(prefix))
-        .map(n => parseInt(n.slice(prefix.length), 10))
-        .filter(n => Number.isFinite(n))
-        .reduce((max, n) => Math.max(max, n), 0)
-    return `${prefix}${String(maxSeq + 1).padStart(3, '0')}`
-}
-
 export const clampNumber = (value: unknown, min: number, max: number): number => {
     const n = Number(value)
     if (!Number.isFinite(n)) return min

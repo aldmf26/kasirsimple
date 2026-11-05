@@ -9,6 +9,12 @@ export const useShifts = () => {
     const loading = useState<boolean>('shift_loading', () => false);
     const error = useState<string | null>('shift_error', () => null);
 
+    // Keep the offline copy in step when a shift is opened or closed online.
+    const cacheShift = (shift: any) => {
+        const u = user.value as any;
+        if (store.value?.id && u?.id) saveOffline(`shift_${store.value.id}_${u.id}`, shift);
+    };
+
     // --- SECURITY: Sinkronisasi Otomatis Sesuai Sesi User ---
     if (process.client) {
         supabase.auth.onAuthStateChange((event, session) => {
@@ -91,11 +97,17 @@ export const useShifts = () => {
                 .limit(1);
 
             if (fetchError) {
+                // Offline: the shift that was open last time we were online.
+                if (isNetworkError(fetchError)) {
+                    activeShift.value = loadOffline<any>(`shift_${currentStoreId}_${currentUser.id}`);
+                    return activeShift.value;
+                }
                 return null;
             }
 
             // Bukannya maybeSingle, kita ambil array index 0 agar lebih robust
             let activeData = data && data.length > 0 ? data[0] : null;
+            saveOffline(`shift_${currentStoreId}_${currentUser.id}`, activeData);
 
             // Jika gagal tapi kita tahu ada data (lewat diagnostik), lapor
             if (!activeData && allData && allData.some((s: any) => s.status === 'open')) {
@@ -177,6 +189,7 @@ export const useShifts = () => {
             }
 
             activeShift.value = data;
+            cacheShift(data);
             return data;
         } catch (err: any) {
             const msg = err.message || err.details || 'Gagal membuka kasir';
@@ -252,6 +265,7 @@ export const useShifts = () => {
 
             if (updateError) throw updateError;
             activeShift.value = null;
+            cacheShift(null);
             return data;
         } catch (err: any) {
             error.value = err.message || 'Gagal menutup kasir';

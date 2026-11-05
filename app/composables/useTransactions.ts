@@ -7,12 +7,11 @@ import {
     isValidWeight,
     validateWeightStock
 } from '~/utils/pricing'
-import { localDateKey, localDayStartISO, localDayEndISO, isReturnedTransaction, nextTransactionNumber, fetchAllRows } from '~/utils/helpers'
+import { localDateKey, localDayStartISO, localDayEndISO, isReturnedTransaction, fetchAllRows } from '~/utils/helpers'
 
 type Transaction = Database['public']['Tables']['transactions']['Row']
 type TransactionInsert = Database['public']['Tables']['transactions']['Insert']
 type TransactionItem = Database['public']['Tables']['transaction_items']['Row']
-type TransactionItemInsert = Database['public']['Tables']['transaction_items']['Insert']
 
 export interface CartItem {
     cart_line_id: string
@@ -199,26 +198,6 @@ export const useTransactions = () => {
         return cart.value.reduce((sum, item) => sum + (item.sale_mode === 'weight' ? 1 : item.quantity), 0)
     })
 
-    // Generate transaction number
-    const generateTransactionNumber = async (): Promise<string> => {
-        if (!store.value) throw new Error('Store not found')
-
-        // Local date + highest existing sequence, so deleted rows or UTC/WIB day
-        // boundaries cannot produce a number that already exists.
-        const dateKey = localDateKey()
-        const prefix = `TRX-${dateKey.replace(/-/g, '')}-`
-
-        // @ts-ignore
-        const { data, error: numberError } = await supabase
-            .from('transactions')
-            .select('transaction_number')
-            .eq('store_id', store.value.id)
-            .like('transaction_number', `${prefix}%`)
-
-        if (numberError) throw numberError
-        return nextTransactionNumber(dateKey, (data || []).map((t: any) => t.transaction_number))
-    }
-
     // Atomic stock change via DB function (row lock); returns before/after.
     const adjustStock = async (productId: string, delta: number) => {
         // @ts-ignore
@@ -273,6 +252,19 @@ export const useTransactions = () => {
         return warnings
     }
 
+    // Offline sale: lower stock in the shared product list and its offline copy,
+    // so the cashier sees roughly right numbers until the queue syncs.
+    const takeStockLocally = (items: { product_id: string | null, stock_qty: number }[]) => {
+        const { products } = useProducts()
+        products.value = products.value.map((p: any) => {
+            const sold = items
+                .filter(i => i.product_id === p.id)
+                .reduce((sum, i) => sum + (i.stock_qty || 0), 0)
+            return sold && p.has_stock ? { ...p, stock: Math.max(0, (Number(p.stock) || 0) - sold) } : p
+        })
+        if (store.value?.id) saveOffline(`products_${store.value.id}`, products.value)
+    }
+
     // Create transaction
     const createTransaction = async (paymentData: {
         paid: number
@@ -319,7 +311,6 @@ export const useTransactions = () => {
 
             // Re-read stock right before saving, so a stale product list cannot oversell.
             // Weight sales allow several lines for the same product, so aggregate first.
-            const stockSnapshot = new Map<string, { stock: number; stock_unit: string }>()
             const requiredStock = new Map<string, number>()
             for (const item of cart.value) {
                 if (!item.has_stock || item.product_id.startsWith('quick-')) continue
@@ -329,7 +320,8 @@ export const useTransactions = () => {
                 )
             }
 
-            for (const [productId, required] of requiredStock) {
+            let offline = import.meta.client && !navigator.onLine
+            for (const [productId, required] of offline ? [] : requiredStock) {
                 const item = cart.value.find(i => i.product_id === productId)
                 // @ts-ignore
                 const { data: product, error: stockFetchError } = await supabase
@@ -338,6 +330,10 @@ export const useTransactions = () => {
                     .eq('id', productId)
                     .single()
 
+                if (stockFetchError && isNetworkError(stockFetchError)) {
+                    offline = true
+                    break
+                }
                 if (stockFetchError || !product) {
                     throw new Error(`Gagal memeriksa stok ${item?.product_name || 'produk'}`)
                 }
@@ -349,11 +345,6 @@ export const useTransactions = () => {
                         : `${available} ${item?.product_unit || 'pcs'}`
                     throw new Error(`Stok ${item?.product_name || 'produk'} tidak cukup (tersisa ${left})`)
                 }
-
-                stockSnapshot.set(productId, {
-                    stock: available,
-                    stock_unit: product.stock_unit || 'pcs'
-                })
             }
 
             const isDebt = paymentData.paid < total
@@ -365,12 +356,22 @@ export const useTransactions = () => {
                 finalNotes = finalNotes ? `${finalNotes} | ${debtTag}` : debtTag
             }
 
-            // Build insert object dengan optional fields
-            const transactionInsert: any = {
+            // One sale record for create_sale(); the id is made here so a resend
+            // (retry, offline sync) is recognised and never saved twice.
+            const saleId = crypto.randomUUID()
+            const dateKey = localDateKey()
+            const sale: Record<string, any> = {
+                id: saleId,
                 store_id: store.value.id,
+                created_at: new Date().toISOString(),
                 subtotal,
                 discount: discountAmount,
                 discount_type: paymentData.discount_type || 'nominal',
+                discount_from_settings: paymentData.discount_from_settings || 0,
+                tax: paymentData.tax || 0,
+                tax_percentage: paymentData.tax_percentage || null,
+                ppn: paymentData.ppn || 0,
+                ppn_percentage: paymentData.ppn_percentage || null,
                 total,
                 paid: paymentData.paid,
                 change: isDebt ? 0 : change,
@@ -379,114 +380,63 @@ export const useTransactions = () => {
                 customer_phone: paymentData.customer_phone || null,
                 customer_id: paymentData.customer_id || null,
                 notes: finalNotes || null,
-                created_by: user.value?.id
-            }
-
-            // Add optional discount & tax fields jika ada
-            if (paymentData.discount_from_settings !== undefined) {
-                transactionInsert.discount_from_settings = paymentData.discount_from_settings || 0
-            }
-            if (paymentData.tax !== undefined) {
-                transactionInsert.tax = paymentData.tax || 0
-            }
-            if (paymentData.tax_percentage !== undefined) {
-                transactionInsert.tax_percentage = paymentData.tax_percentage || null
-            }
-            if (paymentData.ppn !== undefined) {
-                transactionInsert.ppn = paymentData.ppn || 0
-            }
-            if (paymentData.ppn_percentage !== undefined) {
-                transactionInsert.ppn_percentage = paymentData.ppn_percentage || null
-            }
-
-            // Insert transaction header; on a duplicate number (another device saved
-            // the same sequence at the same moment) take the next number and retry.
-            let transaction: any = null
-            for (let attempt = 1; !transaction; attempt++) {
-                transactionInsert.transaction_number = await generateTransactionNumber()
-                // @ts-ignore
-                const { data, error: transactionError } = await supabase
-                    .from('transactions')
-                    .insert(transactionInsert)
-                    .select()
-                    .single()
-
-                if (!transactionError) {
-                    transaction = data
-                } else if (transactionError.code !== '23505' || attempt >= 3) {
-                    throw transactionError
-                }
-            }
-            const transactionNumber = transaction.transaction_number
-
-            // Insert transaction items
-            const items: TransactionItemInsert[] = cart.value.map(item => ({
-                transaction_id: transaction.id,
-                // store_id dihapus karena tidak ada di schema
-                product_id: item.product_id.startsWith('quick-') ? null : item.product_id,
-                product_name: item.product_name,
-                product_sku: item.product_sku,
-                product_price: item.product_price,
-                quantity: item.sale_mode === 'weight' ? 1 : item.quantity,
-                subtotal: item.subtotal,
-                sale_mode: item.sale_mode,
-                weight_grams: item.weight_grams,
-                product_unit: item.product_unit,
-                base_price: item.base_price
-            }))
-
-            // @ts-ignore
-            const { data: transactionItems, error: itemsError } = await supabase
-                .from('transaction_items')
-                .insert(items)
-                .select()
-
-            if (itemsError) {
-                // Don't leave a header with no items behind.
-                // @ts-ignore
-                await supabase.from('transactions').delete().eq('id', transaction.id)
-                throw itemsError
-            }
-
-            // Update stock for products with stock tracking
-            const stockWarnings: string[] = []
-            for (const item of cart.value) {
-                if (item.has_stock && !item.product_id.startsWith('quick-')) {
-                    try {
-                        const delta = getStockQuantity(item)
-                        const { before, after } = await adjustStock(item.product_id, -delta)
-                        const stockUnit = stockSnapshot.get(item.product_id)?.stock_unit
-                            || (item.sale_mode === 'weight' ? 'gram' : 'pcs')
-
-                        // @ts-ignore
-                        await supabase
-                            .from('stock_movements')
-                            .insert({
-                                product_id: item.product_id,
-                                transaction_id: transaction.id,
-                                type: 'out',
-                                quantity: delta,
-                                stock_before: before,
-                                stock_after: after,
-                                stock_unit: stockUnit,
-                                notes: `Penjualan: ${transactionNumber}`,
-                                created_by: user.value?.id
-                            })
-                    } catch (e: any) {
-                        console.warn('Stock update failed:', e.message)
-                        stockWarnings.push(item.product_name)
+                items: cart.value.map(item => {
+                    const isQuick = item.product_id.startsWith('quick-')
+                    return {
+                        product_id: isQuick ? null : item.product_id,
+                        product_name: item.product_name,
+                        product_sku: item.product_sku,
+                        product_price: item.product_price,
+                        quantity: item.sale_mode === 'weight' ? 1 : item.quantity,
+                        subtotal: item.subtotal,
+                        sale_mode: item.sale_mode,
+                        weight_grams: item.weight_grams,
+                        product_unit: item.product_unit,
+                        base_price: item.base_price,
+                        // pcs or grams to take off stock; 0 = not tracked
+                        stock_qty: item.has_stock && !isQuick ? Math.round(getStockQuantity(item)) : 0
                     }
+                })
+            }
+
+            let transaction: any = null
+            let transactionItems: any[] = []
+            if (!offline) {
+                // @ts-ignore
+                const { data, error: saleError } = await supabase.rpc('create_sale', {
+                    p_sale: sale,
+                    p_date_key: dateKey
+                })
+                if (saleError && isNetworkError(saleError)) {
+                    offline = true
+                } else if (saleError) {
+                    throw saleError
+                } else {
+                    const result = data as any
+                    transaction = result.transaction
+                    transactionItems = result.items || []
                 }
+            }
+
+            if (offline) {
+                // Final number now so the printed receipt matches what gets synced.
+                sale.transaction_number = `TRX-${dateKey.replace(/-/g, '')}-OFF-${saleId.slice(0, 5).toUpperCase()}`
+                useSaleQueue().enqueue(sale, dateKey)
+                takeStockLocally(sale.items)
+                const { items: _items, ...header } = sale
+                transaction = { ...header, status: 'completed', offline: true }
+                transactionItems = sale.items
             }
 
             // Clear cart
             clearCart()
 
             // Add to local transactions
-            const fullTransaction: TransactionWithItems & { stock_warnings: string[] } = {
+            // create_sale is all-or-nothing, so there are no partial stock failures left.
+            const fullTransaction: TransactionWithItems & { stock_warnings: string[], offline?: boolean } = {
                 ...transaction,
                 items: transactionItems || [],
-                stock_warnings: stockWarnings
+                stock_warnings: []
             }
             transactions.value.unshift(fullTransaction)
 
