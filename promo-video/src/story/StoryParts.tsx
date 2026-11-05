@@ -1,23 +1,114 @@
 import { AbsoluteFill, Html5Audio, Img, Sequence, spring, staticFile } from 'remotion'
 import { KineticText } from '../components/KineticText'
 import { colors, fonts } from '../theme'
-import { easeOut, tween } from '../utils/animations'
+import { easeIn, easeOut, tween } from '../utils/animations'
 import { useGlobalFrame } from '../utils/frame'
 import { Burst, LightSweep } from './fx'
-import { PHONE, PHONE_HITS } from './StoryPhone'
-import { ACT, at, BEATS, FPS, L, TOTAL } from './timeline'
+import { shakeAt } from './fx'
+import { PROBLEMS, problemAt, stampAt } from './ProblemsAct'
+import { PHONE, PHONE_HITS, PHONE_MOMENTS } from './StoryPhone'
+import { ACT, BEATS, FEATURE_IDS, FPS, L, TOTAL } from './timeline'
 
 /** Blue stage behind the phone; opens as a circle from the phone's centre (match cut from paper). */
 export const PhoneStage: React.FC = () => {
   const frame = useGlobalFrame()
-  if (frame < ACT.phone.from - 2) return null
-  const open = tween(frame, [ACT.phone.from - 2, ACT.phone.from + 16], [0, 1], easeOut)
+  if (frame < ACT.stage.from) return null
+  const open = tween(frame, [ACT.stage.from, ACT.stage.from + 18], [0, 1], easeOut)
   const drift = frame * 0.6
   return (
-    <AbsoluteFill style={{ clipPath: `circle(${open * 140}% at 50% 62%)`, background: `linear-gradient(170deg, ${colors.primary600} 0%, ${colors.logoDeep} 70%, #0B2A7A 100%)` }}>
+    <AbsoluteFill style={{ clipPath: `circle(${open * 140}% at 50% 50%)`, background: `linear-gradient(170deg, ${colors.primary600} 0%, ${colors.logoDeep} 70%, #0B2A7A 100%)` }}>
       <div style={{ position: 'absolute', width: 900, height: 900, borderRadius: '50%', left: -300 + Math.sin(drift / 40) * 60, top: 200, background: 'radial-gradient(circle, rgba(240,198,36,0.28), transparent 65%)' }} />
       <div style={{ position: 'absolute', width: 1000, height: 1000, borderRadius: '50%', right: -420, top: 1100 + Math.cos(drift / 50) * 50, background: 'radial-gradient(circle, rgba(14,126,254,0.55), transparent 65%)' }} />
       <AbsoluteFill style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.09) 2px, transparent 2px)', backgroundSize: '44px 44px', backgroundPosition: `0 ${drift}px` }} />
+    </AbsoluteFill>
+  )
+}
+
+
+// ---- business montage ---------------------------------------------------------
+export const BUSINESSES: Array<[string, string, string]> = [
+  ['🛒', 'Sembako', 'stok & timbangan'],
+  ['📱', 'Konter HP', 'kartu, sparepart, casan'],
+  ['🔧', 'Bengkel', 'jasa + sparepart'],
+  ['💈', 'Barbershop', 'jasa cukur'],
+  ['🧺', 'Laundry', 'kiloan per kg'],
+  ['🍛', 'Rumah makan', 'menu & pesanan'],
+  ['☕', 'Kafe kopi', 'cepat saat ramai']
+]
+const TILE = { w: 460, h: 236, gap: 26, left: 67, top: 486 }
+export const tileAt = (i: number) => L.montage.from + 26 + i * 21
+
+/** "Cocok buat usaha apa aja": seven business cards slam onto the blue stage. */
+export const Montage: React.FC = () => {
+  const frame = useGlobalFrame()
+  if (frame < ACT.montage.from || frame > ACT.montage.to) return null
+  const titleIn = spring({ frame: frame - L.montage.from - 4, fps: FPS, config: { damping: 12, stiffness: 170 } })
+  const exit = tween(frame, [L.montage.to - 14, L.montage.to + 6], [0, 1], easeIn)
+  const shake = shakeAt(frame, BUSINESSES.map((_, i) => tileAt(i)), 10)
+  return (
+    <AbsoluteFill style={{ transform: `translate(${shake.x}px, ${shake.y}px)` }}>
+      <div style={{ position: 'absolute', left: 40, right: 40, top: 262, textAlign: 'center', fontFamily: fonts.display, fontWeight: 800, fontSize: 92, lineHeight: 1.02, letterSpacing: '-0.035em', color: '#fff', transform: `translateY(${(1 - titleIn) * -80 - exit * 120}px) scale(${0.7 + titleIn * 0.3})`, opacity: Math.min(1, titleIn * 1.4) * (1 - exit), textShadow: '0 10px 28px rgba(0,0,0,0.35)' }}>
+        Cocok buat usaha<br /><span style={{ color: colors.logoYellow }}>apa aja</span>
+      </div>
+      {BUSINESSES.map(([icon, name, desc], i) => {
+        const t0 = tileAt(i)
+        if (frame < t0 - 2) return null
+        const slam = spring({ frame: frame - t0, fps: FPS, config: { damping: 13, stiffness: 260, mass: 0.7 } })
+        const col = i % 2
+        const row = Math.floor(i / 2)
+        const lastAlone = i === BUSINESSES.length - 1 && BUSINESSES.length % 2 === 1
+        const x = lastAlone ? (1080 - TILE.w) / 2 : TILE.left + col * (TILE.w + TILE.gap)
+        const y = TILE.top + row * (TILE.h + TILE.gap)
+        // exit: every card is sucked into the centre, where the phone rises
+        const ex = (540 - (x + TILE.w / 2)) * exit
+        const ey = (1040 - (y + TILE.h / 2)) * exit
+        return (
+          <div key={name} style={{ position: 'absolute', left: x, top: y, width: TILE.w, height: TILE.h, borderRadius: 34, background: '#fff', boxShadow: '0 24px 50px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: 22, padding: '0 30px', transform: `translate(${ex}px, ${ey}px) scale(${(2.1 - slam * 1.1) * (1 - exit * 0.85)}) rotate(${(1 - slam) * (col ? 14 : -14)}deg)`, opacity: Math.min(1, slam * 2) * (1 - exit * 0.9) }}>
+            <div style={{ fontSize: 100, lineHeight: 1 }}>{icon}</div>
+            <div>
+              <div style={{ fontFamily: fonts.display, fontWeight: 800, fontSize: 48, color: colors.ink, letterSpacing: '-0.02em', lineHeight: 1.05 }}>{name}</div>
+              <div style={{ fontFamily: fonts.ui, fontWeight: 600, fontSize: 25, color: colors.gray500, marginTop: 6 }}>{desc}</div>
+            </div>
+          </div>
+        )
+      })}
+      {BUSINESSES.map((_, i) => <Burst key={i} at={tileAt(i)} x={540} y={TILE.top + Math.floor(i / 2) * (TILE.h + TILE.gap) + TILE.h / 2} colors={[colors.logoYellow, '#fff']} count={8} spread={300} size={10} />)}
+    </AbsoluteFill>
+  )
+}
+
+// ---- "masih banyak lagi" chips ------------------------------------------------
+const EXTRAS: Array<[string, number, number]> = [
+  ['Shift kasir', 70, 560],
+  ['PIN owner', 700, 640],
+  ['Data pelanggan', 40, 820],
+  ['Pengeluaran', 730, 900],
+  ['Diskon & pajak', 60, 1080],
+  ['Backup data', 720, 1160],
+  ['Export Excel/PDF', 120, 1330]
+]
+
+const chipAt = (i: number) => L.extras.from + i * 7
+
+/** Feature chips fly in around the phone during "Masih banyak lagi". */
+export const Extras: React.FC = () => {
+  const frame = useGlobalFrame()
+  if (frame < ACT.extras.from || frame > L.cta.from + 4) return null
+  const out = tween(frame, [L.cta.from - 10, L.cta.from + 4], [0, 1], easeIn)
+  return (
+    <AbsoluteFill>
+      {EXTRAS.map(([label, x, y], i) => {
+        const t0 = chipAt(i)
+        const pop = spring({ frame: frame - t0, fps: FPS, config: { damping: 11, stiffness: 220, mass: 0.6 } })
+        if (frame < t0) return null
+        const fromX = x < 400 ? -500 : 700
+        const bob = Math.sin((frame + i * 13) / 10) * 8
+        return (
+          <div key={label} style={{ position: 'absolute', left: x, top: y + bob, padding: '18px 30px', borderRadius: 999, background: i % 2 ? colors.logoYellow : '#fff', color: colors.ink, fontFamily: fonts.display, fontWeight: 800, fontSize: 40, boxShadow: '0 16px 34px rgba(0,0,0,0.3)', transform: `translateX(${(1 - pop) * fromX}px) scale(${(0.6 + pop * 0.4) * (1 - out)}) rotate(${(i % 2 ? 3 : -3) * pop}deg)`, opacity: 1 - out, whiteSpace: 'nowrap', zIndex: 5 }}>
+            ✓ {label}
+          </div>
+        )
+      })}
     </AbsoluteFill>
   )
 }
@@ -106,15 +197,22 @@ export const Ending: React.FC = () => {
 // [frame, file, volume]: impacts/whooshes on the cuts, clicks on taps
 const SFX: Array<[number, string, number]> = [
   [0, 'impact', 0.35],
-  [at(L.hook, 0.42), 'impact', 0.55],
-  [at(L.past, 0.05), 'whoosh', 0.7],
-  [at(L.past, 0.08), 'paper', 0.6],
+  ...PROBLEMS.flatMap((_, i): Array<[number, string, number]> => [[problemAt(i), 'whoosh', 0.35], [stampAt(i), 'impact', 0.6]]),
+  [problemAt(PROBLEMS.length) + 2, 'pop', 0.5],
+  [ACT.stage.from, 'whoosh', 0.6],
+  ...BUSINESSES.map((_, i): [number, string, number] => [tileAt(i), 'impact', 0.42]),
+  [L.montage.to - 12, 'suck', 0.5],
   [ACT.phone.from, 'whoosh', 0.6],
   [ACT.phone.from + 10, 'pop', 0.45],
   ...PHONE_HITS.map((f): [number, string, number] => [f, 'click', 0.7]),
-  [ACT.stock.from, 'whoosh', 0.4],
-  [ACT.offline.from, 'whoosh', 0.4],
-  [ACT.report.from, 'whoosh', 0.4],
+  [PHONE_MOMENTS.scanBeep1, 'tick', 0.8],
+  [PHONE_MOMENTS.scanBeep2, 'tick', 0.8],
+  [PHONE_MOMENTS.payChange, 'ding', 0.45],
+  [PHONE_MOMENTS.printFeed, 'printer', 0.6],
+  [PHONE_MOMENTS.profitLaba, 'ding', 0.45],
+  ...FEATURE_IDS.slice(1).map((id): [number, string, number] => [ACT[id].from, 'whoosh', 0.35]),
+  [ACT.extras.from, 'whoosh', 0.45],
+  ...EXTRAS.map((_, i): [number, string, number] => [chipAt(i), 'pop', 0.3]),
   [ACT.phone.to - 8, 'suck', 0.6],
   [ACT.phone.to - 4, 'impact', 0.7],
   [ACT.phone.to + 26, 'ding', 0.5]

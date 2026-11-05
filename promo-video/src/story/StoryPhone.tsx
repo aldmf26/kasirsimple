@@ -3,7 +3,7 @@ import { colors, fonts } from '../theme'
 import { easeIn, easeInOut, easeOut, keyframes, rupiah, tween } from '../utils/animations'
 import { useGlobalFrame } from '../utils/frame'
 import { Burst, Glitch, LightSweep, shakeAt } from './fx'
-import { ACT, at, FPS, L } from './timeline'
+import { ACT, at, FEATURE_IDS, FPS, L } from './timeline'
 
 // Phone sits under the caption band, inside the story safe area
 export const PHONE = { x: 230, y: 470, w: 620, h: 1150, r: 64 }
@@ -27,9 +27,21 @@ const M = {
   wifiBack: at(L.offline, 0.95),
   synced: at(L.offline, 1.0) + 2,
   reportCount: at(L.report, 0.05),
-  reportUp: at(L.report, 0.55)
+  reportUp: at(L.report, 0.55),
+  scanBeep1: at(L.scan, 0.3),
+  scanBeep2: at(L.scan, 0.62),
+  payQris: at(L.pay, 0.22),
+  payCash: at(L.pay, 0.48),
+  payChange: at(L.pay, 0.62),
+  printTap: at(L.print, 0.18),
+  printFeed: at(L.print, 0.24),
+  weightType: at(L.weight, 0.25),
+  weightAdd: at(L.weight, 0.7),
+  profitCount: at(L.profit, 0.08),
+  profitLaba: at(L.profit, 0.55)
 }
-export const PHONE_HITS = [M.debtTap, M.debtSave, M.stockBadge, M.wifiBreak, M.offlinePay, M.reportUp]
+export const PHONE_HITS = [M.scanBeep1, M.scanBeep2, M.payQris, M.payCash, M.printTap, M.weightAdd, M.debtTap, M.debtSave, M.stockBadge, M.wifiBreak, M.offlinePay, M.reportUp, M.profitLaba]
+export const PHONE_MOMENTS = M
 
 // ---- small UI atoms ----------------------------------------------------------
 const Card: React.FC<{ style?: React.CSSProperties; children: React.ReactNode }> = ({ style, children }) => (
@@ -289,6 +301,217 @@ const ReportScreen: React.FC = () => {
   )
 }
 
+
+// ---- extra feature screens (60 s cut) ------------------------------------------
+const ScanScreen: React.FC = () => {
+  const frame = useGlobalFrame()
+  const laser = Math.sin(frame / 4) * 70
+  const added = (f: number) => tween(frame, [f, f + 10], [0, 1], easeOut)
+  const flash = (f: number) => (frame >= f && frame < f + 5 ? 1 - (frame - f) / 5 : 0)
+  const lines = [
+    { at: M.scanBeep1, name: 'Indomie Goreng', price: 'Rp 3.500' },
+    { at: M.scanBeep2, name: 'Aqua 600ml', price: 'Rp 4.000' }
+  ]
+  return (
+    <>
+      <div style={{ position: 'relative', height: 560, background: '#111827', overflow: 'hidden' }}>
+        {/* product with barcode under the camera */}
+        <div style={{ position: 'absolute', left: 120, top: 120, width: 350, height: 300, borderRadius: 26, background: 'linear-gradient(135deg,#FDE68A,#F59E0B)', transform: `rotate(-6deg) translateY(${Math.sin(frame / 9) * 6}px)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', padding: '18px 22px 10px', borderRadius: 8 }}>
+            <div style={{ display: 'flex', gap: 3, height: 120, alignItems: 'stretch' }}>
+              {Array.from({ length: 34 }, (_, i) => <div key={i} style={{ width: [3, 6, 2, 4][(i * 7) % 4], background: '#111' }} />)}
+            </div>
+            <div style={{ textAlign: 'center', fontSize: 22, letterSpacing: 4, marginTop: 6, color: '#111' }}>8 99654 321057</div>
+          </div>
+        </div>
+        {/* frame + laser */}
+        <div style={{ position: 'absolute', left: 70, right: 70, top: 160, height: 240, border: '4px solid rgba(255,255,255,0.85)', borderRadius: 24 }} />
+        <div style={{ position: 'absolute', left: 80, right: 80, top: 280 + laser, height: 6, background: colors.red600, boxShadow: '0 0 18px 6px rgba(220,38,38,0.7)' }} />
+        <AbsoluteFill style={{ background: `rgba(16,185,129,${0.45 * Math.max(flash(M.scanBeep1), flash(M.scanBeep2))})` }} />
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 24, textAlign: 'center', color: '#fff', fontSize: 24, fontWeight: 700 }}>Arahkan kamera ke barcode</div>
+      </div>
+      <div style={{ margin: '20px 24px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {lines.map(l => {
+          const p = added(l.at)
+          return (
+            <Card key={l.name} style={{ padding: '18px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: p, transform: `translateY(${(1 - p) * -40}px) scale(${0.9 + p * 0.1})` }}>
+              <span style={{ fontSize: 27, fontWeight: 800, color: colors.ink }}>✓ {l.name}</span>
+              <span style={{ fontSize: 26, fontWeight: 900, color: colors.primary600 }}>{l.price}</span>
+            </Card>
+          )
+        })}
+      </div>
+      <div style={{ position: 'absolute', left: 20, right: 20, bottom: 30, borderRadius: 24, background: colors.primary600, color: '#fff', padding: '22px 28px', display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: 28, opacity: added(M.scanBeep1) }}>
+        <span>{frame >= M.scanBeep2 ? '2 item' : '1 item'}</span><span>{frame >= M.scanBeep2 ? 'Rp 7.500' : 'Rp 3.500'}</span>
+      </div>
+    </>
+  )
+}
+
+const PayScreen: React.FC = () => {
+  const frame = useGlobalFrame()
+  const method = frame >= M.payCash ? 'Tunai' : frame >= M.payQris ? 'QRIS' : 'Tunai'
+  const paid = frame >= M.payCash ? countTo(frame, M.payCash, M.payCash + 12, 0, 50000) : 0
+  const change = spring({ frame: frame - M.payChange, fps: FPS, config: { damping: 11, stiffness: 200 } })
+  return (
+    <>
+      <Header title="Pembayaran" sub="3 item" />
+      <div style={{ margin: '0 24px', textAlign: 'center', padding: '26px 0', borderRadius: 26, background: 'linear-gradient(135deg,#EFF6FF,#DBEAFE)', border: `3px solid ${colors.primary200}` }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: colors.primary600, letterSpacing: '0.05em' }}>TOTAL BAYAR</div>
+        <div style={{ fontFamily: fonts.display, fontWeight: 800, fontSize: 76, color: colors.primary700 }}>Rp 37.500</div>
+      </div>
+      <div style={{ margin: '22px 24px 0', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        {['Tunai', 'QRIS', 'Transfer'].map(m => (
+          <div key={m} style={{ padding: '20px 0', borderRadius: 18, textAlign: 'center', fontWeight: 900, fontSize: 25, border: `3px solid ${m === method ? colors.primary600 : colors.gray200}`, background: m === method ? colors.primary600 : '#fff', color: m === method ? '#fff' : colors.gray700 }}>{m}</div>
+        ))}
+      </div>
+      <Tap at={M.payQris} x={SCREEN_W / 2} y={420} />
+      <Tap at={M.payCash} x={100} y={420} />
+      {frame >= M.payQris && frame < M.payCash && (
+        <div style={{ margin: '22px auto 0', width: 260, height: 260, borderRadius: 18, background: '#fff', border: `3px solid ${colors.gray200}`, display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', padding: 18, gap: 4 }}>
+          {Array.from({ length: 81 }, (_, i) => <div key={i} style={{ background: (i * 37 + (i % 7) * 11) % 3 === 0 ? '#111' : '#fff', borderRadius: 2 }} />)}
+        </div>
+      )}
+      {frame >= M.payCash && (
+        <Card style={{ margin: '22px 24px 0', padding: '22px 26px' }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: colors.gray500 }}>Uang diterima</div>
+          <div style={{ fontFamily: fonts.display, fontWeight: 800, fontSize: 52, color: colors.ink }}>{rupiah(paid)}</div>
+          <div style={{ marginTop: 12, padding: '16px 20px', borderRadius: 16, background: colors.emerald50, color: colors.emerald700, fontWeight: 900, fontSize: 32, display: 'flex', justifyContent: 'space-between', transform: `scale(${change})`, transformOrigin: 'left center' }}>
+            <span>Kembalian</span><span>Rp 12.500</span>
+          </div>
+        </Card>
+      )}
+      <Burst at={M.payChange} x={SCREEN_W - 110} y={760} colors={[colors.emerald500, colors.logoYellow]} count={12} spread={140} />
+    </>
+  )
+}
+
+const PrintScreen: React.FC = () => (
+  <>
+    <Header title="Transaksi Berhasil" sub="TRX-20261105-014" />
+    <div style={{ margin: '10px auto 0', width: 150, height: 150, borderRadius: '50%', background: colors.emerald50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Ico d={ICON.check} size={90} color={colors.emerald500} sw={3} />
+    </div>
+    <Card style={{ margin: '28px 24px 0', padding: '22px 26px', display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div style={{ width: 14, height: 14, borderRadius: '50%', background: colors.emerald500 }} />
+      <div style={{ fontSize: 25, fontWeight: 800, color: colors.ink }}>Printer RPP02N terhubung</div>
+    </Card>
+    <div style={{ margin: '20px 24px 0', padding: '24px 0', borderRadius: 20, background: colors.primary600, color: '#fff', textAlign: 'center', fontWeight: 900, fontSize: 30 }}>🖨 Cetak Struk</div>
+    <Tap at={M.printTap} x={SCREEN_W / 2} y={575} />
+  </>
+)
+
+/** Thermal printer beside the phone; the receipt rolls out of it. */
+const Printer: React.FC = () => {
+  const frame = useGlobalFrame()
+  const win = ACT.print
+  if (frame < win.from || frame > win.to + 6) return null
+  const inP = spring({ frame: frame - win.from, fps: FPS, config: { damping: 14, stiffness: 150 } })
+  const out = tween(frame, [win.to - 6, win.to + 6], [0, 1], easeIn)
+  const paper = tween(frame, [M.printFeed, M.printFeed + 50], [0, 1])
+  const rows = ['WARUNG BU SITI', '--------------------', 'Indomie x2   7.000', 'Aqua 600ml   4.000', 'Telur 1/4kg  7.500', 'Gula 1kg    19.000', '--------------------', 'TOTAL       37.500', 'TUNAI       50.000', 'KEMBALI     12.500', '', 'Terima kasih :)']
+  return (
+    <div style={{ position: 'absolute', left: PHONE.w - 230, top: PHONE.h - 360, width: 330, transform: `translate(${(1 - inP) * 500 + out * 500}px, 0) rotate(${(1 - inP) * 12}deg)` }}>
+      {/* receipt rolling up out of the slot */}
+      <div style={{ position: 'absolute', left: 45, right: 45, bottom: 150, height: 520 * paper, overflow: 'hidden', display: 'flex', alignItems: 'flex-end' }}>
+        <div style={{ width: '100%', background: '#FFFEF8', padding: '18px 16px 26px', fontFamily: 'monospace', fontSize: 18, lineHeight: 1.45, color: '#222', boxShadow: '0 10px 24px rgba(0,0,0,0.25)', clipPath: 'polygon(0 6px,5% 0,10% 6px,15% 0,20% 6px,25% 0,30% 6px,35% 0,40% 6px,45% 0,50% 6px,55% 0,60% 6px,65% 0,70% 6px,75% 0,80% 6px,85% 0,90% 6px,95% 0,100% 6px,100% 100%,0 100%)' }}>
+          {rows.map((r, i) => <div key={i} style={{ whiteSpace: 'pre', fontWeight: i === 0 || i === 7 ? 900 : 500 }}>{r || ' '}</div>)}
+        </div>
+      </div>
+      <div style={{ position: 'relative', height: 170, borderRadius: 34, background: 'linear-gradient(160deg,#374151,#111827)', boxShadow: '0 30px 60px rgba(0,0,0,0.45)' }}>
+        <div style={{ position: 'absolute', left: 40, right: 40, top: 22, height: 10, borderRadius: 5, background: '#030712' }} />
+        <div style={{ position: 'absolute', right: 34, bottom: 30, width: 16, height: 16, borderRadius: '50%', background: frame % 16 < 8 && paper > 0 && paper < 1 ? '#22C55E' : '#14532D' }} />
+        <div style={{ position: 'absolute', left: 34, bottom: 26, color: '#9CA3AF', fontSize: 20, fontWeight: 800, fontFamily: fonts.ui }}>BT PRINTER</div>
+      </div>
+    </div>
+  )
+}
+
+const WeightScreen: React.FC = () => {
+  const frame = useGlobalFrame()
+  const grams = Math.round(tween(frame, [M.weightType, M.weightType + 22], [0, 1500]) / 50) * 50
+  const sub = Math.round((grams / 1000) * 12000)
+  const add = spring({ frame: frame - M.weightAdd, fps: FPS, config: { damping: 12, stiffness: 180 } })
+  return (
+    <>
+      <Header title="Laundry Kiloan" sub="Rp 12.000 / kg" />
+      <div style={{ margin: '0 24px', height: 300, borderRadius: 30, background: 'linear-gradient(160deg,#ECFDF5,#D1FAE5)', border: '3px solid #A7F3D0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: colors.emerald700, letterSpacing: '0.05em' }}>⚖ BERAT</div>
+        <div style={{ fontFamily: fonts.display, fontWeight: 800, fontSize: 110, color: colors.emerald700, lineHeight: 1 }}>{(grams / 1000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg</div>
+      </div>
+      <Card style={{ margin: '22px 24px 0', padding: '24px 26px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 26, fontWeight: 800, color: colors.gray700 }}>Subtotal</span>
+        <span style={{ fontFamily: fonts.display, fontSize: 48, fontWeight: 800, color: colors.primary700 }}>{rupiah(sub)}</span>
+      </Card>
+      <div style={{ margin: '20px 24px 0', padding: '24px 0', borderRadius: 20, background: colors.emerald500, color: '#fff', textAlign: 'center', fontWeight: 900, fontSize: 30, transform: `scale(${1 + (1 - add) * 0.04})` }}>+ Masukkan Keranjang</div>
+      <Tap at={M.weightAdd} x={SCREEN_W / 2} y={690} />
+      <Toast at={M.weightAdd + 4} until={ACT.weight.to - 4} tone="success" title="1,5 kg ditambahkan" desc="Cuci + setrika · Rp 18.000" />
+    </>
+  )
+}
+
+const ProfitScreen: React.FC = () => {
+  const frame = useGlobalFrame()
+  const omset = countTo(frame, M.profitCount, M.profitCount + 30, 0, 2450000)
+  const modal = countTo(frame, M.profitCount + 8, M.profitCount + 38, 0, 1580000)
+  const laba = spring({ frame: frame - M.profitLaba, fps: FPS, config: { damping: 10, stiffness: 190, mass: 0.7 } })
+  const rows: Array<[string, number, string, string]> = [
+    ['Omset', omset, colors.primary600, colors.primary50],
+    ['Modal (HPP)', modal, '#B45309', '#FFFBEB']
+  ]
+  return (
+    <>
+      <Header title="Laba / Rugi" sub="Bulan ini" />
+      <div style={{ margin: '0 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {rows.map(([label, value, fg, bg]) => (
+          <Card key={label} style={{ padding: '22px 26px', background: bg, borderColor: 'transparent' }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: fg, letterSpacing: '0.04em' }}>{label.toUpperCase()}</div>
+            <div style={{ fontFamily: fonts.display, fontSize: 56, fontWeight: 800, color: colors.ink }}>{rupiah(value)}</div>
+          </Card>
+        ))}
+        <div style={{ position: 'relative', overflow: 'hidden', padding: '26px 28px', borderRadius: 26, background: 'linear-gradient(135deg,#059669,#10B981)', color: '#fff', transform: `scale(${0.85 + laba * 0.15})`, opacity: Math.min(1, laba * 1.5) }}>
+          <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '0.05em', opacity: 0.9 }}>LABA KOTOR</div>
+          <div style={{ fontFamily: fonts.display, fontSize: 72, fontWeight: 800 }}>Rp 870.000</div>
+          <div style={{ fontSize: 22, fontWeight: 700, opacity: 0.9 }}>Margin 35,5%</div>
+          <LightSweep at={M.profitLaba + 4} duration={16} />
+        </div>
+      </div>
+      <BottomNav active={2} />
+      <Burst at={M.profitLaba} x={SCREEN_W / 2} y={640} colors={[colors.emerald500, colors.logoYellow, '#fff']} count={16} spread={220} />
+    </>
+  )
+}
+
+const HomeScreen: React.FC = () => {
+  const tiles: Array<[string, string]> = [['🧑‍💼', 'Shift kasir'], ['🔒', 'PIN owner'], ['👥', 'Pelanggan'], ['💾', 'Backup'], ['📊', 'Export Excel'], ['📄', 'Export PDF']]
+  return (
+    <>
+      <Header title="Menu Lainnya" sub="Semua di satu aplikasi" />
+      <div style={{ margin: '0 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {tiles.map(([icon, label]) => (
+          <Card key={label} style={{ padding: '26px 0', textAlign: 'center' }}>
+            <div style={{ fontSize: 58 }}>{icon}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: colors.gray800, marginTop: 8 }}>{label}</div>
+          </Card>
+        ))}
+      </div>
+      <BottomNav active={4} />
+    </>
+  )
+}
+
+const SCREEN_OF: Record<string, React.FC> = {
+  scan: ScanScreen,
+  pay: PayScreen,
+  print: PrintScreen,
+  stock: StockScreen,
+  weight: WeightScreen,
+  debt: DebtScreen,
+  profit: ProfitScreen,
+  report: ReportScreen,
+  offline: OfflineScreen
+}
+
 // ---- assembly ----------------------------------------------------------------
 type Win = { from: number; to: number }
 /** Whip pan between screens: slide + horizontal motion blur. */
@@ -324,13 +547,15 @@ export const StoryPhone: React.FC = () => {
       <div style={{ position: 'absolute', inset: 14, borderRadius: PHONE.r - 14, overflow: 'hidden', background: colors.slate50 }}>
         <StatusBar />
         <div style={{ position: 'absolute', top: 56, left: 0, right: 0, bottom: 0 }}>
-          <ScreenSlot win={ACT.debt} first><DebtScreen /></ScreenSlot>
-          <ScreenSlot win={ACT.stock}><StockScreen /></ScreenSlot>
-          <ScreenSlot win={ACT.offline}><OfflineScreen /></ScreenSlot>
-          <ScreenSlot win={ACT.report} last><ReportScreen /></ScreenSlot>
+          {FEATURE_IDS.map((id, i) => {
+            const Screen = SCREEN_OF[id]
+            return <ScreenSlot key={id} win={ACT[id]} first={i === 0}><Screen /></ScreenSlot>
+          })}
+          <ScreenSlot win={ACT.extras} last><HomeScreen /></ScreenSlot>
         </div>
         <div style={{ position: 'absolute', top: 12, left: '50%', width: 150, height: 34, marginLeft: -75, borderRadius: 20, background: '#0B1220' }} />
       </div>
+      <Printer />
     </div>
   )
 }
