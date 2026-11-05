@@ -238,6 +238,7 @@ export const useDataBackup = () => {
       const storeUpdate: Record<string, any> = {
         name: s.name,
         business_type: s.business_type,
+        timezone: s.timezone,
         address: s.address,
         phone: s.phone,
         currency: s.currency || "Rp",

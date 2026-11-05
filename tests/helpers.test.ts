@@ -16,9 +16,15 @@ import {
 } from '../app/utils/helpers'
 
 describe('localDateKey', () => {
-  it('uses the local calendar day, not the UTC one', () => {
-    const lateNight = new Date(2026, 10, 5, 0, 30) // 00:30 local
-    expect(localDateKey(lateNight)).toBe('2026-11-05')
+  it('uses the store timezone calendar day, not the UTC one', () => {
+    const instant = '2026-11-04T16:30:00Z' // 00:30 WITA on 5 Nov, 23:30 WIB on 4 Nov
+    expect(localDateKey(instant, 'Asia/Makassar')).toBe('2026-11-05')
+    expect(localDateKey(instant, 'Asia/Jakarta')).toBe('2026-11-04')
+  })
+
+  it('day bounds follow the store timezone', () => {
+    expect(localDayStartISO('2026-11-05', 'Asia/Makassar')).toBe('2026-11-04T16:00:00.000Z')
+    expect(localDayEndISO('2026-11-05', 'Asia/Jakarta')).toBe('2026-11-05T16:59:59.999Z')
   })
 
   it('day bounds round-trip to the same local day', () => {
@@ -66,7 +72,10 @@ describe('fetchAllRows / chunkArray', () => {
 })
 
 describe('buildSalesTrend', () => {
-  const at = (y: number, m: number, d: number, h = 10) => new Date(y, m - 1, d, h).toISOString()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  // Instants in WITA, the default store timezone when no store is loaded (as in tests).
+  const at = (y: number, m: number, d: number, h = 10) =>
+    new Date(`${y}-${pad(m)}-${pad(d)}T${pad(h)}:00:00+08:00`).toISOString()
 
   it('orders days chronologically and fills days without sales', () => {
     const { unit, rows } = buildSalesTrend(
@@ -79,7 +88,11 @@ describe('buildSalesTrend', () => {
       '2026-10-26',
     )
     expect(unit).toBe('day')
-    expect(rows.map(r => [r.label, r.sales])).toEqual([['24/10', 1500], ['25/10', 0], ['26/10', 3000]])
+    expect(rows.map(r => [r.key, r.label, r.sales])).toEqual([
+      ['2026-10-24', '24/10', 1500],
+      ['2026-10-25', '25/10', 0],
+      ['2026-10-26', '26/10', 3000],
+    ])
   })
 
   it('groups long ranges by month, including Indonesian month names like Okt/Mei', () => {

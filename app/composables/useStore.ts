@@ -15,6 +15,16 @@ export const useStore = () => {
     const loading = useState('store_loading', () => false)
     const error = useState<string | null>('store_error', () => null)
 
+    // Keep the device copies (offline store + timezone fallback) in step with
+    // every store change, including a timezone switch in Pengaturan.
+    const rememberStore = (data: any) => {
+        if (!data) return
+        if (data.user_id) saveOffline(`store_${data.user_id}`, data)
+        if (data.timezone && import.meta.client) {
+            try { localStorage.setItem('kasirok_timezone', data.timezone) } catch { /* storage blocked */ }
+        }
+    }
+
     // Fetch printer settings for the store
     const fetchPrinterSettings = async (storeId: string) => {
         try {
@@ -93,7 +103,7 @@ export const useStore = () => {
 
             if (data) {
                 store.value = data;
-                saveOffline(`store_${targetUserId}`, data);
+                rememberStore(data);
                 // Fetch printer settings once store is loaded
                 await fetchPrinterSettings(data.id);
             } else {
@@ -106,6 +116,7 @@ export const useStore = () => {
             const cached = offlineFallback<Store>(e, `store_${userId || user.value?.id}`);
             if (cached) {
                 store.value = cached;
+                rememberStore(cached);
                 await fetchPrinterSettings(cached.id);
                 return cached;
             }
@@ -150,6 +161,7 @@ export const useStore = () => {
             if (createError) throw createError
 
             store.value = data
+            rememberStore(data)
             return data
         } catch (e: any) {
             error.value = e.message
@@ -178,6 +190,7 @@ export const useStore = () => {
             if (updateError) throw updateError
 
             store.value = data
+            rememberStore(data)
             return data
         } catch (e: any) {
             error.value = e.message

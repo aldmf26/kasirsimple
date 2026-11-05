@@ -3,6 +3,7 @@
 // Device & writeChar disimpan di module-level agar tidak hilang saat pindah halaman.
 
 import { formatWeight, isWeightItem, weightInKg } from '~/utils/pricing'
+import { getActiveTimezone } from '~/utils/helpers'
 
 const LS_KEY = 'kasirok_bt_device'
 
@@ -26,15 +27,18 @@ const row = (left: string, right: string, width: number) => {
 const rupiah = (n: number) => `Rp${Math.round(n || 0).toLocaleString('id-ID')}`
 
 // Format tanggal & waktu
-const formatDateTime = (dateVal: any) => {
+const formatDateTime = (dateVal: any, tz?: string) => {
   try {
     const d = new Date(dateVal || Date.now())
+    const timeZone = tz || getActiveTimezone()
     const dateStr = d.toLocaleDateString('id-ID', {
+      timeZone,
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
     })
     const timeStr = d.toLocaleTimeString('id-ID', {
+      timeZone,
       hour: '2-digit',
       minute: '2-digit'
     }).replace(':', '.')
@@ -87,7 +91,7 @@ export const useBluetoothPrinter = () => {
     L.push(divider)
 
     // 2. Tanggal & No Struk (masing-masing 1 baris di tengah agar utuh)
-    L.push(center(formatDateTime(trx?.created_at), W))
+    L.push(center(formatDateTime(trx?.created_at, store?.timezone), W))
     L.push(center(`No: ${trx?.transaction_number || trx?.id || '-'}`, W))
     if (trx?.customer_name) {
       L.push(center(`Cust: ${trx.customer_name}`, W))

@@ -3,35 +3,93 @@ export const formatCurrency = (value: number, currency: string = 'Rp'): string =
     return `${currency} ${value.toLocaleString('id-ID')}`
 }
 
+// Indonesian Timezones
+export const INDONESIA_TIMEZONES = [
+    { value: 'Asia/Jakarta', label: 'WIB', fullLabel: 'WIB (Waktu Indonesia Barat)', offset: '+07:00', cities: 'Jakarta, Jawa, Sumatera, Pontianak' },
+    { value: 'Asia/Makassar', label: 'WITA', fullLabel: 'WITA (Waktu Indonesia Tengah)', offset: '+08:00', cities: 'Banjarmasin, Bali, Makassar, Samarinda' },
+    { value: 'Asia/Jayapura', label: 'WIT', fullLabel: 'WIT (Waktu Indonesia Timur)', offset: '+09:00', cities: 'Jayapura, Ambon, Papua, Maluku' },
+] as const
+
+export const DEFAULT_TIMEZONE = 'Asia/Makassar'
+
+// Get active store timezone safely across reactive context, localStorage, or fallback
+export const getActiveTimezone = (): string => {
+    try {
+        const storeState = useState<any>('current_store')
+        if (storeState?.value?.timezone) {
+            return storeState.value.timezone
+        }
+    } catch {}
+    if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+            const stored = localStorage.getItem('kasirok_timezone')
+            if (stored) return stored
+        } catch {}
+    }
+    return DEFAULT_TIMEZONE
+}
+
+// Get timezone offset string like "+08:00"
+export const getTimezoneOffset = (tz?: string): string => {
+    const targetTz = tz || getActiveTimezone()
+    const known = INDONESIA_TIMEZONES.find(z => z.value === targetTz)
+    if (known) return known.offset
+    try {
+        const part = new Intl.DateTimeFormat('en-US', { timeZone: targetTz, timeZoneName: 'longOffset' })
+            .formatToParts(new Date())
+            .find(p => p.type === 'timeZoneName')
+        if (part?.value) {
+            const offset = part.value.replace('GMT', '').trim()
+            if (/^[+-]\d{2}:\d{2}$/.test(offset)) return offset
+        }
+    } catch {}
+    return '+08:00'
+}
+
 // Format date to Indonesian format
-export const formatDate = (dateString: string): string => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('id-ID', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric'
-    })
+export const formatDate = (dateString: string | Date, tz?: string): string => {
+    try {
+        const date = typeof dateString === 'string' ? new Date(dateString) : dateString
+        return date.toLocaleDateString('id-ID', {
+            timeZone: tz || getActiveTimezone(),
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric'
+        })
+    } catch {
+        return String(dateString || '')
+    }
 }
 
 // Format datetime to Indonesian format
-export const formatDateTime = (dateString: string): string => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('id-ID', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    })
+export const formatDateTime = (dateString: string | Date, tz?: string): string => {
+    try {
+        const date = typeof dateString === 'string' ? new Date(dateString) : dateString
+        return date.toLocaleDateString('id-ID', {
+            timeZone: tz || getActiveTimezone(),
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        })
+    } catch {
+        return String(dateString || '')
+    }
 }
 
 // Format time only
-export const formatTime = (dateString: string): string => {
-    const date = new Date(dateString)
-    return date.toLocaleTimeString('id-ID', {
-        hour: '2-digit',
-        minute: '2-digit'
-    })
+export const formatTime = (dateString: string | Date, tz?: string): string => {
+    try {
+        const date = typeof dateString === 'string' ? new Date(dateString) : dateString
+        return date.toLocaleTimeString('id-ID', {
+            timeZone: tz || getActiveTimezone(),
+            hour: '2-digit',
+            minute: '2-digit'
+        })
+    } catch {
+        return String(dateString || '')
+    }
 }
 
 // Generate short ID
@@ -120,12 +178,23 @@ export const businessTypes = [
     { value: 'fnb', label: 'F&B / Resto', description: 'Resto, cafe, warung makan', icon: '🍽️' },
 ]
 
-// Local (device timezone) calendar date as YYYY-MM-DD. toISOString() gives the UTC
-// date, which is "yesterday" before 07:00 WIB.
-export const localDateKey = (date: Date | string = new Date()): string => {
-    const d = typeof date === 'string' ? new Date(date) : date
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+// Local (store timezone) calendar date as YYYY-MM-DD.
+export const localDateKey = (date: Date | string = new Date(), tz?: string): string => {
+    try {
+        const d = typeof date === 'string' ? new Date(date) : date
+        const targetTz = tz || getActiveTimezone()
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: targetTz,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        })
+        return formatter.format(d)
+    } catch {
+        const d = typeof date === 'string' ? new Date(date) : date
+        const pad = (n: number) => String(n).padStart(2, '0')
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    }
 }
 
 // "YYYY-MM-DD" -> local Date at the given time of day.
@@ -134,10 +203,36 @@ const parseDateKey = (dateKey: string, h = 0, min = 0, sec = 0, ms = 0): Date =>
     return new Date(y, m - 1, d, h, min, sec, ms)
 }
 
-// ISO bounds (UTC instants) of local calendar days, for created_at filters.
-export const localDayStartISO = (dateKey: string): string => parseDateKey(dateKey).toISOString()
+// ISO bounds (UTC instants) of local calendar days in the store timezone, for created_at filters.
+export const localDayStartISO = (dateKey: string, tz?: string): string => {
+    try {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+            const offset = getTimezoneOffset(tz)
+            return new Date(`${dateKey}T00:00:00.000${offset}`).toISOString()
+        }
+    } catch {}
+    return parseDateKey(dateKey).toISOString()
+}
 
-export const localDayEndISO = (dateKey: string): string => parseDateKey(dateKey, 23, 59, 59, 999).toISOString()
+export const localDayEndISO = (dateKey: string, tz?: string): string => {
+    try {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+            const offset = getTimezoneOffset(tz)
+            return new Date(`${dateKey}T23:59:59.999${offset}`).toISOString()
+        }
+    } catch {}
+    return parseDateKey(dateKey, 23, 59, 59, 999).toISOString()
+}
+
+// Pure calendar arithmetic on date keys, done in UTC so the result does not depend
+// on the device timezone (a WITA phone can run a WIB store).
+const keyToCalendar = (dateKey: string): Date => {
+    const [y, m, d] = dateKey.split('-').map(Number) as [number, number, number]
+    return new Date(Date.UTC(y, m - 1, d))
+}
+const calendarToKey = (d: Date): string => d.toISOString().slice(0, 10)
+const addCalendarDays = (d: Date, days: number): Date =>
+    new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + days))
 
 // Returned transactions use the status column; the "[RETUR]" notes prefix is
 // only a fallback for rows read before migration 023 ran.
@@ -190,39 +285,42 @@ export const buildSalesTrend = (
     startKey: string,
     endKey: string,
 ): { unit: 'day' | 'month', rows: SalesTrendRow[] } => {
-    const start = parseDateKey(startKey)
-    const end = parseDateKey(endKey)
+    const start = keyToCalendar(startKey)
+    const end = keyToCalendar(endKey)
     const days = Math.round((end.getTime() - start.getTime()) / DAY_MS) + 1
     const unit: 'day' | 'month' = days > TREND_MONTHLY_AFTER_DAYS ? 'month' : 'day'
-    const keyOf = (date: Date | string) => localDateKey(date).slice(0, unit === 'day' ? 10 : 7)
+    const keyLength = unit === 'day' ? 10 : 7
 
+    // Each sale lands on its store-timezone date; the axis is plain calendar keys.
     const totals = new Map<string, number>()
     for (const t of transactions) {
-        const key = keyOf(t.created_at)
+        const key = localDateKey(t.created_at).slice(0, keyLength)
         totals.set(key, (totals.get(key) || 0) + (Number(t.total) || 0))
     }
 
-    const multiYear = start.getFullYear() !== end.getFullYear()
+    const fmt = (d: Date, options: Intl.DateTimeFormatOptions) =>
+        d.toLocaleDateString('id-ID', { ...options, timeZone: 'UTC' })
+    const multiYear = start.getUTCFullYear() !== end.getUTCFullYear()
     const rows: SalesTrendRow[] = []
     if (unit === 'day') {
         for (let i = 0; i < Math.max(days, 0); i++) {
-            const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)
-            const key = keyOf(d)
+            const d = addCalendarDays(start, i)
+            const key = calendarToKey(d)
             rows.push({
                 key,
-                label: `${d.getDate()}/${d.getMonth() + 1}`,
-                fullLabel: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }),
+                label: `${d.getUTCDate()}/${d.getUTCMonth() + 1}`,
+                fullLabel: fmt(d, { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }),
                 sales: totals.get(key) || 0,
             })
         }
     } else {
-        for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
-            const key = keyOf(d)
-            const month = d.toLocaleDateString('id-ID', { month: 'short' })
+        for (let d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1)); d <= end; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
+            const key = calendarToKey(d).slice(0, 7)
+            const month = fmt(d, { month: 'short' })
             rows.push({
                 key,
-                label: multiYear ? `${month} ${String(d.getFullYear()).slice(2)}` : month,
-                fullLabel: d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
+                label: multiYear ? `${month} ${String(d.getUTCFullYear()).slice(2)}` : month,
+                fullLabel: fmt(d, { month: 'long', year: 'numeric' }),
                 sales: totals.get(key) || 0,
             })
         }
@@ -240,29 +338,27 @@ export const previousPeriod = (
     endKey: string,
     period: ReportPeriod,
 ): { start: string, end: string, label: string } => {
-    const start = parseDateKey(startKey)
-    const end = parseDateKey(endKey)
+    const start = keyToCalendar(startKey)
+    const end = keyToCalendar(endKey)
     const shiftCalendar = (d: Date, months: number) => {
         // Clamp: 31 Mar minus one month is 28/29 Feb, not 3 Mar.
-        const lastDay = new Date(d.getFullYear(), d.getMonth() + months + 1, 0).getDate()
-        return new Date(d.getFullYear(), d.getMonth() + months, Math.min(d.getDate(), lastDay))
+        const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months + 1, 0)).getUTCDate()
+        return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, Math.min(d.getUTCDate(), lastDay)))
     }
 
     if (period === 'month' || period === 'year') {
         const months = period === 'month' ? -1 : -12
         return {
-            start: localDateKey(shiftCalendar(start, months)),
-            end: localDateKey(shiftCalendar(end, months)),
+            start: calendarToKey(shiftCalendar(start, months)),
+            end: calendarToKey(shiftCalendar(end, months)),
             label: period === 'month' ? 'bulan lalu' : 'tahun lalu',
         }
     }
 
     const days = Math.round((end.getTime() - start.getTime()) / DAY_MS) + 1
-    const prevEnd = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1)
-    const prevStart = new Date(start.getFullYear(), start.getMonth(), start.getDate() - days)
     return {
-        start: localDateKey(prevStart),
-        end: localDateKey(prevEnd),
+        start: calendarToKey(addCalendarDays(start, -days)),
+        end: calendarToKey(addCalendarDays(start, -1)),
         label: days === 1 ? (period === 'today' ? 'kemarin' : 'hari sebelumnya') : `${days} hari sebelumnya`,
     }
 }

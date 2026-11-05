@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { businessTypes, paymentMethods, clampNumber } from "~/utils/helpers";
+import { businessTypes, paymentMethods, clampNumber, DEFAULT_TIMEZONE, INDONESIA_TIMEZONES } from "~/utils/helpers";
 
 definePageMeta({
   layout: "default",
@@ -31,6 +31,7 @@ const {
 const storeSettings = reactive({
   name: "",
   business_type: "retail",
+  timezone: DEFAULT_TIMEZONE as string,
   address: "",
   phone: "",
   currency: "Rp",
@@ -67,6 +68,7 @@ const syncFormFromStore = (storeId?: string) => {
     const newStore = store.value!;
     storeSettings.name = newStore.name;
     storeSettings.business_type = newStore.business_type || "retail";
+    storeSettings.timezone = newStore.timezone || DEFAULT_TIMEZONE;
     storeSettings.address = newStore.address || "";
     storeSettings.phone = newStore.phone || "";
     storeSettings.currency = newStore.currency || "Rp";
@@ -261,7 +263,7 @@ const handleBtConnect = async () => {
       try { localStorage.setItem('kasirok_bt_device', bt.deviceName.value); } catch { /* abaikan */ }
       showAlert("success", ` tersambung ke ${bt.deviceName.value}. Struk tes dikirim.`);
       await bt.printTest(
-        { name: storeSettings.name || store.value?.name, address: storeSettings.address, phone: storeSettings.phone },
+        { name: storeSettings.name || store.value?.name, address: storeSettings.address, phone: storeSettings.phone, timezone: storeSettings.timezone || store.value?.timezone },
         printerSettings.value
       );
     } else if (!ok && bt.lastError.value) {
@@ -276,7 +278,7 @@ const handleBtTest = async () => {
   btBusy.value = true;
   try {
     const r = await bt.printTest(
-      { name: storeSettings.name || store.value?.name, address: storeSettings.address, phone: storeSettings.phone },
+      { name: storeSettings.name || store.value?.name, address: storeSettings.address, phone: storeSettings.phone, timezone: storeSettings.timezone || store.value?.timezone },
       printerSettings.value
     );
     if (!r.sent) showAlert("success", `Simulasi tersimpan (${r.bytes} byte). Sambungkan printer untuk cetak langsung.`);
@@ -511,6 +513,7 @@ const autoSaveStoreSettings = async () => {
     await updateStore(store.value.id, {
       name: storeSettings.name,
       business_type: storeSettings.business_type,
+      timezone: storeSettings.timezone,
       address: storeSettings.address,
       phone: storeSettings.phone,
       currency: storeSettings.currency,
@@ -1149,6 +1152,45 @@ watch(() => store.value?.id, syncFormFromStore, { immediate: true });
                   class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   placeholder="08xxxxxxxxxx"
                 />
+              </div>
+
+              <!-- Timezone Settings -->
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1"
+                  >Zona Waktu Toko</label
+                >
+                <p class="text-xs text-gray-500 mb-3">
+                  Digunakan untuk jam di nota cetak, penomoran transaksi harian, shift kasir, dan laporan penjualan
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                  <button
+                    type="button"
+                    v-for="tz in INDONESIA_TIMEZONES"
+                    :key="tz.value"
+                    class="p-3 sm:p-4 rounded-xl border-2 transition-all text-left flex flex-col justify-between"
+                    :class="
+                      storeSettings.timezone === tz.value
+                        ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                    "
+                    @click="storeSettings.timezone = tz.value"
+                  >
+                    <div>
+                      <div class="flex items-center justify-between mb-1">
+                        <span class="font-bold text-sm" :class="storeSettings.timezone === tz.value ? 'text-emerald-800' : 'text-gray-900'">
+                          {{ tz.label }} ({{ tz.offset }})
+                        </span>
+                        <span
+                          v-if="storeSettings.timezone === tz.value"
+                          class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"
+                        ></span>
+                      </div>
+                      <span class="text-xs text-gray-500 block leading-relaxed">
+                        {{ tz.cities }}
+                      </span>
+                    </div>
+                  </button>
+                </div>
               </div>
 
               <!-- Product Display Settings -->
