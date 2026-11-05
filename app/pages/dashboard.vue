@@ -12,11 +12,14 @@ useHead({
 
 const { store, fetchStore, createStore } = useStore();
 const { products, fetchProducts, getLowStockProducts } = useProducts();
-const { transactions, fetchTransactions, getTodaySummary } = useTransactions();
+const { getTodaySummary } = useTransactions();
+const supabase = useSupabaseClient();
+const { debts, totalRemaining: totalDebt, fetchDebts } = useDebts();
 const user = useSupabaseUser();
 const toast = useToast();
 
 const dashboardStats = ref({
+  totalReceived: 0,
   totalSales: 0,
   totalTransactions: 0,
   totalProducts: 0,
@@ -85,15 +88,24 @@ const refreshDashboard = async () => {
 
   loading.value = true;
   try {
-    const [summary, recent, lowStock, prods] = await Promise.all([
+    // Only the 5 latest sales are shown, so don't load the whole history.
+    const recentQuery = (supabase.from("transactions") as any)
+      .select("*, items:transaction_items(*)")
+      .eq("store_id", store.value.id)
+      .order("created_at", { ascending: false })
+      .limit(5);
+    const [summary, recentResult, lowStock, prods] = await Promise.all([
       getTodaySummary(),
-      fetchTransactions(),
+      recentQuery,
       getLowStockProducts(),
       fetchProducts(),
+      fetchDebts().catch(() => []),
     ]);
+    const recent = recentResult?.data || [];
 
     if (summary) {
       dashboardStats.value = {
+        totalReceived: summary.totalReceived || 0,
         totalSales: summary.totalSales || 0,
         totalTransactions: summary.totalTransactions || 0,
         totalProducts: prods?.length || 0,
@@ -157,7 +169,7 @@ onMounted(async () => {
 });
 
 // Aksi Cepat - Diurutkan berdasarkan prioritas ibu-ibu
-const quickActions = [
+const quickActions = computed(() => [
   {
     label: "MULAI JUALAN (KASIR)",
     description: "Klik di sini untuk melayani pembeli",
@@ -182,7 +194,17 @@ const quickActions = [
     color: "violet",
     featured: false,
   },
-];
+  {
+    label: "Hutang Pelanggan",
+    description: totalDebt.value > 0
+      ? `Belum dibayar ${formatCurrency(totalDebt.value)} · ${debts.value.length} orang`
+      : "Catat cicilan pelanggan",
+    icon: "i-heroicons-banknotes",
+    to: "/debts",
+    color: totalDebt.value > 0 ? "amber" : "blue",
+    featured: false,
+  },
+]);
 
 const getColorClasses = (color: string) => {
   const colors: Record<
@@ -263,7 +285,7 @@ const greeting = computed(() => {
           <div>
             <p class="text-blue-100 font-medium">Uang Masuk Hari Ini:</p>
             <h2 class="text-4xl font-black mt-1">
-              {{ formatCurrency(dashboardStats.totalSales) }}
+              {{ formatCurrency(dashboardStats.totalReceived) }}
             </h2>
             <p class="text-blue-100 text-sm mt-2 flex items-center gap-1">
               <UIcon name="i-heroicons-check-badge" />

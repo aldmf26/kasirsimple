@@ -199,7 +199,7 @@ export const useShifts = () => {
         const storeId = store.value.id;
         const txs = await fetchAllRows((from, to) => (supabase as any)
             .from('transactions')
-            .select('total, paid')
+            .select('id, total, paid, payment_method')
             .eq('store_id', storeId)
             .eq('payment_method', 'cash')
             .eq('status', 'completed')
@@ -216,10 +216,10 @@ export const useShifts = () => {
             .gte('created_at', startTime)
             .lte('created_at', endTime);
 
-        const totalCashSales = (txs || []).reduce((sum: number, t: any) => {
-            const actualCash = Math.min(Number(t.paid ?? t.total ?? 0), Number(t.total ?? 0));
-            return sum + actualCash;
-        }, 0);
+        // Cash taken at the till for these sales plus cash installments received
+        // during the shift (installments on older debts included, none twice).
+        const { receivedBetween } = useDebts();
+        const { cash: totalCashSales } = await receivedBetween(txs as any[], startTime, endTime);
         const totalExpenses = (exps || []).reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
 
         return (shift.opening_balance || 0) + totalCashSales - totalExpenses;

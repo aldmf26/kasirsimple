@@ -578,25 +578,22 @@ export const useTransactions = () => {
             const activeTransactions = (data || []).filter((t: any) => !isReturnedTransaction(t))
 
             let totalSales = 0 // Total nilai faktur (omzet barang)
-            let realCash = 0 // Duit fisik / kas tunai nyata di kasir
-            let realNonCash = 0 // Uang non-tunai (transfer/qris) yang diterima
             let totalDebt = 0 // Sisa hutang/kasbon belum lunas
             let debtCount = 0 // Jumlah transaksi belum lunas
+
+            // Uang riil masuk hari ini: dibayar di kasir + cicilan hutang yang diterima hari ini
+            const { receivedBetween } = useDebts()
+            const { cash: realCash, nonCash: realNonCash } = await receivedBetween(
+                activeTransactions as any[],
+                startOfDay,
+                endOfDay,
+            )
 
             for (const t of activeTransactions) {
                 const total = Number(t.total) || 0
                 const paid = t.paid != null ? Number(t.paid) : total
 
                 totalSales += total
-
-                // Uang riil yang diterima (maksimal total nilai faktur)
-                const actualReceived = Math.min(paid, total)
-
-                if (t.payment_method === 'cash') {
-                    realCash += actualReceived
-                } else {
-                    realNonCash += actualReceived
-                }
 
                 if (paid < total) {
                     totalDebt += Math.max(0, total - paid)
@@ -776,44 +773,23 @@ export const useTransactions = () => {
             const remaining = total - currentPaid
             if (remaining <= 0) throw new Error('Transaksi ini sudah lunas')
 
-            const now = new Date()
-            const timeStr = now.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-            
-            // Bersihkan tag [HUTANG: ...] jika ada dan ganti dengan [LUNAS ...]
-            let updatedNotes = trx.notes || ""
-            if (updatedNotes.includes('[HUTANG')) {
-                updatedNotes = updatedNotes.replace(/\[HUTANG:[^\]]*\]/g, `[LUNAS ${timeStr}]`).trim()
-            } else {
-                updatedNotes = updatedNotes ? `${updatedNotes} | [LUNAS ${timeStr}]` : `[LUNAS ${timeStr}]`
-            }
+            // Pay the whole rest through pay_debts so it lands in the installment
+            // history and in today's/shift cash like any other installment.
+            const { payDebts } = useDebts()
+            await payDebts([transactionId], remaining, 'cash')
 
-            // Update in Supabase
-            // @ts-ignore
-            const { data, error: updateErr } = await supabase
+            const { data: updated, error: reloadErr } = await (supabase as any)
                 .from('transactions')
-                .update({
-                    paid: total,
-                    change: 0,
-                    notes: updatedNotes,
-                })
+                .select('paid, change, notes')
                 .eq('id', transactionId)
-                .select()
                 .single()
+            if (reloadErr) throw reloadErr
 
-            if (updateErr) throw updateErr
-
-            // Update local state
             const idx = transactions.value.findIndex(t => t.id === transactionId)
             if (idx > -1) {
-                transactions.value[idx] = {
-                    ...transactions.value[idx],
-                    paid: total,
-                    change: 0,
-                    notes: updatedNotes
-                }
+                transactions.value[idx] = { ...transactions.value[idx], ...updated }
             }
-
-            return transactions.value[idx]
+            return { ...trx, ...updated }
         } catch (e: any) {
             error.value = e.message
             throw e

@@ -281,3 +281,94 @@ export const previousPeriod = (
 // Percent change for the "▲ 12%" badge; null when there is nothing to compare with.
 export const percentChange = (current: number, previous: number): number | null =>
     previous > 0 ? Math.round(((current - previous) / previous) * 100) : null
+
+export interface DebtTransaction {
+    id: string
+    transaction_number: string
+    created_at: string
+    total: number | string | null
+    paid: number | string | null
+    customer_id?: string | null
+    customer_name?: string | null
+    customer_phone?: string | null
+}
+
+export interface CustomerDebt {
+    key: string
+    name: string
+    phone: string | null
+    customerId: string | null
+    remaining: number
+    oldestAt: string
+    transactions: (DebtTransaction & { remaining: number })[] // oldest first
+}
+
+export const debtRemaining = (t: Pick<DebtTransaction, 'total' | 'paid'>): number =>
+    Math.max(0, (Number(t.total) || 0) - (Number(t.paid) || 0))
+
+// One entry per customer: by customer_id when the sale was linked to a
+// registered customer, otherwise by the typed name (case/space-insensitive).
+export const groupDebtsByCustomer = (transactions: DebtTransaction[]): CustomerDebt[] => {
+    const groups = new Map<string, CustomerDebt>()
+    const sorted = [...transactions].sort((a, b) => a.created_at.localeCompare(b.created_at))
+    for (const t of sorted) {
+        const remaining = debtRemaining(t)
+        if (remaining <= 0) continue
+        const name = (t.customer_name || '').trim()
+        const key = t.customer_id ? `id:${t.customer_id}` : `name:${name.toLowerCase().replace(/\s+/g, ' ') || '-'}`
+        const group = groups.get(key) || {
+            key,
+            name: name || 'Tanpa nama',
+            phone: t.customer_phone || null,
+            customerId: t.customer_id || null,
+            remaining: 0,
+            oldestAt: t.created_at,
+            transactions: [],
+        }
+        group.remaining += remaining
+        group.phone = group.phone || t.customer_phone || null
+        group.transactions.push({ ...t, remaining })
+        groups.set(key, group)
+    }
+    return [...groups.values()].sort((a, b) => b.remaining - a.remaining)
+}
+
+// Preview of how an installment is split: oldest nota first (same rule as the
+// pay_debts database function).
+export const allocateDebtPayment = (
+    transactions: { id: string, remaining: number }[],
+    amount: number,
+): { id: string, applied: number, remaining: number }[] => {
+    let left = Math.max(0, amount)
+    const result: { id: string, applied: number, remaining: number }[] = []
+    for (const t of transactions) {
+        if (left <= 0) break
+        const applied = Math.min(left, t.remaining)
+        if (applied <= 0) continue
+        left -= applied
+        result.push({ id: t.id, applied, remaining: t.remaining - applied })
+    }
+    return result
+}
+
+// Money actually received in a period, by method: what each sale took at the
+// till (paid now minus installments added to it later) plus installments
+// received in the period, under the installment's own payment method.
+export const moneyReceived = (
+    sales: { id: string, total: number | string | null, paid: number | string | null, payment_method: string }[],
+    laterPaymentsBySale: Map<string, number>,
+    installments: { amount: number | string, payment_method: string }[],
+): { cash: number, nonCash: number } => {
+    let cash = 0
+    let nonCash = 0
+    const add = (method: string, amount: number) => {
+        if (method === 'cash') cash += amount
+        else nonCash += amount
+    }
+    for (const s of sales) {
+        const atTill = Math.min(Number(s.paid) || 0, Number(s.total) || 0) - (laterPaymentsBySale.get(s.id) || 0)
+        add(s.payment_method, Math.max(0, atTill))
+    }
+    for (const p of installments) add(p.payment_method, Number(p.amount) || 0)
+    return { cash, nonCash }
+}

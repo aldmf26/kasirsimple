@@ -8,7 +8,10 @@ import {
   localDayEndISO,
   localDayStartISO,
   nextTransactionNumber,
+  allocateDebtPayment,
   buildSalesTrend,
+  groupDebtsByCustomer,
+  moneyReceived,
   percentChange,
   previousPeriod,
 } from '../app/utils/helpers'
@@ -141,5 +144,47 @@ describe('percentChange', () => {
     expect(percentChange(112, 100)).toBe(12)
     expect(percentChange(80, 100)).toBe(-20)
     expect(percentChange(50, 0)).toBeNull()
+  })
+})
+
+describe('groupDebtsByCustomer', () => {
+  const tx = (id: string, created_at: string, total: number, paid: number, extra: Record<string, any> = {}) =>
+    ({ id, transaction_number: id, created_at, total, paid, ...extra })
+
+  it('groups by customer id, else by normalized name, biggest debt first', () => {
+    const groups = groupDebtsByCustomer([
+      tx('a', '2026-10-02', 10000, 4000, { customer_name: 'Bu Ani' }),
+      tx('b', '2026-10-01', 5000, 0, { customer_name: ' bu  ani ' }),
+      tx('c', '2026-10-03', 30000, 0, { customer_id: 'c1', customer_name: 'Pak Budi', customer_phone: '0812' }),
+      tx('d', '2026-10-04', 8000, 8000, { customer_name: 'Lunas' }),
+    ])
+    expect(groups.map(g => [g.name, g.remaining, g.transactions.map(t => t.id)])).toEqual([
+      ['Pak Budi', 30000, ['c']],
+      ['bu  ani', 11000, ['b', 'a']],
+    ])
+    expect(groups[0]!.phone).toBe('0812')
+    expect(groups[1]!.oldestAt).toBe('2026-10-01')
+  })
+})
+
+describe('allocateDebtPayment', () => {
+  it('pays the oldest nota first and stops when the money runs out', () => {
+    expect(allocateDebtPayment([{ id: 'a', remaining: 5000 }, { id: 'b', remaining: 6000 }], 7000)).toEqual([
+      { id: 'a', applied: 5000, remaining: 0 },
+      { id: 'b', applied: 2000, remaining: 4000 },
+    ])
+  })
+})
+
+describe('moneyReceived', () => {
+  it('counts installments when received and never twice', () => {
+    // Sale today: total 10k, 4k at the till, later +6k installment (paid is now 10k).
+    const sales = [{ id: 's1', total: 10000, paid: 10000, payment_method: 'cash' }]
+    const later = new Map([['s1', 6000]])
+    const installmentsToday = [
+      { amount: 6000, payment_method: 'transfer' }, // the one above, paid by transfer today
+      { amount: 2000, payment_method: 'cash' },     // for an older sale
+    ]
+    expect(moneyReceived(sales, later, installmentsToday)).toEqual({ cash: 6000, nonCash: 6000 })
   })
 })
