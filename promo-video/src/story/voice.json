@@ -1,0 +1,44 @@
+[
+  {
+    "id": "hook",
+    "text": "Nak, warungmu masih nyatat utang di buku?",
+    "file": "audio/vo/hook.wav",
+    "duration": 3.247
+  },
+  {
+    "id": "past",
+    "text": "Bukunya hilang, utangnya ikut hilang.",
+    "file": "audio/vo/past.wav",
+    "duration": 3.255
+  },
+  {
+    "id": "debt",
+    "text": "Pakai KasirOK. Utang tercatat, bisa dicicil.",
+    "file": "audio/vo/debt.wav",
+    "duration": 5.169
+  },
+  {
+    "id": "stock",
+    "text": "Barang mau habis? Dikasih tahu.",
+    "file": "audio/vo/stock.wav",
+    "duration": 3.323
+  },
+  {
+    "id": "offline",
+    "text": "Internet mati? Tetap bisa jualan.",
+    "file": "audio/vo/offline.wav",
+    "duration": 3.47
+  },
+  {
+    "id": "report",
+    "text": "Laporannya jelas, naik dua belas persen.",
+    "file": "audio/vo/report.wav",
+    "duration": 3.353
+  },
+  {
+    "id": "cta",
+    "text": "KasirOK. Nenek saja bisa.",
+    "file": "audio/vo/cta.wav",
+    "duration": 3.373
+  }
+]

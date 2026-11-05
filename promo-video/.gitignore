@@ -1,3 +1,4 @@
 node_modules
 out/*
 !out/kasirok-promo.mp4
+!out/kasirok-story.mp4
