@@ -17,9 +17,24 @@ const accountName = computed(
     "Pengguna",
 );
 
-onMounted(async () => {
-  // Store fetch akan di-trigger oleh initStoreAutoFetch di composable
-});
+// Badge on "Barang": refreshed when the store loads, on page change, and whenever
+// the shared product list is reloaded (after a sale, edit, or restock).
+const { products, getLowStockProducts, lowStockCount } = useProducts();
+watch(
+  [
+    () => store.value?.id,
+    () => route.path,
+    // Edits replace single items in place, so watch the values that matter.
+    () => products.value.map((p) => `${p.id}:${p.stock}:${p.min_stock}`).join(),
+  ],
+  ([storeId]) => {
+    if (storeId) getLowStockProducts();
+  },
+  { immediate: true },
+);
+const badgeFor = (to: string) =>
+  to === "/products" && lowStockCount.value > 0 ? lowStockCount.value : 0;
+const badgeText = (to: string) => (badgeFor(to) > 99 ? "99+" : String(badgeFor(to)));
 
 // Menu yang disederhanakan bahasanya
 const links = [
@@ -152,9 +167,15 @@ const handleLogout = async () => {
               ? 'bg-blue-50 text-blue-600 shadow-sm'
               : 'text-gray-400 hover:bg-gray-50 hover:text-gray-700'
           "
-          :title="link.label"
+          :title="badgeFor(link.to) ? `${link.label} – ${badgeFor(link.to)} perlu restock` : link.label"
         >
-          <UIcon :name="link.icon" class="w-6 h-6" />
+          <span class="relative">
+            <UIcon :name="link.icon" class="w-6 h-6" />
+            <span
+              v-if="badgeFor(link.to)"
+              class="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[11px] font-bold leading-[18px] text-center"
+            >{{ badgeText(link.to) }}</span>
+          </span>
           <span class="mt-1 text-[10px] font-bold leading-none">
             {{ link.label }}
           </span>
@@ -182,11 +203,18 @@ const handleLogout = async () => {
               : 'text-gray-400 active:bg-gray-50'
           "
         >
-          <UIcon
-            :name="link.icon"
-            class="w-6 h-6 mb-1"
-            :class="isActiveRoute(link.to) ? 'text-blue-600' : 'text-gray-400'"
-          />
+          <span class="relative mb-1">
+            <UIcon
+              :name="link.icon"
+              class="w-6 h-6"
+              :class="isActiveRoute(link.to) ? 'text-blue-600' : 'text-gray-400'"
+            />
+            <span
+              v-if="badgeFor(link.to)"
+              class="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[11px] font-bold leading-[18px] text-center"
+              :aria-label="`${badgeFor(link.to)} barang perlu restock`"
+            >{{ badgeText(link.to) }}</span>
+          </span>
           <span class="text-[10px] font-bold leading-none">
             {{ link.label }}
           </span>

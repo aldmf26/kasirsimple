@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatCurrency, formatDateTime } from "~/utils/helpers";
+import { formatStock, stockLevel } from "~/utils/pricing";
 
 definePageMeta({
   layout: "default",
@@ -324,9 +325,19 @@ const greeting = computed(() => {
               name="i-heroicons-exclamation-triangle-solid"
               class="text-orange-500 w-5 h-5"
             />
-            <h2 class="font-bold text-orange-800 text-sm uppercase">
+            <h2 class="font-bold text-orange-800 text-sm uppercase flex-1">
               Barang Mau Habis
+              <span v-if="lowStockItems.length" class="ml-1 normal-case font-semibold text-orange-600">
+                ({{ lowStockItems.length }} barang)
+              </span>
             </h2>
+            <NuxtLink
+              v-if="lowStockItems.length"
+              to="/products?stok=menipis"
+              class="text-xs text-orange-700 font-bold"
+            >
+              Lihat Semua
+            </NuxtLink>
           </div>
           <div class="p-2">
             <div
@@ -341,15 +352,16 @@ const greeting = computed(() => {
             </div>
             <div v-else class="divide-y divide-gray-50">
               <div
-                v-for="item in lowStockItems.slice(0, 3)"
+                v-for="item in lowStockItems.slice(0, 5)"
                 :key="item.id"
-                class="p-3 flex justify-between items-center"
+                class="p-3 flex justify-between items-center gap-3"
               >
-                <span class="font-medium text-gray-700">{{ item.name }}</span>
+                <span class="font-medium text-gray-700 truncate">{{ item.name }}</span>
                 <span
-                  class="bg-red-100 text-red-600 px-3 py-1 rounded-full font-bold text-xs"
+                  class="shrink-0 px-3 py-1 rounded-full font-bold text-xs"
+                  :class="stockLevel(item) === 'out' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'"
                 >
-                  Sisa: {{ item.stock }}
+                  {{ stockLevel(item) === 'out' ? 'Habis' : `Sisa ${formatStock(item.stock, item.stock_unit)}` }}
                 </span>
               </div>
             </div>

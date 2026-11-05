@@ -4,6 +4,8 @@ import {
   calcWeightSubtotal,
   formatStock,
   formatWeight,
+  needsRestock,
+  stockLevel,
   validateWeightStock,
 } from "~/utils/pricing";
 
@@ -649,6 +651,13 @@ const processPayment = async () => {
     return;
   }
 
+  // Stock level of each sold product before the sale, to warn when it drops low.
+  const levelBefore = new Map(
+    products.value
+      .filter((p: any) => cart.value.some((item) => item.product_id === p.id))
+      .map((p: any) => [p.id, stockLevel(p)]),
+  );
+
   // ✅ EDIT: Snapshot cart items SEBELUM createTransaction
   // Deep copy cart untuk menghindari referensi yang berubah
   const snapshotItems = JSON.parse(JSON.stringify(cart.value.map((item) => ({
@@ -738,6 +747,20 @@ const processPayment = async () => {
 
     // Refresh products
     await fetchProducts();
+
+    const nowLow = products.value.filter(
+      (p: any) => levelBefore.get(p.id) === "ok" && needsRestock(p),
+    );
+    if (nowLow.length) {
+      toast.add({
+        title: "Stok mau habis",
+        description: nowLow
+          .map((p: any) => (stockLevel(p) === "out" ? `${p.name} habis` : `${p.name} sisa ${formatStock(p.stock, p.stock_unit)}`))
+          .join(", "),
+        color: "warning",
+        icon: "i-heroicons-exclamation-triangle",
+      });
+    }
 
     // Tampilkan Struk
     showReceipt.value = true;

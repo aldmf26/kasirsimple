@@ -5,6 +5,9 @@ import {
   formatWeight,
   getReceiptItemParts,
   isValidWeight,
+  needsRestock,
+  sortByStockUrgency,
+  stockLevel,
   validateWeightStock,
   weightInKg
 } from '../app/utils/pricing'
@@ -167,5 +170,43 @@ describe('getReceiptItemParts', () => {
         sale_mode: 'weight'
       })
     ).toBe('0,750 kg Telur\n   0,750 kg × Rp 30.000/kg')
+  })
+})
+
+describe('stockLevel', () => {
+  it('uses min_stock as-is, including 0', () => {
+    expect(stockLevel({ has_stock: true, stock: 3, min_stock: 5 })).toBe('low')
+    expect(stockLevel({ has_stock: true, stock: 3, min_stock: 0 })).toBe('ok')
+    expect(stockLevel({ has_stock: true, stock: 0, min_stock: 0 })).toBe('out')
+  })
+
+  it('defaults to 500 gram for weight stock and 5 for pcs', () => {
+    expect(stockLevel({ has_stock: true, stock: 400, stock_unit: 'gram', min_stock: null })).toBe('low')
+    expect(stockLevel({ has_stock: true, stock: 600, stock_unit: 'gram', min_stock: null })).toBe('ok')
+    expect(stockLevel({ has_stock: true, stock: 5, stock_unit: 'pcs', min_stock: null })).toBe('low')
+  })
+
+  it('ignores products without stock tracking', () => {
+    expect(stockLevel({ has_stock: false, stock: 0 })).toBe('untracked')
+  })
+})
+
+describe('sortByStockUrgency', () => {
+  it('puts empty and relatively lowest first', () => {
+    const items = [
+      { id: 'a', stock: 4, min_stock: 5 },
+      { id: 'b', stock: 0, min_stock: 5 },
+      { id: 'c', stock: 300, min_stock: 500, stock_unit: 'gram' },
+    ]
+    expect(sortByStockUrgency(items).map(i => i.id)).toEqual(['b', 'c', 'a'])
+  })
+})
+
+describe('needsRestock', () => {
+  it('is true for low or empty tracked stock only', () => {
+    expect(needsRestock({ has_stock: true, stock: 0, min_stock: 5 })).toBe(true)
+    expect(needsRestock({ has_stock: true, stock: 3, min_stock: 5 })).toBe(true)
+    expect(needsRestock({ has_stock: true, stock: 9, min_stock: 5 })).toBe(false)
+    expect(needsRestock({ has_stock: false, stock: 0 })).toBe(false)
   })
 })

@@ -1,5 +1,6 @@
 import type { Database } from '~/types/database'
 import { logToActivity, ACTIVITY_TYPES } from '~/utils/activityLogger'
+import { needsRestock, sortByStockUrgency } from '~/utils/pricing'
 
 type Product = Database['public']['Tables']['products']['Row']
 type ProductInsert = Database['public']['Tables']['products']['Insert']
@@ -23,6 +24,8 @@ export const useProducts = () => {
 
     const products = useState<ProductWithCategory[]>('products', () => [])
     const loading = useState('products_loading', () => false)
+    // Count of low/empty stock products, shown as a badge on the "Barang" menu.
+    const lowStockCount = useState('low_stock_count', () => 0)
     const error = useState<string | null>('products_error', () => null)
 
     // Fetch all products for current store
@@ -95,24 +98,25 @@ export const useProducts = () => {
         }
     }
 
-    // Get low stock products
+    // Low or empty stock products, most urgent first. Also refreshes lowStockCount.
+    // PostgREST cannot compare two columns, so filter by min_stock here.
     const getLowStockProducts = async () => {
         if (!store.value) return []
 
         try {
-            console.log('📦 Fetching low stock products for store:', store.value.id)
-
             const { data, error: fetchError } = await supabase
                 .from('products')
-                .select('*')
+                .select('id, name, stock, min_stock, stock_unit, has_stock, unit')
                 .eq('store_id', store.value.id)
                 .eq('is_active', true)
                 .eq('has_stock', true)
 
             if (fetchError) throw fetchError
 
-            // Filter products where stock <= min_stock
-            const lowStockProducts = (data || []).filter(p => p.stock <= (p.min_stock || 5))
+            const lowStockProducts = sortByStockUrgency(
+                (data || []).filter(needsRestock)
+            )
+            lowStockCount.value = lowStockProducts.length
             return lowStockProducts
         } catch (e: any) {
             error.value = e.message
@@ -388,6 +392,7 @@ export const useProducts = () => {
         fetchProducts,
         searchProducts,
         getLowStockProducts,
+        lowStockCount,
         createProduct,
         updateProduct,
         deleteProduct,

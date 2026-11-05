@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { formatCurrency } from "~/utils/helpers";
-import { formatStock, formatWeight } from "~/utils/pricing";
+import { defaultMinStock, formatStock, formatWeight, needsRestock, stockLevel } from "~/utils/pricing";
 
 definePageMeta({
   layout: "default",
@@ -389,7 +389,8 @@ const categoryModal = reactive({
 });
 const searchQuery = ref("");
 const selectedCategory = ref("all");
-const selectedStockStatus = ref("all");
+// "?stok=menipis" (from the Beranda low-stock card) opens with the restock filter.
+const selectedStockStatus = ref(useRoute().query.stok === "menipis" ? "attention" : "all");
 const sortBy = ref("newest");
 
 // Mobile overflow menu state
@@ -430,11 +431,11 @@ const filteredProducts = computed(() => {
     if (selectedStockStatus.value === "available") {
       result = result.filter((p) => p.stock > 0);
     } else if (selectedStockStatus.value === "low") {
-      result = result.filter(
-        (p) => p.stock > 0 && p.stock <= (p.min_stock || 5),
-      );
+      result = result.filter((p) => stockLevel(p) === "low");
     } else if (selectedStockStatus.value === "out") {
-      result = result.filter((p) => p.stock === 0);
+      result = result.filter((p) => stockLevel(p) === "out");
+    } else if (selectedStockStatus.value === "attention") {
+      result = result.filter(needsRestock);
     }
   }
 
@@ -469,13 +470,13 @@ const totalCategories = computed(() => {
 
 const lowStockCount = computed(() => {
   return (
-    products.value?.filter((p) => p.stock <= (p.min_stock || 5) && p.stock > 0)
+    products.value?.filter((p) => stockLevel(p) === "low")
       .length || 0
   );
 });
 
 const outOfStockCount = computed(() => {
-  return products.value?.filter((p) => p.stock === 0).length || 0;
+  return products.value?.filter((p) => stockLevel(p) === "out").length || 0;
 });
 
 const modalOpen = ref(false);
@@ -490,6 +491,7 @@ const form = reactive({
   buy_price: 0,
   sell_price: 0,
   stock: 0,
+  min_stock: defaultMinStock("pcs"),
   unit: "pcs",
   sale_mode: "unit" as "unit" | "weight",
   stock_unit: "pcs" as "pcs" | "gram",
@@ -509,6 +511,7 @@ const setSaleMode = (mode: "unit" | "weight") => {
   if (form.sale_mode === mode) return;
   form.sale_mode = mode;
   form.stock = 0;
+  form.min_stock = defaultMinStock(mode === "weight" ? "gram" : "pcs");
   if (mode === "weight") {
     form.stock_unit = "gram";
     if (form.unit === "pcs") form.unit = "kg";
@@ -533,6 +536,7 @@ const modalCategoryOptions = computed(() =>
 const stockStatusOptions = [
   { label: "Semua Status Stok", value: "all" },
   { label: "Tersedia", value: "available" },
+  { label: "Perlu Restock", value: "attention" },
   { label: "Stok Rendah", value: "low" },
   { label: "Habis", value: "out" },
 ];
@@ -553,6 +557,7 @@ const openAdd = () => {
   form.buy_price = 0;
   form.sell_price = 0;
   form.stock = 0;
+  form.min_stock = defaultMinStock("pcs");
   form.unit = "pcs";
   form.sale_mode = "unit";
   form.stock_unit = "pcs";
@@ -575,6 +580,7 @@ const openEdit = (product) => {
   form.unit = product.unit || "pcs";
   form.sale_mode = product.sale_mode === "weight" ? "weight" : "unit";
   form.stock_unit = product.stock_unit === "gram" ? "gram" : "pcs";
+  form.min_stock = product.min_stock ?? defaultMinStock(form.stock_unit);
   form.image_url = product.image_url || "";
   form.is_favorite = product.is_favorite || false;
   selectedProductFile.value = null;
@@ -654,6 +660,7 @@ const save = async () => {
         buy_price: form.buy_price,
         price: form.sell_price,
         stock: form.stock,
+        min_stock: Math.max(0, Number(form.min_stock) || 0),
         unit: form.unit,
         sale_mode: form.sale_mode,
         stock_unit: form.stock_unit,
@@ -669,6 +676,7 @@ const save = async () => {
         buy_price: form.buy_price,
         price: form.sell_price,
         stock: form.stock,
+        min_stock: Math.max(0, Number(form.min_stock) || 0),
         unit: form.unit,
         sale_mode: form.sale_mode,
         stock_unit: form.stock_unit,
@@ -846,7 +854,12 @@ watch(
       </div>
 
       <!-- Stok Menipis (Pengganti Rincian Kategori) -->
-      <div class="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl shadow-sm border border-gray-100">
+      <button
+        type="button"
+        class="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl shadow-sm border border-gray-100 hover:border-orange-200 transition-colors"
+        title="Tampilkan barang yang perlu restock"
+        @click="selectedStockStatus = 'attention'"
+      >
         <div class="flex items-center justify-center md:justify-between text-center md:text-left">
           <div class="min-w-0">
             <p
@@ -876,7 +889,7 @@ watch(
             />
           </div>
         </div>
-      </div>
+      </button>
     </div>
 
     <!-- Alert Box (Replaced with AppAlert) -->
@@ -1047,11 +1060,9 @@ watch(
                 <span
                   class="font-bold"
                   :class="{
-                    'text-red-600': product.stock === 0,
-                    'text-orange-600':
-                      product.stock > 0 &&
-                      product.stock <= (product.min_stock || 5),
-                    'text-gray-900': product.stock > (product.min_stock || 5),
+                    'text-red-600': stockLevel(product) === 'out',
+                    'text-orange-600': stockLevel(product) === 'low',
+                    'text-gray-900': ['ok', 'untracked'].includes(stockLevel(product)),
                   }"
                 >
                   {{ formatStock(product.stock, product.stock_unit) }}
@@ -1148,11 +1159,9 @@ watch(
               <span
                 class="flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded-full leading-tight"
                 :class="{
-                  'bg-red-100 text-red-700': product.stock === 0,
-                  'bg-orange-100 text-orange-700':
-                    product.stock > 0 &&
-                    product.stock <= (product.min_stock || 5),
-                  'bg-gray-100 text-gray-700': product.stock > (product.min_stock || 5),
+                  'bg-red-100 text-red-700': stockLevel(product) === 'out',
+                  'bg-orange-100 text-orange-700': stockLevel(product) === 'low',
+                  'bg-gray-100 text-gray-700': ['ok', 'untracked'].includes(stockLevel(product)),
                 }"
               >
                 Stok {{ formatStock(product.stock, product.stock_unit) }}
@@ -1414,6 +1423,23 @@ watch(
                 Stok disimpan dalam gram ({{ formatWeight(form.stock || 0) }}).
               </p>
             </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-bold text-gray-700 mb-2">
+              Ingatkan jika stok tinggal{{ isWeightForm ? " (gram)" : "" }}
+            </label>
+            <input
+              v-model.number="form.min_stock"
+              type="number"
+              min="0"
+              inputmode="numeric"
+              class="w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p class="text-xs text-gray-500 mt-1">
+              Muncul di "Barang Mau Habis" saat stok ≤
+              {{ formatStock(Math.max(0, Number(form.min_stock) || 0), form.stock_unit) }}. Isi 0 untuk diingatkan hanya saat habis.
+            </p>
           </div>
 
           <div>

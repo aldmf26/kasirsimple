@@ -131,3 +131,36 @@ export const formatStock = (stock: number, stockUnit?: string | null): string =>
   stockUnit === 'gram'
     ? formatWeight(stock)
     : `${toNumber(stock).toLocaleString('id-ID')} ${stockUnit || 'pcs'}`
+
+export type StockLevel = 'untracked' | 'out' | 'low' | 'ok'
+
+/** Default warning threshold in the product's stock unit: 5 pcs or 500 gram. */
+export const defaultMinStock = (stockUnit?: string | null): number =>
+  stockUnit === 'gram' ? 500 : 5
+
+export const lowStockThreshold = (product: { min_stock?: number | null, stock_unit?: string | null }): number =>
+  product.min_stock ?? defaultMinStock(product.stock_unit)
+
+/** 'low' = at or below min_stock but not empty; min_stock 0 means only warn when empty. */
+export const stockLevel = (product: {
+  has_stock?: boolean | null
+  stock?: number | null
+  min_stock?: number | null
+  stock_unit?: string | null
+}): StockLevel => {
+  if (product.has_stock === false) return 'untracked'
+  const stock = toNumber(product.stock)
+  if (stock <= 0) return 'out'
+  return stock <= lowStockThreshold(product) ? 'low' : 'ok'
+}
+
+/** Low or empty tracked stock: what "Barang Mau Habis" and the menu badge count. */
+export const needsRestock = (product: Parameters<typeof stockLevel>[0]): boolean => {
+  const level = stockLevel(product)
+  return level === 'low' || level === 'out'
+}
+
+/** Most urgent first: empty, then lowest stock relative to its threshold. */
+export const sortByStockUrgency = <T extends { stock?: number | null, min_stock?: number | null, stock_unit?: string | null }>(items: T[]): T[] =>
+  [...items].sort((a, b) =>
+    toNumber(a.stock) / Math.max(1, lowStockThreshold(a)) - toNumber(b.stock) / Math.max(1, lowStockThreshold(b)))
