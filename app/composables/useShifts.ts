@@ -197,7 +197,7 @@ export const useShifts = () => {
         // Fetch transactions cash total during shift
         const { data: txs } = await (supabase as any)
             .from('transactions')
-            .select('total')
+            .select('total, paid')
             .eq('store_id', store.value.id)
             .eq('payment_method', 'cash')
             .gte('created_at', startTime)
@@ -211,7 +211,10 @@ export const useShifts = () => {
             .gte('created_at', startTime)
             .lte('created_at', endTime);
 
-        const totalCashSales = (txs || []).reduce((sum: number, t: any) => sum + (t.total || 0), 0);
+        const totalCashSales = (txs || []).reduce((sum: number, t: any) => {
+            const actualCash = Math.min(Number(t.paid ?? t.total ?? 0), Number(t.total ?? 0));
+            return sum + actualCash;
+        }, 0);
         const totalExpenses = (exps || []).reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
 
         return (shift.opening_balance || 0) + totalCashSales - totalExpenses;

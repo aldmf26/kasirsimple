@@ -70,8 +70,22 @@ onMounted(async () => {
               {{ transaction.store.phone }}
             </p>
             
-            <div class="inline-flex items-center px-4 py-1.5 bg-gray-50 rounded-full text-xs font-bold text-gray-500 uppercase tracking-widest">
-              NOTA DIGITAL
+            <div class="flex items-center justify-center gap-2">
+              <div class="inline-flex items-center px-4 py-1.5 bg-gray-50 rounded-full text-xs font-bold text-gray-500 uppercase tracking-widest">
+                NOTA DIGITAL
+              </div>
+              <span
+                v-if="Number(transaction.paid ?? transaction.total) < Number(transaction.total)"
+                class="inline-flex items-center px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-black uppercase tracking-wider"
+              >
+                ⚠️ BELUM LUNAS
+              </span>
+              <span
+                v-else
+                class="inline-flex items-center px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-black uppercase tracking-wider"
+              >
+                ✓ LUNAS
+              </span>
             </div>
           </div>
 
@@ -134,11 +148,22 @@ onMounted(async () => {
             </div>
             <div class="flex justify-between text-sm pt-2 border-t border-gray-100 italic">
               <span class="text-gray-500">Dibayar</span>
-              <span class="text-gray-900 font-bold">{{ formatCurrency(transaction.paid || transaction.total) }}</span>
+              <span class="text-gray-900 font-bold">{{ formatCurrency(transaction.paid ?? transaction.total) }}</span>
             </div>
-            <div v-if="(transaction.paid || transaction.total) - transaction.total > 0" class="flex justify-between text-sm italic">
+            <!-- Sisa Hutang jika ada -->
+            <div
+              v-if="Number(transaction.paid ?? transaction.total) < Number(transaction.total)"
+              class="flex justify-between text-sm font-black text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-200"
+            >
+              <span>SISA HUTANG</span>
+              <span>{{ formatCurrency(Number(transaction.total) - Number(transaction.paid ?? 0)) }}</span>
+            </div>
+            <div
+              v-else-if="Number(transaction.paid ?? transaction.total) - Number(transaction.total) > 0"
+              class="flex justify-between text-sm italic"
+            >
               <span class="text-gray-500">Kembali</span>
-              <span class="text-gray-900 font-bold">{{ formatCurrency((transaction.paid || transaction.total) - transaction.total) }}</span>
+              <span class="text-gray-900 font-bold">{{ formatCurrency(Number(transaction.paid ?? transaction.total) - Number(transaction.total)) }}</span>
             </div>
           </div>
 

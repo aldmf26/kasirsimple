@@ -7,7 +7,7 @@ definePageMeta({
 });
 
 const { store, printerSettings, fetchStore } = useStore();
-const { transactions, loading, fetchTransactions, deleteTransaction, returnTransaction } =
+const { transactions, loading, fetchTransactions, deleteTransaction, returnTransaction, settleDebtTransaction } =
   useTransactions();
 const { products, fetchProducts } = useProducts();
 const {
@@ -34,6 +34,7 @@ const showDeleteModal = ref(false);
 const showReturnModal = ref(false);
 const deleteLoading = ref(false);
 const returnLoading = ref(false);
+const settlingId = ref<string | null>(null);
 const showAddExpenseModal = ref(false);
 const submitExpenseLoading = ref(false);
 
@@ -354,6 +355,37 @@ const dailyReport = computed(() => {
 const viewReceipt = (transaction: any) => {
   selectedTransaction.value = transaction;
   showReceiptModal.value = true;
+};
+
+// Lunasi Hutang
+const handleSettle = async (transaction: any) => {
+  const sisa = (Number(transaction.total) || 0) - (Number(transaction.paid) || 0);
+  const name = transaction.customer_name || 'pelanggan ini';
+  if (!confirm(`Lunasi sisa hutang ${formatCurrency(sisa)} untuk ${name}?`)) return;
+
+  settlingId.value = transaction.id;
+  try {
+    const updated = await settleDebtTransaction(transaction.id);
+    // Sync ke selectedTransaction jika modal sedang buka
+    if (selectedTransaction.value && (selectedTransaction.value as any).id === transaction.id) {
+      selectedTransaction.value = { ...(selectedTransaction.value as any), ...updated };
+    }
+    toast.add({
+      title: 'Hutang Dilunasi ✅',
+      description: `Sisa hutang ${name} sebesar ${formatCurrency(sisa)} berhasil dilunasi!`,
+      color: 'success',
+      icon: 'i-heroicons-check-circle',
+    });
+  } catch (e: any) {
+    toast.add({
+      title: 'Gagal',
+      description: e.message || 'Gagal melunasi transaksi',
+      color: 'error',
+      icon: 'i-heroicons-x-circle',
+    });
+  } finally {
+    settlingId.value = null;
+  }
 };
 
 // Delete Transaction
@@ -1383,6 +1415,18 @@ watch(
                   formatCurrency(t.total)
                 }}</span>
                   <div class="flex flex-wrap items-center gap-2">
+                    <!-- Tombol Lunasi (hanya muncul kalau paid < total) -->
+                    <UButton
+                      v-if="Number(t.paid) < Number(t.total)"
+                      label="Lunasi"
+                      icon="i-heroicons-check-circle"
+                      size="sm"
+                      color="amber"
+                      variant="solid"
+                      :loading="settlingId === t.id"
+                      @click="handleSettle(t)"
+                      class="rounded-xl font-bold"
+                    />
                     <UButton
                       label="Detail"
                       icon="i-heroicons-eye"
@@ -1863,6 +1907,34 @@ watch(
         <div
           class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto flex flex-col"
         >
+          <!-- Banner Hutang (jika belum lunas) -->
+          <div
+            v-if="Number((selectedTransaction as any).paid) < Number((selectedTransaction as any).total)"
+            class="mb-4 p-4 rounded-2xl bg-amber-50 border-2 border-amber-300"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-[10px] font-black text-amber-700 uppercase tracking-widest">⚠️ BELUM LUNAS (KASBON)</p>
+                <p class="text-2xl font-black text-amber-800 mt-0.5">
+                  {{ formatCurrency((selectedTransaction as any).total - (selectedTransaction as any).paid) }}
+                </p>
+                <p class="text-xs text-amber-700 mt-0.5 font-medium">
+                  Pelanggan: <span class="font-bold">{{ (selectedTransaction as any).customer_name || 'Umum' }}</span>
+                </p>
+              </div>
+              <UButton
+                color="amber"
+                variant="solid"
+                icon="i-heroicons-check-circle"
+                class="font-bold shrink-0"
+                :loading="settlingId === (selectedTransaction as any).id"
+                @click="handleSettle(selectedTransaction)"
+              >
+                Lunasi
+              </UButton>
+            </div>
+          </div>
+
           <!-- Thermal Printer Receipt Component -->
           <div class="mb-4">
             <ThermalPrinterReceipt

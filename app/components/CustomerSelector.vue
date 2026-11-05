@@ -87,7 +87,11 @@ watch(() => props.modelValue, (val) => {
 
 onMounted(async () => {
   if (storeSettings.value?.customer_enabled !== false) {
-    await fetchCustomers(true)
+    try {
+      await fetchCustomers(true)
+    } catch (e) {
+      // Graceful fallback if table is not yet migrated
+    }
   }
 })
 </script>

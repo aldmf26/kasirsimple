@@ -118,19 +118,38 @@
           }})</span
         >
         <span>{{
-          formatCurrency(transaction.paid_amount || transaction.total)
+          formatCurrency(transaction.paid_amount ?? transaction.paid ?? transaction.total)
         }}</span>
       </div>
 
-      <!-- Kembali/Change -->
-      <div class="flex justify-between">
-        <span>KEMBALI</span>
+      <!-- Kembali atau Sisa Hutang -->
+      <div
+        v-if="Number(transaction.paid_amount ?? transaction.paid ?? transaction.total) < Number(transaction.total)"
+        class="flex justify-between text-amber-700"
+      >
+        <span>SISA HUTANG</span>
         <span>{{
           formatCurrency(
-            (transaction.paid_amount || transaction.total) - transaction.total,
+            Number(transaction.total) - Number(transaction.paid_amount ?? transaction.paid ?? 0)
           )
         }}</span>
       </div>
+      <div v-else class="flex justify-between">
+        <span>KEMBALI</span>
+        <span>{{
+          formatCurrency(
+            Math.max(0, Number(transaction.paid_amount ?? transaction.paid ?? transaction.total) - Number(transaction.total))
+          )
+        }}</span>
+      </div>
+    </div>
+
+    <!-- Status Belum Lunas Banner -->
+    <div
+      v-if="Number(transaction.paid_amount ?? transaction.paid ?? transaction.total) < Number(transaction.total)"
+      class="mt-3 py-1 text-center font-bold text-amber-800 bg-amber-50 rounded"
+    >
+      *** BELUM LUNAS ***
     </div>
 
     <div class="mt-6 text-center text-[11px]">

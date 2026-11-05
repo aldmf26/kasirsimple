@@ -266,10 +266,6 @@ export const useTransactions = () => {
             const total = subtotalAfterDiscount + tax + ppn
             const change = paymentData.paid - total
 
-            if (paymentData.payment_method === 'cash' && change < 0) {
-                throw new Error('Pembayaran kurang')
-            }
-
             // Re-read stock right before saving, so a stale product list cannot oversell.
             // Weight sales allow several lines for the same product, so aggregate first.
             const stockSnapshot = new Map<string, { stock: number; stock_unit: string }>()
@@ -311,6 +307,15 @@ export const useTransactions = () => {
 
             const transactionNumber = await generateTransactionNumber()
 
+            const isDebt = paymentData.paid < total
+            const debtAmount = isDebt ? Math.max(0, total - paymentData.paid) : 0
+
+            let finalNotes = paymentData.notes || ""
+            if (isDebt) {
+                const debtTag = `[HUTANG: Rp ${debtAmount.toLocaleString("id-ID")}]`
+                finalNotes = finalNotes ? `${finalNotes} | ${debtTag}` : debtTag
+            }
+
             // Build insert object dengan optional fields
             const transactionInsert: any = {
                 store_id: store.value.id,
@@ -320,11 +325,11 @@ export const useTransactions = () => {
                 discount_type: paymentData.discount_type || 'nominal',
                 total,
                 paid: paymentData.paid,
-                change,
+                change: isDebt ? 0 : change,
                 payment_method: paymentData.payment_method,
                 customer_name: paymentData.customer_name || null,
                 customer_phone: paymentData.customer_phone || null,
-                notes: paymentData.notes || null,
+                notes: finalNotes || null,
                 created_by: user.value?.id
             }
 
@@ -518,23 +523,55 @@ export const useTransactions = () => {
 
             const { data, error: fetchError } = await supabase
                 .from('transactions')
-                .select('total, payment_method')
+                .select('id, total, paid, change, payment_method, notes, customer_name, created_at')
                 .eq('store_id', store.value.id)
                 .gte('created_at', startOfDay)
                 .lte('created_at', endOfDay)
 
             if (fetchError) throw fetchError
 
-            const totalSales = (data || []).reduce((sum, t) => sum + t.total, 0)
-            const totalTransactions = (data || []).length
-            const cashSales = (data || []).filter(t => t.payment_method === 'cash').reduce((sum, t) => sum + t.total, 0)
-            const nonCashSales = totalSales - cashSales
+            const activeTransactions = (data || []).filter((t: any) => !(t.notes || '').includes('[RETUR]'))
+
+            let totalSales = 0 // Total nilai faktur (omzet barang)
+            let realCash = 0 // Duit fisik / kas tunai nyata di kasir
+            let realNonCash = 0 // Uang non-tunai (transfer/qris) yang diterima
+            let totalDebt = 0 // Sisa hutang/kasbon belum lunas
+            let debtCount = 0 // Jumlah transaksi belum lunas
+
+            for (const t of activeTransactions) {
+                const total = Number(t.total) || 0
+                const paid = t.paid != null ? Number(t.paid) : total
+
+                totalSales += total
+
+                // Uang riil yang diterima (maksimal total nilai faktur)
+                const actualReceived = Math.min(paid, total)
+
+                if (t.payment_method === 'cash') {
+                    realCash += actualReceived
+                } else {
+                    realNonCash += actualReceived
+                }
+
+                if (paid < total) {
+                    totalDebt += Math.max(0, total - paid)
+                    debtCount += 1
+                }
+            }
+
+            const totalReceived = realCash + realNonCash
+            const totalTransactions = activeTransactions.length
 
             return {
                 totalSales,
                 totalTransactions,
-                cashSales,
-                nonCashSales,
+                totalReceived,
+                realCash,
+                realNonCash,
+                cashSales: realCash,
+                nonCashSales: realNonCash,
+                totalDebt,
+                debtCount,
                 averageTransaction: totalTransactions > 0 ? totalSales / totalTransactions : 0
             }
         } catch (e: any) {
@@ -769,6 +806,74 @@ export const useTransactions = () => {
         }
     }
 
+    const settleDebtTransaction = async (transactionId: string) => {
+        if (!store.value) throw new Error('Store not found')
+        loading.value = true
+        error.value = null
+
+        try {
+            let trx = transactions.value.find(t => t.id === transactionId)
+            if (!trx) {
+                const { data: dbTrx, error: findErr } = await (supabase as any)
+                    .from('transactions')
+                    .select('*')
+                    .eq('id', transactionId)
+                    .single()
+                if (findErr || !dbTrx) throw new Error('Transaksi tidak ditemukan')
+                trx = dbTrx
+            }
+
+            const total = Number(trx.total) || 0
+            const currentPaid = Number(trx.paid) || 0
+            const remaining = total - currentPaid
+            if (remaining <= 0) throw new Error('Transaksi ini sudah lunas')
+
+            const now = new Date()
+            const timeStr = now.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+            
+            // Bersihkan tag [HUTANG: ...] jika ada dan ganti dengan [LUNAS ...]
+            let updatedNotes = trx.notes || ""
+            if (updatedNotes.includes('[HUTANG')) {
+                updatedNotes = updatedNotes.replace(/\[HUTANG:[^\]]*\]/g, `[LUNAS ${timeStr}]`).trim()
+            } else {
+                updatedNotes = updatedNotes ? `${updatedNotes} | [LUNAS ${timeStr}]` : `[LUNAS ${timeStr}]`
+            }
+
+            // Update in Supabase
+            // @ts-ignore
+            const { data, error: updateErr } = await supabase
+                .from('transactions')
+                .update({
+                    paid: total,
+                    change: 0,
+                    notes: updatedNotes,
+                })
+                .eq('id', transactionId)
+                .select()
+                .single()
+
+            if (updateErr) throw updateErr
+
+            // Update local state
+            const idx = transactions.value.findIndex(t => t.id === transactionId)
+            if (idx > -1) {
+                transactions.value[idx] = {
+                    ...transactions.value[idx],
+                    paid: total,
+                    change: 0,
+                    notes: updatedNotes
+                }
+            }
+
+            return transactions.value[idx]
+        } catch (e: any) {
+            error.value = e.message
+            throw e
+        } finally {
+            loading.value = false
+        }
+    }
+
     return {
         transactions,
         cart,
@@ -787,6 +892,7 @@ export const useTransactions = () => {
         getTodaySummary,
         deleteTransaction,
         getTransactionByNumber,
-        returnTransaction
+        returnTransaction,
+        settleDebtTransaction
     }
 }
