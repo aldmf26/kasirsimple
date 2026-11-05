@@ -128,16 +128,16 @@ export const localDateKey = (date: Date | string = new Date()): string => {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-// ISO bounds (UTC instants) of local calendar days, for created_at filters.
-export const localDayStartISO = (dateKey: string): string => {
+// "YYYY-MM-DD" -> local Date at the given time of day.
+const parseDateKey = (dateKey: string, h = 0, min = 0, sec = 0, ms = 0): Date => {
     const [y, m, d] = dateKey.split('-').map(Number) as [number, number, number]
-    return new Date(y, m - 1, d, 0, 0, 0, 0).toISOString()
+    return new Date(y, m - 1, d, h, min, sec, ms)
 }
 
-export const localDayEndISO = (dateKey: string): string => {
-    const [y, m, d] = dateKey.split('-').map(Number) as [number, number, number]
-    return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString()
-}
+// ISO bounds (UTC instants) of local calendar days, for created_at filters.
+export const localDayStartISO = (dateKey: string): string => parseDateKey(dateKey).toISOString()
+
+export const localDayEndISO = (dateKey: string): string => parseDateKey(dateKey, 23, 59, 59, 999).toISOString()
 
 // Returned transactions use the status column; the "[RETUR]" notes prefix is
 // only a fallback for rows read before migration 023 ran.
@@ -181,4 +181,62 @@ export const chunkArray = <T>(items: T[], size: number): T[][] => {
     const chunks: T[][] = []
     for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size))
     return chunks
+}
+
+export interface SalesTrendRow {
+    key: string        // YYYY-MM-DD or YYYY-MM
+    label: string      // short axis label: "26/10" or "Okt"
+    fullLabel: string  // "Senin, 26 Okt 2026" or "Oktober 2026"
+    sales: number
+}
+
+// Longer ranges are charted per month so bars stay readable on a phone.
+const TREND_MONTHLY_AFTER_DAYS = 62
+const DAY_MS = 86_400_000
+
+// Sales per local day (or per month for ranges over TREND_MONTHLY_AFTER_DAYS) across the whole
+// selected range, with 0 for periods without sales so the trend is not compressed.
+export const buildSalesTrend = (
+    transactions: { created_at: string, total: number | string | null }[],
+    startKey: string,
+    endKey: string,
+): { unit: 'day' | 'month', rows: SalesTrendRow[] } => {
+    const start = parseDateKey(startKey)
+    const end = parseDateKey(endKey)
+    const days = Math.round((end.getTime() - start.getTime()) / DAY_MS) + 1
+    const unit: 'day' | 'month' = days > TREND_MONTHLY_AFTER_DAYS ? 'month' : 'day'
+    const keyOf = (date: Date | string) => localDateKey(date).slice(0, unit === 'day' ? 10 : 7)
+
+    const totals = new Map<string, number>()
+    for (const t of transactions) {
+        const key = keyOf(t.created_at)
+        totals.set(key, (totals.get(key) || 0) + (Number(t.total) || 0))
+    }
+
+    const multiYear = start.getFullYear() !== end.getFullYear()
+    const rows: SalesTrendRow[] = []
+    if (unit === 'day') {
+        for (let i = 0; i < Math.max(days, 0); i++) {
+            const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)
+            const key = keyOf(d)
+            rows.push({
+                key,
+                label: `${d.getDate()}/${d.getMonth() + 1}`,
+                fullLabel: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }),
+                sales: totals.get(key) || 0,
+            })
+        }
+    } else {
+        for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+            const key = keyOf(d)
+            const month = d.toLocaleDateString('id-ID', { month: 'short' })
+            rows.push({
+                key,
+                label: multiYear ? `${month} ${String(d.getFullYear()).slice(2)}` : month,
+                fullLabel: d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
+                sales: totals.get(key) || 0,
+            })
+        }
+    }
+    return { unit, rows }
 }

@@ -8,6 +8,7 @@ import {
   localDayEndISO,
   localDayStartISO,
   nextTransactionNumber,
+  buildSalesTrend,
 } from '../app/utils/helpers'
 
 describe('localDateKey', () => {
@@ -72,5 +73,44 @@ describe('fetchAllRows / chunkArray', () => {
 
   it('splits arrays', () => {
     expect(chunkArray([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]])
+  })
+})
+
+describe('buildSalesTrend', () => {
+  const at = (y: number, m: number, d: number, h = 10) => new Date(y, m - 1, d, h).toISOString()
+
+  it('orders days chronologically and fills days without sales', () => {
+    const { unit, rows } = buildSalesTrend(
+      [
+        { created_at: at(2026, 10, 26), total: 3000 },
+        { created_at: at(2026, 10, 24), total: 1000 },
+        { created_at: at(2026, 10, 24), total: 500 },
+      ],
+      '2026-10-24',
+      '2026-10-26',
+    )
+    expect(unit).toBe('day')
+    expect(rows.map(r => [r.label, r.sales])).toEqual([['24/10', 1500], ['25/10', 0], ['26/10', 3000]])
+  })
+
+  it('groups long ranges by month, including Indonesian month names like Okt/Mei', () => {
+    const { unit, rows } = buildSalesTrend(
+      [
+        { created_at: at(2026, 10, 17), total: 2000 },
+        { created_at: at(2026, 5, 3), total: 1000 },
+      ],
+      '2026-01-01',
+      '2026-11-05',
+    )
+    expect(unit).toBe('month')
+    expect(rows).toHaveLength(11)
+    expect(rows[4]).toMatchObject({ key: '2026-05', sales: 1000 })
+    expect(rows[9]).toMatchObject({ key: '2026-10', sales: 2000 })
+    expect(rows[0]!.sales).toBe(0)
+  })
+
+  it('counts a sale just after local midnight on that local day', () => {
+    const { rows } = buildSalesTrend([{ created_at: at(2026, 11, 5, 0), total: 700 }], '2026-11-04', '2026-11-05')
+    expect(rows.map(r => r.sales)).toEqual([0, 700])
   })
 })

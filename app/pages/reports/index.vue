@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatCurrency, formatDateTime, localDateKey, isReturnedTransaction } from "~/utils/helpers";
+import { buildSalesTrend, formatCurrency, formatDateTime, localDateKey, isReturnedTransaction } from "~/utils/helpers";
 import { formatWeight, weightInKg } from "~/utils/pricing";
 
 definePageMeta({
@@ -11,7 +11,6 @@ const { transactions, loading, fetchTransactions, deleteTransaction, returnTrans
   useTransactions();
 const { products, fetchProducts } = useProducts();
 const {
-  getSalesByDate,
   getSalesByPaymentMethod,
   getTopSellingProducts,
   getAllItemsSold,
@@ -171,13 +170,14 @@ const activeTransactions = computed(() =>
   transactions.value.filter((t: any) => !isReturnedTransaction(t)),
 );
 
-const salesTrendRows = computed(() => {
-  const { dates, sales } = getSalesByDate(activeTransactions.value);
-  return dates.map((date: string, index: number) => ({
-    date,
-    sales: Number(sales[index]) || 0,
-  }));
-});
+// Range of the data currently loaded (set in loadData), not the unsaved date inputs.
+const trendRange = ref({ start: localDateKey(), end: localDateKey() });
+const salesTrend = computed(() =>
+  buildSalesTrend(activeTransactions.value, trendRange.value.start, trendRange.value.end),
+);
+const salesTrendRows = computed(() => salesTrend.value.rows);
+// Tapped bar on touch screens (hover does not exist there).
+const selectedTrendKey = ref<string | null>(null);
 
 const maxTrendSales = computed(() =>
   Math.max(...salesTrendRows.value.map((item) => item.sales), 1),
@@ -204,10 +204,11 @@ const formatCompactCurrency = (value: number) =>
   }).format(value);
 
 const bestSalesDay = computed(() => {
-  return salesTrendRows.value.reduce(
-    (best, item) => (item.sales > best.sales ? item : best),
-    { date: "-", sales: 0 },
+  const best = salesTrendRows.value.reduce(
+    (top, item) => (item.sales > top.sales ? item : top),
+    { fullLabel: "-", sales: 0 } as { fullLabel: string, sales: number },
   );
+  return { date: best.sales > 0 ? best.fullLabel : "-", sales: best.sales };
 });
 
 const totalItemsSold = computed(() =>
@@ -566,6 +567,7 @@ const loadData = async () => {
 
   if (store.value) {
     loading.value = true;
+    selectedTrendKey.value = null;
     try {
       await Promise.all([
         fetchTransactions({
@@ -583,6 +585,7 @@ const loadData = async () => {
           endDate: filters.endDate
         }),
       ]);
+      trendRange.value = { start: filters.startDate, end: filters.endDate };
     } catch (e: any) {
     } finally {
       loading.value = false;
@@ -1007,7 +1010,7 @@ watch(
           <UButton
             size="xs"
             :color="activeFilter === 'today' ? 'primary' : 'neutral'"
-            variant="soft"
+            :variant="activeFilter === 'today' ? 'solid' : 'outline'"
             @click="setFilter('today')"
             class="whitespace-nowrap flex-none"
             >Hari Ini</UButton
@@ -1015,7 +1018,7 @@ watch(
           <UButton
             size="xs"
             :color="activeFilter === 'week' ? 'primary' : 'neutral'"
-            variant="soft"
+            :variant="activeFilter === 'week' ? 'solid' : 'outline'"
             @click="setFilter('week')"
             class="whitespace-nowrap flex-none"
             >7 Hari</UButton
@@ -1023,7 +1026,7 @@ watch(
           <UButton
             size="xs"
             :color="activeFilter === 'month' ? 'primary' : 'neutral'"
-            variant="soft"
+            :variant="activeFilter === 'month' ? 'solid' : 'outline'"
             @click="setFilter('month')"
             class="whitespace-nowrap flex-none"
             >30 Hari</UButton
@@ -1031,7 +1034,7 @@ watch(
           <UButton
             size="xs"
             :color="activeFilter === 'year' ? 'primary' : 'neutral'"
-            variant="soft"
+            :variant="activeFilter === 'year' ? 'solid' : 'outline'"
             @click="setFilter('year')"
             class="whitespace-nowrap flex-none"
             >Tahun Ini</UButton
@@ -1082,7 +1085,7 @@ watch(
             icon="i-heroicons-funnel"
             size="sm"
             color="primary"
-            @click="loadData"
+            @click="activeFilter = 'custom'; loadData()"
             :loading="loading"
             class="mb-0.5 shadow-sm"
           >
@@ -1214,21 +1217,21 @@ watch(
               <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div>
                   <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Trend Penjualan</p>
-                  <h3 class="mt-1 text-lg font-black text-gray-950">Omset per Hari</h3>
-                  <p class="text-sm text-gray-500">Mengikuti periode laporan yang dipilih.</p>
+                  <h3 class="mt-1 text-lg font-black text-gray-950">Omset per {{ salesTrend.unit === 'month' ? 'Bulan' : 'Hari' }}</h3>
+                  <p class="text-sm text-gray-500">Ketuk batang untuk melihat angkanya.</p>
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                   <div class="min-w-28 rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2">
                     <div class="flex items-center gap-1.5">
                       <span class="h-2 w-2 rounded-full bg-amber-500"></span>
-                      <p class="text-[10px] font-bold uppercase tracking-wide text-gray-500">Total Omset</p>
+                      <p class="text-[11px] font-bold uppercase tracking-wide text-gray-500">Total Omset</p>
                     </div>
                     <p class="mt-1 text-sm font-black text-gray-950">{{ formatCurrency(totalSales) }}</p>
                   </div>
                   <div class="min-w-28 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                    <p class="text-[10px] font-bold uppercase tracking-wide text-gray-500">Hari Terbaik</p>
+                    <p class="text-[11px] font-bold uppercase tracking-wide text-gray-500">{{ salesTrend.unit === 'month' ? 'Bulan Terbaik' : 'Hari Terbaik' }}</p>
                     <p class="mt-1 truncate text-sm font-black text-gray-950">{{ bestSalesDay.date }}</p>
-                    <p class="text-[10px] font-semibold text-gray-500">{{ formatCurrency(bestSalesDay.sales) }}</p>
+                    <p class="text-xs font-semibold text-gray-500">{{ formatCurrency(bestSalesDay.sales) }}</p>
                   </div>
                 </div>
               </div>
@@ -1239,7 +1242,7 @@ watch(
                     <span
                       v-for="tick in trendAxisTicks"
                       :key="tick.ratio"
-                      class="absolute right-2 -translate-y-1/2 text-[10px] font-semibold text-gray-400"
+                      class="absolute right-2 -translate-y-1/2 text-[11px] font-semibold text-gray-500"
                       :style="{ top: `${24 + (1 - tick.ratio) * 68}%` }"
                     >
                       {{ formatCompactCurrency(tick.value) }}
@@ -1249,7 +1252,7 @@ watch(
                   <div class="min-w-0 flex-1 overflow-x-auto no-scrollbar">
                     <div
                       class="relative flex h-full items-end gap-2 px-3 pt-2"
-                      :style="{ minWidth: `${Math.max(salesTrendChartRows.length * 48, 420)}px` }"
+                      :style="{ minWidth: `${Math.max(salesTrendChartRows.length * 34, 320)}px` }"
                     >
                       <div class="pointer-events-none absolute inset-x-0 bottom-[8%] h-[68%]">
                         <span
@@ -1260,27 +1263,36 @@ watch(
                         ></span>
                       </div>
 
-                      <div
-                        v-for="item in salesTrendChartRows"
-                        :key="item.date"
-                        class="group relative z-10 flex h-full min-w-9 flex-1 flex-col items-center justify-end"
+                      <button
+                        v-for="(item, index) in salesTrendChartRows"
+                        :key="item.key"
+                        type="button"
+                        class="group relative z-10 flex h-full min-w-7 flex-1 flex-col items-center justify-end focus:outline-none"
+                        :aria-label="`${item.fullLabel}: ${formatCurrency(item.sales)}`"
+                        @click="selectedTrendKey = selectedTrendKey === item.key ? null : item.key"
                       >
                         <div class="relative flex h-[68%] w-full max-w-9 items-end rounded-t-lg bg-amber-100/70">
                           <div
-                            class="w-full rounded-t-lg bg-amber-400 transition-all duration-500 group-hover:bg-amber-500"
+                            class="w-full rounded-t-lg transition-all duration-500 group-hover:bg-amber-500"
+                            :class="selectedTrendKey === item.key ? 'bg-amber-500' : 'bg-amber-400'"
                             :style="{ height: `${item.height}%` }"
                           ></div>
                           <div
-                            class="pointer-events-none absolute left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-950 px-2 py-1 text-[10px] font-bold text-white shadow-lg group-hover:block"
+                            class="pointer-events-none absolute z-20 whitespace-nowrap rounded-md bg-gray-950 px-2 py-1 text-xs font-bold text-white shadow-lg group-hover:block"
+                            :class="[
+                              selectedTrendKey === item.key ? 'block' : 'hidden',
+                              // keep the label inside the scroll area at both ends
+                              index < 2 ? 'left-0' : index >= salesTrendChartRows.length - 2 ? 'right-0' : 'left-1/2 -translate-x-1/2',
+                            ]"
                             :style="{ bottom: `calc(${item.height}% + 6px)` }"
                           >
-                            {{ formatCurrency(item.sales) }}
+                            {{ item.fullLabel }} · {{ formatCurrency(item.sales) }}
                           </div>
                         </div>
-                        <span class="mt-2 max-w-20 truncate text-[10px] font-semibold text-gray-500" :title="item.date">
-                          {{ item.date }}
+                        <span class="mt-2 whitespace-nowrap text-[11px] font-semibold text-gray-500">
+                          {{ item.label }}
                         </span>
-                      </div>
+                      </button>
                     </div>
                   </div>
                 </div>

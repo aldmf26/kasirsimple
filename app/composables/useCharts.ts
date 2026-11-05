@@ -1,34 +1,4 @@
 export const useCharts = () => {
-    // Calculate sales by date for line chart
-    const getSalesByDate = (transactions: any[]) => {
-        if (transactions.length === 0) return { dates: [], sales: [] }
-
-        // Group by date
-        const salesByDate: Record<string, number> = {}
-        
-        transactions.forEach(t => {
-            const date = new Date(t.created_at).toLocaleDateString('id-ID', { 
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric' 
-            })
-            if (!salesByDate[date]) {
-                salesByDate[date] = 0
-            }
-            salesByDate[date] += t.total
-        })
-
-        // Sort by date
-        const sortedEntries = Object.entries(salesByDate).sort((a, b) => {
-            return new Date(a[0]).getTime() - new Date(b[0]).getTime()
-        })
-
-        return {
-            dates: sortedEntries.map(([date]) => date),
-            sales: sortedEntries.map(([_, sales]) => sales)
-        }
-    }
-
     // Calculate sales by payment method for pie chart
     const getSalesByPaymentMethod = (transactions: any[]) => {
         if (transactions.length === 0) return { methods: [], amounts: [] }
@@ -141,7 +111,6 @@ export const useCharts = () => {
     }
 
     return {
-        getSalesByDate,
         getSalesByPaymentMethod,
         getTopSellingProducts,
         getTransactionCountByMethod,
