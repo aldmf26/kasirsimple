@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatCurrency, formatDateTime } from "~/utils/helpers";
+import { formatCurrency, formatDateTime, localDateKey, isReturnedTransaction } from "~/utils/helpers";
 import { formatWeight, weightInKg } from "~/utils/pricing";
 
 definePageMeta({
@@ -41,7 +41,7 @@ const submitExpenseLoading = ref(false);
 const expenseForm = reactive({
   category: "Lainnya",
   amount: "",
-  date: new Date().toISOString().split("T")[0],
+  date: localDateKey(),
   note: "",
 });
 
@@ -107,12 +107,12 @@ const filteredShifts = computed(() => {
 // Stats Calculation
 const totalSales = computed(() => {
   return transactions.value
-    .filter((t: any) => !(t.notes || "").includes("[RETUR]"))
+    .filter((t: any) => !isReturnedTransaction(t))
     .reduce((sum, t) => sum + (t.total || 0), 0);
 });
 
 const totalTransactions = computed(() => 
-  transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]")).length
+  transactions.value.filter((t: any) => !isReturnedTransaction(t)).length
 );
 const averageTransaction = computed(() => {
   if (totalTransactions.value === 0) return 0;
@@ -120,7 +120,7 @@ const averageTransaction = computed(() => {
 });
 
 const paymentMethodData = computed(() => {
-  const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
+  const activeTransactions = transactions.value.filter((t: any) => !isReturnedTransaction(t));
   const { methods, amounts } = getSalesByPaymentMethod(activeTransactions);
   return {
     labels: methods,
@@ -136,7 +136,7 @@ const paymentMethodData = computed(() => {
 });
 
 const topProductsData = computed(() => {
-  const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
+  const activeTransactions = transactions.value.filter((t: any) => !isReturnedTransaction(t));
   const { products: names, sales } = getTopSellingProducts(
     activeTransactions,
     5,
@@ -163,12 +163,12 @@ const topProductsData = computed(() => {
 
 // Top Selling Items Computed
 const allItemsSold = computed(() => {
-  const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
+  const activeTransactions = transactions.value.filter((t: any) => !isReturnedTransaction(t));
   return getAllItemsSold(activeTransactions);
 });
 
 const activeTransactions = computed(() =>
-  transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]")),
+  transactions.value.filter((t: any) => !isReturnedTransaction(t)),
 );
 
 const salesTrendRows = computed(() => {
@@ -268,7 +268,7 @@ const buyPriceMap = computed(() => {
 
 const profitByProduct = computed(() => {
   const productMap = new Map();
-  const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
+  const activeTransactions = transactions.value.filter((t: any) => !isReturnedTransaction(t));
   for (const t of activeTransactions) {
     for (const item of ((t as any).items || [])) {
       const key = item.product_id || item.product_name;
@@ -312,9 +312,9 @@ const hasBuyPriceData = computed(() => {
 // ============ DAILY REPORT ============
 const dailyReport = computed(() => {
   const dayMap = new Map();
-  const activeTransactions = transactions.value.filter((t: any) => !(t.notes || "").includes("[RETUR]"));
+  const activeTransactions = transactions.value.filter((t: any) => !isReturnedTransaction(t));
   for (const t of activeTransactions) {
-    const dateKey = new Date(t.created_at).toISOString().split('T')[0];
+    const dateKey = localDateKey(t.created_at);
     const dateLabel = new Date(t.created_at).toLocaleDateString('id-ID', {
       weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
     });
@@ -405,7 +405,15 @@ const handleReturn = async () => {
 
   returnLoading.value = true;
   try {
-    await returnTransaction((selectedTransaction.value as any).id);
+    const returnWarnings = await returnTransaction((selectedTransaction.value as any).id);
+    if (returnWarnings?.length) {
+      toast.add({
+        title: "Stok belum kembali",
+        description: `Cek stok manual: ${returnWarnings.join(", ")}`,
+        color: "warning",
+        icon: "i-heroicons-exclamation-triangle",
+      });
+    }
     toast.add({
       title: "Berhasil",
       description: `Transaksi ${(selectedTransaction.value as any).transaction_number} berhasil di-retur dan stok dikembalikan`,
@@ -432,7 +440,15 @@ const handleDelete = async () => {
 
   deleteLoading.value = true;
   try {
-    await deleteTransaction((selectedTransaction.value as any).id);
+    const deleteWarnings = await deleteTransaction((selectedTransaction.value as any).id);
+    if (deleteWarnings?.length) {
+      toast.add({
+        title: "Stok belum kembali",
+        description: `Cek stok manual: ${deleteWarnings.join(", ")}`,
+        color: "warning",
+        icon: "i-heroicons-exclamation-triangle",
+      });
+    }
     toast.add({
       title: "Berhasil",
       description: `Transaksi ${(selectedTransaction.value as any).transaction_number} berhasil dihapus dan stok dikembalikan`,
@@ -514,8 +530,8 @@ const printViaBrowser = () => {
 
 // Filters
 const filters = reactive({
-  startDate: new Date().toISOString().split("T")[0],
-  endDate: new Date().toISOString().split("T")[0],
+  startDate: localDateKey(),
+  endDate: localDateKey(),
   paymentMethod: "all",
 });
 const activeFilter = ref("today");
@@ -535,8 +551,8 @@ const setFilter = (type: string) => {
     start.setMonth(0, 1); // Jan 1st
   }
 
-  filters.startDate = start.toISOString().split("T")[0];
-  filters.endDate = end.toISOString().split("T")[0];
+  filters.startDate = localDateKey(start);
+  filters.endDate = localDateKey(end);
   loadData();
 };
 
@@ -1394,7 +1410,7 @@ watch(
                       }}
                     </p>
                     <span 
-                      v-if="(t.notes || '').includes('[RETUR]')" 
+                      v-if="isReturnedTransaction(t)" 
                       class="px-2 py-0.5 bg-red-100 text-red-600 text-[10px] font-black uppercase rounded-full"
                     >
                       DITOLAK/RETUR
@@ -1437,7 +1453,7 @@ watch(
                       class="rounded-xl font-bold"
                     />
                     <UButton
-                      v-if="!(t.notes || '').includes('[RETUR]')"
+                      v-if="!isReturnedTransaction(t)"
                       label="Retur"
                       icon="i-heroicons-arrow-path"
                       size="sm"
@@ -2054,8 +2070,11 @@ watch(
             </div>
           </div>
 
-          <!-- Stock Restoration Notice -->
-          <div class="bg-blue-50 rounded-xl p-4 mb-5 border border-blue-200">
+          <!-- Stock Restoration Notice (a returned transaction already restored its stock) -->
+          <div
+            v-if="!isReturnedTransaction(selectedTransaction as any)"
+            class="bg-blue-50 rounded-xl p-4 mb-5 border border-blue-200"
+          >
             <div class="flex gap-3">
               <UIcon name="i-heroicons-arrow-path" class="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
               <div>

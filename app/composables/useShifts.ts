@@ -195,13 +195,18 @@ export const useShifts = () => {
         const endTime = new Date().toISOString();
 
         // Fetch transactions cash total during shift
-        const { data: txs } = await (supabase as any)
+        // Returned sales gave the cash back, so they are not in the drawer.
+        const storeId = store.value.id;
+        const txs = await fetchAllRows((from, to) => (supabase as any)
             .from('transactions')
             .select('total, paid')
-            .eq('store_id', store.value.id)
+            .eq('store_id', storeId)
             .eq('payment_method', 'cash')
+            .eq('status', 'completed')
             .gte('created_at', startTime)
-            .lte('created_at', endTime);
+            .lte('created_at', endTime)
+            .order('id')
+            .range(from, to));
 
         // Fetch expenses total during shift
         const { data: exps } = await (supabase as any)

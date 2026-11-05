@@ -1,23 +1,8 @@
 const OWNER_UNLOCK_PREFIX = 'kasirok_owner_unlocked_'
 const OWNER_IDLE_LIMIT_MS = 2 * 60 * 60 * 1000
 
-const bytesToHex = (buffer: ArrayBuffer) =>
-  Array.from(new Uint8Array(buffer))
-    .map(byte => byte.toString(16).padStart(2, '0'))
-    .join('')
-
-const randomSalt = () => {
-  const bytes = new Uint8Array(16)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes)
-    .map(byte => byte.toString(16).padStart(2, '0'))
-    .join('')
-}
-
-const hashPin = async (pin: string, salt: string) => {
-  const encoded = new TextEncoder().encode(`${salt}:${pin}`)
-  return bytesToHex(await crypto.subtle.digest('SHA-256', encoded))
-}
+// PIN hash lives in store_owner_pins (migration 023) and is only checked by
+// SECURITY DEFINER functions, so the browser never sees a hash it could brute-force.
 
 export const useOwnerPin = () => {
   const supabase = useSupabaseClient()
@@ -31,7 +16,7 @@ export const useOwnerPin = () => {
 
   const storeData = computed<Record<string, unknown>>(() => store.value || {})
   const isOwnerPinEnabled = computed(() => storeData.value.owner_pin_enabled === true)
-  const hasOwnerPin = computed(() => Boolean(storeData.value.owner_pin_hash))
+  const hasOwnerPin = computed(() => storeData.value.owner_pin_set === true)
   const needsOwnerPin = computed(() => isOwnerPinEnabled.value)
 
   const unlockKey = computed(() =>
@@ -84,19 +69,20 @@ export const useOwnerPin = () => {
     }
   }
 
-  const setOwnerPin = async (pin: string) => {
+  // Changing an existing PIN needs currentPin, or a password login in the last
+  // 10 minutes (checked server-side), which resetOwnerPinWithPassword provides.
+  const setOwnerPin = async (pin: string, currentPin?: string) => {
     if (!store.value?.id) throw new Error('Toko belum siap')
     assertPinFormat(pin)
 
     loading.value = true
     try {
-      const salt = randomSalt()
-      const owner_pin_hash = await hashPin(pin, salt)
-      await updateStore(store.value.id, {
-        owner_pin_hash,
-        owner_pin_salt: salt,
-        owner_pin_enabled: true
+      const { error } = await (supabase as any).rpc('set_owner_pin', {
+        p_new_pin: pin,
+        p_current_pin: currentPin ?? null
       })
+      if (error) throw new Error(error.message || 'Gagal menyimpan PIN')
+      await fetchStore()
       touchOwnerSession()
     } finally {
       loading.value = false
@@ -107,17 +93,13 @@ export const useOwnerPin = () => {
     if (!store.value?.id) throw new Error('Toko belum siap')
     assertPinFormat(pin)
 
-    const salt = storeData.value.owner_pin_salt
-    const savedHash = storeData.value.owner_pin_hash
-    if (typeof salt !== 'string' || typeof savedHash !== 'string') {
-      throw new Error('PIN Owner belum dibuat')
-    }
-    if (!salt || !savedHash) throw new Error('PIN Owner belum dibuat')
+    if (!hasOwnerPin.value) throw new Error('PIN Owner belum dibuat')
 
     loading.value = true
     try {
-      const currentHash = await hashPin(pin, salt)
-      if (currentHash !== savedHash) throw new Error('PIN salah')
+      const { data: ok, error } = await (supabase as any).rpc('verify_owner_pin', { p_pin: pin })
+      if (error) throw new Error(error.message || 'Gagal memeriksa PIN')
+      if (ok !== true) throw new Error('PIN salah')
       touchOwnerSession()
     } finally {
       loading.value = false
@@ -136,8 +118,6 @@ export const useOwnerPin = () => {
       })
       if (error) throw new Error('Password akun salah')
       await setOwnerPin(newPin)
-      await fetchStore()
-      touchOwnerSession()
     } finally {
       loading.value = false
     }

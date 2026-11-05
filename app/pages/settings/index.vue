@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { businessTypes, paymentMethods } from "~/utils/helpers";
+import { businessTypes, paymentMethods, clampNumber } from "~/utils/helpers";
 
 definePageMeta({
   layout: "default",
@@ -47,12 +47,24 @@ onMounted(async () => {
   loadLastBackupAt();
 });
 
-// Sync form with store data
-watch(
-  () => store.value?.id,
-  async (storeId) => {
-    if (storeId && store.value) {
-    const newStore = store.value;
+// Loading values into the form must not look like user edits to the auto-save
+// watchers (that used to write 3 times + show "berhasil disimpan" on every visit).
+let hydrating = false;
+const withoutAutoSave = (apply: () => void) => {
+  hydrating = true;
+  try {
+    apply();
+  } finally {
+    nextTick(() => {
+      hydrating = false;
+    });
+  }
+};
+
+// Sync form with store data (watched at the end of setup, after every ref it fills exists)
+const syncFormFromStore = (storeId?: string) => {
+    if (storeId && store.value) withoutAutoSave(() => {
+    const newStore = store.value!;
     storeSettings.name = newStore.name;
     storeSettings.business_type = newStore.business_type || "retail";
     storeSettings.address = newStore.address || "";
@@ -116,13 +128,13 @@ watch(
         logoPreview.value = newStore.logo_url || "";
       }
 
+    });
+    if (storeId && store.value) {
       // Load printer settings
       fetchPrinterSettings();
       loadLastBackupAt();
     }
-  },
-  { immediate: true },
-);
+};
 
 const fetchPrinterSettings = async () => {
   if (!store.value?.id) return;
@@ -138,6 +150,7 @@ const fetchPrinterSettings = async () => {
       const savedBtName = (data as any).bluetooth_device_name || ''
       let localBtName = ''
       try { localBtName = localStorage.getItem('kasirok_bt_device') || '' } catch { /* abaikan */ }
+      withoutAutoSave(() => {
       printerSettings.value = {
         printerType: "thermal",
         paperWidth: data.paper_width || 58,
@@ -148,6 +161,7 @@ const fetchPrinterSettings = async () => {
         bluetoothDeviceName: savedBtName || localBtName,
         bluetoothDeviceAddress: (data as any).bluetooth_device_address || "",
       };
+      });
       // Synchronize with global state
       if (globalPrinterSettings) {
         globalPrinterSettings.value = data;
@@ -454,10 +468,22 @@ let storeSettingsDebounce: ReturnType<typeof setTimeout> | null = null;
 let paymentSettingsDebounce: ReturnType<typeof setTimeout> | null = null;
 
 // Auto-save store settings with debounce
+// Path inside the "logos" bucket for a public URL we uploaded, else null.
+const logoStoragePath = (url: string | null | undefined) => {
+  const marker = "/storage/v1/object/public/logos/";
+  const index = url ? url.indexOf(marker) : -1;
+  return index === -1 ? null : decodeURIComponent(url!.slice(index + marker.length).split("?")[0] ?? "");
+};
+
 const autoSaveStoreSettings = async () => {
   if (!store.value?.id) return;
+  if (!storeSettings.name.trim()) {
+    showAlert("error", "Nama toko tidak boleh kosong");
+    return;
+  }
 
   try {
+    const previousLogoUrl = store.value.logo_url || "";
     let logoUrl = storeSettings.logo_url;
 
     // Upload logo jika ada file baru di client
@@ -496,6 +522,13 @@ const autoSaveStoreSettings = async () => {
     selectedLogoFile.value = null;
     storeSettings.logo_url = logoUrl;
 
+    // Remove the replaced/removed logo file so the bucket does not keep every old upload.
+    const oldPath = previousLogoUrl !== logoUrl ? logoStoragePath(previousLogoUrl) : null;
+    if (oldPath) {
+      const { error: removeError } = await supabase.storage.from("logos").remove([oldPath]);
+      if (removeError) console.warn("Gagal menghapus logo lama:", removeError.message);
+    }
+
     showAlert("success", "Profil toko berhasil disimpan");
   } catch (e: any) {
     console.error(e);
@@ -504,10 +537,23 @@ const autoSaveStoreSettings = async () => {
 };
 
 // Auto-save payment settings with debounce
+// Inputs only hint min/max; clamp before saving so 150% or -5 never reaches the POS.
+const sanitizeDiscountTax = () => {
+  const d = discountTaxSettings;
+  d.discount_global.percent = clampNumber(d.discount_global.percent, 0, 100);
+  d.discount_global.nominal = clampNumber(d.discount_global.nominal, 0, Number.MAX_SAFE_INTEGER);
+  d.discount_nominal.min_amount = clampNumber(d.discount_nominal.min_amount, 0, Number.MAX_SAFE_INTEGER);
+  d.discount_nominal.discount_percent = clampNumber(d.discount_nominal.discount_percent, 0, 100);
+  d.discount_nominal.discount_nominal = clampNumber(d.discount_nominal.discount_nominal, 0, Number.MAX_SAFE_INTEGER);
+  d.tax.percent = clampNumber(d.tax.percent, 0, 100);
+  d.ppn.percent = clampNumber(d.ppn.percent, 0, 100);
+};
+
 const autoSavePaymentSettings = async () => {
   if (!store.value?.id) return;
 
   try {
+    withoutAutoSave(sanitizeDiscountTax);
     const updateData: any = {
       enabled_payment_methods: JSON.stringify(enabledPaymentMethods.value),
       bank_accounts: JSON.stringify(bankAccounts.value),
@@ -577,6 +623,7 @@ let printerSettingsDebounce: ReturnType<typeof setTimeout> | null = null;
 watch(
   printerSettings,
   () => {
+    if (hydrating) return;
     if (printerSettingsDebounce) clearTimeout(printerSettingsDebounce);
     printerSettingsDebounce = setTimeout(autoSavePrinterSettings, 500);
   },
@@ -587,6 +634,7 @@ watch(
 watch(
   storeSettings,
   () => {
+    if (hydrating) return;
     if (storeSettingsDebounce) clearTimeout(storeSettingsDebounce);
     storeSettingsDebounce = setTimeout(autoSaveStoreSettings, 1000);
   },
@@ -597,6 +645,7 @@ watch(
 watch(
   enabledPaymentMethods,
   () => {
+    if (hydrating) return;
     if (paymentSettingsDebounce) clearTimeout(paymentSettingsDebounce);
     paymentSettingsDebounce = setTimeout(autoSavePaymentSettings, 1000);
   },
@@ -616,6 +665,7 @@ watch(selectedLogoFile, (newFile) => {
 watch(
   bankAccounts,
   () => {
+    if (hydrating) return;
     if (paymentSettingsDebounce) clearTimeout(paymentSettingsDebounce);
     paymentSettingsDebounce = setTimeout(autoSavePaymentSettings, 1000);
   },
@@ -624,12 +674,14 @@ watch(
 
 // Watch product images setting with debounce
 watch(showProductImages, () => {
+  if (hydrating) return;
   if (paymentSettingsDebounce) clearTimeout(paymentSettingsDebounce);
   paymentSettingsDebounce = setTimeout(autoSavePaymentSettings, 1000);
 });
 
 // Watch sales input settings with debounce
 watch([weightModeEnabled, barcodeEnabled, customerRequired, () => storeSettings.customer_enabled], () => {
+  if (hydrating) return;
   if (paymentSettingsDebounce) clearTimeout(paymentSettingsDebounce);
   paymentSettingsDebounce = setTimeout(autoSavePaymentSettings, 1000);
 });
@@ -638,6 +690,7 @@ watch([weightModeEnabled, barcodeEnabled, customerRequired, () => storeSettings.
 watch(
   discountTaxSettings,
   () => {
+    if (hydrating) return;
     if (paymentSettingsDebounce) clearTimeout(paymentSettingsDebounce);
     paymentSettingsDebounce = setTimeout(autoSavePaymentSettings, 1000);
   },
@@ -778,10 +831,16 @@ const handleUpdatePassword = async () => {
   }
 };
 
-const handleLogout = () => {
+const handleLogout = async () => {
+  lockOwnerAccess();
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    showAlert("error", error.message || "Gagal keluar");
+    return;
+  }
   const dummyAuth = useCookie("dummy_auth");
   dummyAuth.value = null;
-  navigateTo("/auth/login");
+  await navigateTo("/auth/login");
 };
 
 const backupFileInput = ref<HTMLInputElement | null>(null);
@@ -815,7 +874,7 @@ const handleExportBackup = async () => {
 };
 
 const handleImportBackup = async () => {
-  if (!confirm("Import backup akan mengganti data toko saat ini dengan isi file backup. Data setelah backup akan hilang. Lanjutkan?")) {
+  if (!confirm("Import backup akan mengganti data toko saat ini dengan isi file backup. Data toko sekarang akan diunduh dulu sebagai cadangan, lalu diganti. Lanjutkan?")) {
     return;
   }
 
@@ -832,6 +891,7 @@ const backupPreviewCounts = computed(() => {
   return [
     { label: "Kategori", count: data.categories?.length || 0 },
     { label: "Produk", count: data.products?.length || 0 },
+    { label: "Pelanggan", count: data.customers?.length || 0 },
     { label: "Transaksi", count: data.transactions?.length || 0 },
     { label: "Item Transaksi", count: data.transaction_items?.length || 0 },
     { label: "Stok", count: data.stock_movements?.length || 0 },
@@ -867,7 +927,7 @@ const handleResetStoreData = async () => {
     return;
   }
 
-  if (!confirm("Reset data toko sekarang? Akun login tetap ada, tetapi produk, kategori, transaksi, stok, pengeluaran, shift, dan pengaturan struk akan dihapus.")) {
+  if (!confirm("Reset data toko sekarang? Akun login tetap ada, tetapi produk, kategori, pelanggan, transaksi, stok, pengeluaran, shift, dan pengaturan struk akan dihapus.")) {
     return;
   }
 
@@ -879,6 +939,8 @@ const handleResetStoreData = async () => {
     showAlert("error", e.message || "Gagal reset data toko");
   }
 };
+
+watch(() => store.value?.id, syncFormFromStore, { immediate: true });
 </script>
 
 <template>

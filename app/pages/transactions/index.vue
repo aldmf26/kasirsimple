@@ -421,8 +421,13 @@ const handleSettle = async (transaction: any) => {
 
 const handleDelete = async (transaction: any) => {
     try {
-        await deleteTransaction(transaction.id);
-        showAlert('success', 'Transaksi berhasil dihapus');
+        const warnings = await deleteTransaction(transaction.id);
+        showAlert(
+            warnings?.length ? 'error' : 'success',
+            warnings?.length
+                ? `Transaksi dihapus, tapi stok belum kembali: ${warnings.join(', ')}`
+                : 'Transaksi berhasil dihapus'
+        );
         detailModal.open = false;
     } catch (e: any) {
         showAlert('error', e.message || 'Gagal menghapus transaksi');

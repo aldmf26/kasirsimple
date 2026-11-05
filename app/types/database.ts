@@ -25,6 +25,7 @@ export interface Database {
                     subscription_until: string | null
                     subscription_plan: string
                     owner_pin_enabled: boolean
+                    owner_pin_set: boolean
                     owner_pin_hash: string | null
                     owner_pin_salt: string | null
                     weight_mode_enabled: boolean
@@ -49,6 +50,7 @@ export interface Database {
                     subscription_until?: string | null
                     subscription_plan?: string
                     owner_pin_enabled?: boolean
+                    owner_pin_set?: boolean
                     owner_pin_hash?: string | null
                     owner_pin_salt?: string | null
                     weight_mode_enabled?: boolean
@@ -73,6 +75,7 @@ export interface Database {
                     subscription_until?: string | null
                     subscription_plan?: string
                     owner_pin_enabled?: boolean
+                    owner_pin_set?: boolean
                     owner_pin_hash?: string | null
                     owner_pin_salt?: string | null
                     weight_mode_enabled?: boolean
@@ -200,6 +203,7 @@ export interface Database {
                     customer_name: string | null
                     customer_phone: string | null
                     notes: string | null
+                    status?: 'completed' | 'returned' // optional: absent before migration 023
                     created_by: string
                     created_at: string
                 }
@@ -219,6 +223,7 @@ export interface Database {
                     customer_name?: string | null
                     customer_phone?: string | null
                     notes?: string | null
+                    status?: 'completed' | 'returned'
                     created_by: string
                     created_at?: string
                 }
@@ -238,6 +243,7 @@ export interface Database {
                     customer_name?: string | null
                     customer_phone?: string | null
                     notes?: string | null
+                    status?: 'completed' | 'returned'
                     created_by?: string
                     created_at?: string
                 }

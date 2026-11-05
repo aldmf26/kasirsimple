@@ -198,6 +198,12 @@ const quickSaleName = ref("");
 const quickSalePrice = ref("");
 const displayedProductsCount = ref(8);
 const showPaymentModal = ref(false);
+const showMobileCart = ref(false);
+watch(() => cart.value.length, (n) => { if (!n) showMobileCart.value = false; });
+
+const confirmClearCart = () => {
+  if (cart.value.length && confirm("Kosongkan semua isi keranjang?")) clearCart();
+};
 const showReceipt = ref(false);
 const barcodeInputRef = ref<HTMLInputElement | null>(null);
 const barcodeVideoRef = ref<HTMLVideoElement | null>(null);
@@ -605,6 +611,7 @@ const addQuickSale = () => {
 
 const openPayment = () => {
   if (!cart.value.length) return;
+  showMobileCart.value = false; // sheet (z-55) would cover payment modal (z-50)
   paymentForm.value.paid = cartTotal.value;
   displayPaid.value = cartTotal.value.toLocaleString("id-ID");
   fetchCustomers(true).catch(() => {});
@@ -684,6 +691,14 @@ const processPayment = async () => {
     };
 
     const result = await createTransaction(transactionPayload);
+    if (result?.stock_warnings?.length) {
+      toast.add({
+        title: "Transaksi tersimpan, stok belum terpotong",
+        description: `Cek stok manual: ${result.stock_warnings.join(", ")}`,
+        color: "warning",
+        icon: "i-heroicons-exclamation-triangle",
+      });
+    }
 
     // ✅ EDIT: Gunakan snapshot items yang sudah disimpan sebelumnya
     lastTransaction.value = {
@@ -1159,7 +1174,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Grid Produk -->
-      <div class="flex-1 overflow-y-auto flex flex-col">
+      <div class="flex-1 overflow-y-auto flex flex-col pb-24 lg:pb-0">
         <div
           class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3 p-2 sm:p-3"
         >
@@ -1277,8 +1292,41 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- RIGHT: Keranjang -->
-    <div class="lg:w-96 lg:border-l border-gray-200 bg-white flex flex-col">
+    <!-- Mobile: bar total menempel di atas nav bawah -->
+    <div
+      v-if="!showMobileCart"
+      class="lg:hidden fixed inset-x-0 z-40 px-3"
+      style="bottom: calc(4.75rem + env(safe-area-inset-bottom))"
+    >
+      <button
+        type="button"
+        :disabled="!cart.length"
+        @click="showMobileCart = true"
+        class="w-full flex items-center justify-between gap-3 rounded-2xl bg-primary-600 px-4 py-3 text-white shadow-lg active:scale-[0.98] transition-transform disabled:bg-gray-400"
+      >
+        <span class="flex items-center gap-2 text-sm font-bold">
+          <UIcon name="i-heroicons-shopping-cart" class="w-5 h-5" />
+          {{ cart.length ? `${cartItemsCount} item` : "Keranjang kosong" }}
+        </span>
+        <span class="flex items-center gap-1 text-lg font-black">
+          {{ formatCurrency(cartTotal) }}
+          <UIcon name="i-heroicons-chevron-up" class="w-5 h-5" />
+        </span>
+      </button>
+    </div>
+
+    <!-- Mobile: backdrop sheet keranjang -->
+    <div
+      v-if="showMobileCart"
+      class="lg:hidden fixed inset-0 z-[55] bg-black/50"
+      @click="showMobileCart = false"
+    />
+
+    <!-- RIGHT: Keranjang (desktop: panel kanan, mobile: bottom sheet) -->
+    <div
+      class="fixed inset-x-0 bottom-0 z-[55] max-h-[85vh] rounded-t-2xl shadow-2xl pb-[env(safe-area-inset-bottom)] lg:static lg:z-auto lg:max-h-none lg:rounded-none lg:shadow-none lg:pb-0 lg:w-96 lg:border-l border-gray-200 bg-white flex-col"
+      :class="showMobileCart ? 'flex' : 'hidden lg:flex'"
+    >
       <!-- Header -->
       <div class="p-4 border-b border-gray-200 flex-shrink-0">
         <div class="flex items-center justify-between">
@@ -1292,13 +1340,25 @@ onUnmounted(() => {
               <p class="text-xs text-gray-500">{{ cartItemsCount }} item</p>
             </div>
           </div>
-          <UButton
-            color="error"
-            variant="soft"
-            icon="i-heroicons-trash"
-            size="lg"
-            @click="clearCart"
-          />
+          <div class="flex items-center gap-2">
+            <UButton
+              color="error"
+              variant="soft"
+              icon="i-heroicons-trash"
+              size="lg"
+              aria-label="Kosongkan keranjang"
+              @click="confirmClearCart"
+            />
+            <UButton
+              class="lg:hidden"
+              color="neutral"
+              variant="soft"
+              icon="i-heroicons-chevron-down"
+              size="lg"
+              aria-label="Tutup keranjang"
+              @click="showMobileCart = false"
+            />
+          </div>
         </div>
       </div>
 
@@ -1317,8 +1377,7 @@ onUnmounted(() => {
         </div>
 
         <div
-          class="overflow-y-auto p-2 sm:p-3 space-y-2 sm:space-y-3"
-          style="max-height: 300px"
+          class="lg:max-h-[300px] lg:overflow-y-auto p-2 sm:p-3 space-y-2 sm:space-y-3"
         >
           <div
             v-for="item in cart"
@@ -1359,7 +1418,7 @@ onUnmounted(() => {
                 @click="
                   updateCartItemQuantity(item.cart_line_id, item.quantity - 1)
                 "
-                class="w-8 h-8 flex items-center justify-center text-red-600 hover:bg-red-50 font-bold text-lg active:scale-90 transition-all"
+                class="w-10 h-10 flex items-center justify-center text-red-600 hover:bg-red-50 font-bold text-lg active:scale-90 transition-all"
               >
                 −
               </button>
@@ -1370,7 +1429,7 @@ onUnmounted(() => {
                 @click="
                   updateCartItemQuantity(item.cart_line_id, item.quantity + 1)
                 "
-                class="w-8 h-8 flex items-center justify-center text-primary-600 hover:bg-primary-50 font-bold text-lg active:scale-90 transition-all"
+                class="w-10 h-10 flex items-center justify-center text-primary-600 hover:bg-primary-50 font-bold text-lg active:scale-90 transition-all"
               >
                 +
               </button>
@@ -1384,7 +1443,7 @@ onUnmounted(() => {
 
             <button
               @click="removeFromCart(item.cart_line_id)"
-              class="w-7 h-7 shrink-0 flex items-center justify-center text-red-600 hover:bg-red-100 rounded-lg font-bold text-base transition-all"
+              class="w-10 h-10 shrink-0 flex items-center justify-center text-red-600 hover:bg-red-100 rounded-lg font-bold text-base transition-all"
               title="Hapus dari keranjang"
             >
               ✕

@@ -5,6 +5,7 @@ const ACTIVITY_STORAGE_KEY = "activity_logs";
 const BACKUP_TABLES = [
   "categories",
   "products",
+  "customers",
   "transactions",
   "transaction_items",
   "stock_movements",
@@ -68,45 +69,43 @@ export const useDataBackup = () => {
   const fetchTable = async (table: BackupTable) => {
     if (!store.value?.id) return [];
 
-    let query = (supabase.from(table) as any).select("*");
+    // Paged + chunked: a single request stops at 1000 rows and a long .in() list
+    // overflows the URL, which used to produce silently incomplete backups.
+    const byParent = async (column: string, ids: string[]) => {
+      const rows: any[] = [];
+      for (const part of chunkArray(ids, 150)) {
+        rows.push(...(await fetchAllRows((from, to) =>
+          (supabase.from(table) as any).select("*").in(column, part).order("id").range(from, to),
+        )));
+      }
+      return rows;
+    };
 
-    if (table === "transaction_items") {
-      const transactionIds = await getTransactionIds();
-      if (!transactionIds.length) return [];
-      const { data, error } = await query.in("transaction_id", transactionIds);
-      if (error) throw error;
-      return data || [];
-    }
+    if (table === "transaction_items") return byParent("transaction_id", await getTransactionIds());
+    if (table === "stock_movements") return byParent("product_id", await getProductIds());
 
-    if (table === "stock_movements") {
-      const productIds = await getProductIds();
-      if (!productIds.length) return [];
-      const { data, error } = await query.in("product_id", productIds);
-      if (error) throw error;
-      return data || [];
-    }
-
-    const { data, error } = await query.eq("store_id", store.value.id);
-    if (error) throw error;
-    return data || [];
+    const storeId = store.value.id;
+    return fetchAllRows((from, to) =>
+      (supabase.from(table) as any).select("*").eq("store_id", storeId).order("id").range(from, to),
+    );
   };
 
   const getTransactionIds = async () => {
     if (!store.value?.id) return [];
-    const { data, error } = await (supabase.from("transactions") as any)
-      .select("id")
-      .eq("store_id", store.value.id);
-    if (error) throw error;
-    return (data || []).map((row: any) => row.id);
+    const storeId = store.value.id;
+    const rows = await fetchAllRows((from, to) =>
+      (supabase.from("transactions") as any).select("id").eq("store_id", storeId).order("id").range(from, to),
+    );
+    return rows.map((row: any) => row.id);
   };
 
   const getProductIds = async () => {
     if (!store.value?.id) return [];
-    const { data, error } = await (supabase.from("products") as any)
-      .select("id")
-      .eq("store_id", store.value.id);
-    if (error) throw error;
-    return (data || []).map((row: any) => row.id);
+    const storeId = store.value.id;
+    const rows = await fetchAllRows((from, to) =>
+      (supabase.from("products") as any).select("id").eq("store_id", storeId).order("id").range(from, to),
+    );
+    return rows.map((row: any) => row.id);
   };
 
   const getLocalActivityLogs = () => {
@@ -131,7 +130,7 @@ export const useDataBackup = () => {
         data[table] = await fetchTable(table);
       }
 
-      const { owner_pin_hash, owner_pin_salt, ...safeStore } = store.value as any;
+      const { owner_pin_hash, owner_pin_salt, is_admin, ...safeStore } = store.value as any;
 
       const backup: StoreBackupFile = {
         app: "kasir-simple",
@@ -153,7 +152,7 @@ export const useDataBackup = () => {
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "");
       link.href = url;
-      link.download = `backup-${safeName}-${new Date().toISOString().slice(0, 10)}.json`;
+      link.download = `backup-${safeName}-${localDateKey()}.json`;
       link.click();
       URL.revokeObjectURL(url);
       markBackedUp();
@@ -184,21 +183,21 @@ export const useDataBackup = () => {
     const transactionIds = await getTransactionIds();
     const productIds = await getProductIds();
 
-    if (productIds.length) {
+    for (const part of chunkArray(productIds, 150)) {
       const { error } = await (supabase.from("stock_movements") as any)
         .delete()
-        .in("product_id", productIds);
+        .in("product_id", part);
       if (error) throw error;
     }
 
-    if (transactionIds.length) {
+    for (const part of chunkArray(transactionIds, 150)) {
       const { error } = await (supabase.from("transaction_items") as any)
         .delete()
-        .in("transaction_id", transactionIds);
+        .in("transaction_id", part);
       if (error) throw error;
     }
 
-    for (const table of ["expenses", "shifts", "printer_settings", "transactions", "products", "categories"] as const) {
+    for (const table of ["expenses", "shifts", "printer_settings", "transactions", "customers", "products", "categories"] as const) {
       const { error } = await (supabase.from(table) as any)
         .delete()
         .eq("store_id", store.value.id);
@@ -215,89 +214,66 @@ export const useDataBackup = () => {
     }
   };
 
+  // Upsert in chunks so a big backup does not exceed the request size limit.
+  const upsertRows = async (table: BackupTable, rows: any[], options?: { onConflict: string }) => {
+    for (const part of chunkArray(rows, 500)) {
+      const { error } = await (supabase.from(table) as any).upsert(part, options);
+      if (error) throw error;
+    }
+  };
+
   const importBackup = async () => {
     if (!store.value?.id) throw new Error("Toko belum siap");
     if (!importPreview.value) throw new Error("Pilih file backup dulu");
-    loading.value = true;
 
+    // The import deletes current data before writing the file's rows and is not
+    // one DB transaction. Download the current data first so a failure halfway
+    // can be recovered by importing this safety copy.
+    await downloadBackup();
+
+    loading.value = true;
     try {
       const backup = importPreview.value;
-      const storeUpdate = {
-        name: backup.store.name,
-        business_type: backup.store.business_type,
-        address: backup.store.address,
-        phone: backup.store.phone,
-        currency: backup.store.currency || "Rp",
-        logo_url: backup.store.logo_url,
-        enabled_payment_methods: backup.store.enabled_payment_methods,
-        bank_accounts: backup.store.bank_accounts,
-        show_product_images: backup.store.show_product_images !== false,
-        discount_tax_settings: backup.store.discount_tax_settings,
+      const s = backup.store;
+      const storeUpdate: Record<string, any> = {
+        name: s.name,
+        business_type: s.business_type,
+        address: s.address,
+        phone: s.phone,
+        currency: s.currency || "Rp",
+        logo_url: s.logo_url,
+        enabled_payment_methods: s.enabled_payment_methods,
+        bank_accounts: s.bank_accounts,
+        show_product_images: s.show_product_images !== false,
+        discount_tax_settings: s.discount_tax_settings,
+        weight_mode_enabled: s.weight_mode_enabled,
+        barcode_enabled: s.barcode_enabled,
+        customer_enabled: s.customer_enabled,
+        customer_required: s.customer_required,
       };
+      // Older backups lack some settings: keep the current value instead of nulling it.
+      for (const key of Object.keys(storeUpdate)) {
+        if (storeUpdate[key] === undefined) delete storeUpdate[key];
+      }
       await updateStore(store.value.id, storeUpdate as any);
       await deleteCurrentStoreData();
 
-      const categories = rowsForCurrentStore(backup.data.categories);
-      if (categories.length) {
-        const { error } = await (supabase.from("categories") as any).upsert(
-          categories,
-        );
-        if (error) throw error;
-      }
-
-      const products = rowsForCurrentStore(backup.data.products);
-      if (products.length) {
-        const { error } = await (supabase.from("products") as any).upsert(
-          products,
-        );
-        if (error) throw error;
-      }
-
-      const transactions = rowsForCurrentStore(backup.data.transactions);
-      if (transactions.length) {
-        const { error } = await (supabase.from("transactions") as any).upsert(
-          transactions,
-        );
-        if (error) throw error;
-      }
-
-      const transactionItems = backup.data.transaction_items || [];
-      if (transactionItems.length) {
-        const { error } = await (supabase.from("transaction_items") as any).upsert(
-          transactionItems,
-        );
-        if (error) throw error;
-      }
-
-      const stockMovements = backup.data.stock_movements || [];
-      if (stockMovements.length) {
-        const { error } = await (supabase.from("stock_movements") as any).upsert(
-          stockMovements,
-        );
-        if (error) throw error;
-      }
-
-      const expenses = rowsForCurrentStore(backup.data.expenses);
-      if (expenses.length) {
-        const { error } = await (supabase.from("expenses") as any).upsert(
-          expenses,
-        );
-        if (error) throw error;
-      }
-
-      const shifts = rowsForCurrentStore(backup.data.shifts);
-      if (shifts.length) {
-        const { error } = await (supabase.from("shifts") as any).upsert(shifts);
-        if (error) throw error;
-      }
-
-      const printerSettings = rowsForCurrentStore(backup.data.printer_settings);
-      if (printerSettings.length) {
-        const { error } = await (
-          supabase.from("printer_settings") as any
-        ).upsert(printerSettings, { onConflict: "store_id" });
-        if (error) throw error;
-      }
+      await upsertRows("categories", rowsForCurrentStore(backup.data.categories));
+      await upsertRows("products", rowsForCurrentStore(backup.data.products));
+      await upsertRows("customers", rowsForCurrentStore(backup.data.customers));
+      // Backups made before the status column marked returns only in notes.
+      await upsertRows(
+        "transactions",
+        rowsForCurrentStore(backup.data.transactions).map((t) => ({
+          ...t,
+          status: t.status || ((t.notes || "").startsWith("[RETUR]") ? "returned" : "completed"),
+        })),
+      );
+      await upsertRows("transaction_items", backup.data.transaction_items || []);
+      await upsertRows("stock_movements", backup.data.stock_movements || []);
+      await upsertRows("expenses", rowsForCurrentStore(backup.data.expenses));
+      await upsertRows("shifts", rowsForCurrentStore(backup.data.shifts));
+      await upsertRows("printer_settings", rowsForCurrentStore(backup.data.printer_settings), { onConflict: "store_id" });
 
       if (process.client && backup.local_activity_logs?.length) {
         const raw = localStorage.getItem(ACTIVITY_STORAGE_KEY);
