@@ -65,6 +65,8 @@ const links = [
   },
 ];
 
+const isOnline = useOnline();
+
 const isActiveRoute = (path: string) =>
   route.path === path || route.path.startsWith(`${path}/`);
 
@@ -182,6 +184,15 @@ const handleLogout = async () => {
         </NuxtLink>
       </nav>
     </aside>
+
+    <div
+      v-if="!isOnline"
+      role="status"
+      class="sticky top-16 z-30 flex items-center justify-center gap-2 bg-amber-100 px-4 py-2 text-center text-sm font-semibold text-amber-900 border-b border-amber-200"
+    >
+      <UIcon name="i-heroicons-signal-slash" class="w-5 h-5 shrink-0" />
+      Sedang offline. Data belum bisa disimpan sampai internet kembali.
+    </div>
 
     <main class="flex-1 pb-24 md:pb-0"><slot /></main>
 
