@@ -240,3 +240,44 @@ export const buildSalesTrend = (
     }
     return { unit, rows }
 }
+
+export type ReportPeriod = 'today' | 'week' | 'month' | 'month30' | 'year' | 'custom'
+
+// The period a report range is compared with. Calendar periods compare with the
+// same days of the previous month/year ("1-5 Nov" vs "1-5 Okt"); everything else
+// with the equally long stretch right before it.
+export const previousPeriod = (
+    startKey: string,
+    endKey: string,
+    period: ReportPeriod,
+): { start: string, end: string, label: string } => {
+    const start = parseDateKey(startKey)
+    const end = parseDateKey(endKey)
+    const shiftCalendar = (d: Date, months: number) => {
+        // Clamp: 31 Mar minus one month is 28/29 Feb, not 3 Mar.
+        const lastDay = new Date(d.getFullYear(), d.getMonth() + months + 1, 0).getDate()
+        return new Date(d.getFullYear(), d.getMonth() + months, Math.min(d.getDate(), lastDay))
+    }
+
+    if (period === 'month' || period === 'year') {
+        const months = period === 'month' ? -1 : -12
+        return {
+            start: localDateKey(shiftCalendar(start, months)),
+            end: localDateKey(shiftCalendar(end, months)),
+            label: period === 'month' ? 'bulan lalu' : 'tahun lalu',
+        }
+    }
+
+    const days = Math.round((end.getTime() - start.getTime()) / DAY_MS) + 1
+    const prevEnd = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1)
+    const prevStart = new Date(start.getFullYear(), start.getMonth(), start.getDate() - days)
+    return {
+        start: localDateKey(prevStart),
+        end: localDateKey(prevEnd),
+        label: days === 1 ? (period === 'today' ? 'kemarin' : 'hari sebelumnya') : `${days} hari sebelumnya`,
+    }
+}
+
+// Percent change for the "▲ 12%" badge; null when there is nothing to compare with.
+export const percentChange = (current: number, previous: number): number | null =>
+    previous > 0 ? Math.round(((current - previous) / previous) * 100) : null

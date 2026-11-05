@@ -281,7 +281,13 @@ export const useTransactions = () => {
         discount_type?: 'nominal' | 'percent'
         customer_name?: string
         customer_phone?: string
+        customer_id?: string | null
         notes?: string
+        discount_from_settings?: number
+        tax?: number
+        tax_percentage?: number | null
+        ppn?: number
+        ppn_percentage?: number | null
     }) => {
         if (!store.value) throw new Error('Store not found')
         if (!user.value) throw new Error('User pengguna tidak ditemukan (Login diperlukan)') // Tambahkan auth check
@@ -371,6 +377,7 @@ export const useTransactions = () => {
                 payment_method: paymentData.payment_method,
                 customer_name: paymentData.customer_name || null,
                 customer_phone: paymentData.customer_phone || null,
+                customer_id: paymentData.customer_id || null,
                 notes: finalNotes || null,
                 created_by: user.value?.id
             }

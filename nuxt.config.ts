@@ -15,6 +15,9 @@ export default defineNuxtConfig({
 
   ui: {
     global: true,
+    // App is designed light-only; following the device's dark mode turned only
+    // the Nuxt UI parts (inputs, neutral buttons) dark on light pages.
+    colorMode: false,
     safelistColors: ['emerald', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'teal', 'cyan', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose', 'slate', 'gray', 'zinc', 'neutral', 'stone']
   },
 

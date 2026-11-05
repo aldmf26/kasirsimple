@@ -123,6 +123,23 @@ const handleCustomerInput = () => {
   }
 };
 
+// Registered customers to tap while typing (only when the feature is enabled in Pengaturan).
+const customerInputFocused = ref(false);
+const customerSuggestions = computed(() => {
+  if (!customerEnabled.value || !customerInputFocused.value) return [];
+  const q = (paymentForm.value.customerName || "").trim().toLowerCase();
+  return (customers.value || [])
+    .filter((c) => c.id !== selectedCustomer.value?.id)
+    .filter((c) => !q || (c.name || "").toLowerCase().includes(q) || (c.phone || "").includes(q))
+    .slice(0, 5);
+});
+
+const pickCustomer = (c: any) => {
+  paymentForm.value.customerName = c.name;
+  selectedCustomer.value = { id: c.id, name: c.name, phone: c.phone };
+  customerInputFocused.value = false;
+};
+
 const clearCustomerInput = () => {
   paymentForm.value.customerName = "";
   selectedCustomer.value = null;
@@ -616,7 +633,7 @@ const openPayment = () => {
   showMobileCart.value = false; // sheet (z-55) would cover payment modal (z-50)
   paymentForm.value.paid = cartTotal.value;
   displayPaid.value = cartTotal.value.toLocaleString("id-ID");
-  fetchCustomers(true).catch(() => {});
+  if (customerEnabled.value) fetchCustomers(true).catch(() => {});
   showPaymentModal.value = true;
 };
 
@@ -677,7 +694,9 @@ const processPayment = async () => {
   const currentChange = changeAmount.value;
   const currentPaymentMethod = paymentForm.value.paymentMethod;
   const currentCustomerName = paymentForm.value.customerName?.trim() || selectedCustomer.value?.name || null;
+  // Only a picked registered customer is linked; free text stays a plain name.
   const currentCustomerId = selectedCustomer.value?.id || null;
+  const currentCustomerPhone = selectedCustomer.value?.phone || null;
   const currentDiscount = discountAmount.value;
   const currentSettingsDiscount = settingsDiscount.value;
   const currentTax = taxAmount.value;
@@ -697,6 +716,7 @@ const processPayment = async () => {
       ppn_percentage: discountTaxSettings.value.ppn.percent,
       customer_name: currentCustomerName,
       customer_id: currentCustomerId,
+      customer_phone: currentCustomerPhone,
     };
 
     const result = await createTransaction(transactionPayload);
@@ -1000,7 +1020,7 @@ onMounted(async () => {
 
   if (store.value) {
     await Promise.all([fetchCategories(), fetchProducts()]);
-    fetchCustomers(true).catch(() => {});
+    if (customerEnabled.value) fetchCustomers(true).catch(() => {});
     await checkAndPromptShift();
   }
 });
@@ -1010,7 +1030,7 @@ watch(
   async (val) => {
     if (val?.id && process.client) {
        await Promise.all([fetchCategories(), fetchProducts()]);
-       fetchCustomers(true).catch(() => {});
+       if (customerEnabled.value) fetchCustomers(true).catch(() => {});
        await checkAndPromptShift();
     }
   },
@@ -1714,27 +1734,46 @@ onUnmounted(() => {
                 <input
                   id="pos-customer-input"
                   v-model="paymentForm.customerName"
-                  list="pos-customer-suggestions"
                   :placeholder="
                     customerRequired
                       ? 'Masukkan nama pelanggan (wajib)...'
-                      : 'Nama pelanggan / keterangan (opsional)...'
+                      : customerEnabled
+                        ? 'Ketik / pilih pelanggan (opsional)...'
+                        : 'Nama pelanggan / keterangan (opsional)...'
                   "
                   class="w-full px-4 py-3 text-blue-700 rounded-xl border-2 border-gray-300 focus:border-blue-500 focus:outline-none transition-colors"
+                  autocomplete="off"
                   @input="handleCustomerInput"
+                  @focus="customerInputFocused = true"
+                  @blur="customerInputFocused = false"
                 />
-                <datalist id="pos-customer-suggestions" v-if="customers && customers.length > 0">
-                  <option
-                    v-for="c in customers"
+                <!-- mousedown.prevent keeps focus so the tap is not lost to blur -->
+                <div
+                  v-if="customerSuggestions.length"
+                  class="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
+                >
+                  <button
+                    v-for="c in customerSuggestions"
                     :key="c.id"
-                    :value="c.name"
+                    type="button"
+                    class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-blue-50 active:bg-blue-100"
+                    @mousedown.prevent
+                    @click="pickCustomer(c)"
                   >
-                    {{ c.phone ? `${c.name} (${c.phone})` : c.name }}
-                  </option>
-                </datalist>
+                    <span class="truncate font-semibold text-gray-800">{{ c.name }}</span>
+                    <span class="shrink-0 text-xs text-gray-500">{{ c.phone || "" }}</span>
+                  </button>
+                </div>
               </div>
               <p
-                v-if="matchedCustomerInfo"
+                v-if="customerEnabled && !customers.length"
+                class="text-xs text-gray-500 mt-1.5"
+              >
+                Belum ada pelanggan terdaftar.
+                <NuxtLink to="/customers" class="font-semibold text-blue-600">Tambah di menu Pelanggan</NuxtLink>
+              </p>
+              <p
+                v-if="customerEnabled && matchedCustomerInfo"
                 class="text-xs text-emerald-600 mt-1.5 flex items-center gap-1 font-medium"
               >
                 <span>✓ Terdaftar:</span>

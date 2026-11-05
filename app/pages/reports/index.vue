@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { buildSalesTrend, formatCurrency, formatDateTime, localDateKey, isReturnedTransaction } from "~/utils/helpers";
+import { buildSalesTrend, fetchAllRows, formatCurrency, formatDateTime, localDateKey, localDayEndISO, localDayStartISO, isReturnedTransaction, percentChange, previousPeriod, type ReportPeriod } from "~/utils/helpers";
 import { formatWeight, weightInKg } from "~/utils/pricing";
 
 definePageMeta({
@@ -535,19 +535,20 @@ const filters = reactive({
   endDate: localDateKey(),
   paymentMethod: "all",
 });
-const activeFilter = ref("today");
+const activeFilter = ref<ReportPeriod>("today");
 
-const setFilter = (type: string) => {
+const setFilter = (type: ReportPeriod) => {
   activeFilter.value = type;
   const end = new Date();
   const start = new Date();
 
-  if (type === "today") {
-    // start stays today
-  } else if (type === "week") {
-    start.setDate(end.getDate() - 7);
+  // Ranges include today: "7 Hari" is today + the 6 days before it.
+  if (type === "week") {
+    start.setDate(end.getDate() - 6);
   } else if (type === "month") {
-    start.setDate(end.getDate() - 30);
+    start.setDate(1); // Bulan Ini
+  } else if (type === "month30") {
+    start.setDate(end.getDate() - 29);
   } else if (type === "year") {
     start.setMonth(0, 1); // Jan 1st
   }
@@ -556,6 +557,61 @@ const setFilter = (type: string) => {
   filters.endDate = localDateKey(end);
   loadData();
 };
+
+// Totals of the comparison period ("dibanding minggu lalu") for the summary cards.
+const supabase = useSupabaseClient();
+const previousStats = ref<{ label: string, sales: number, count: number } | null>(null);
+
+const loadPreviousStats = async () => {
+  if (!store.value?.id) return;
+  const prev = previousPeriod(filters.startDate, filters.endDate, activeFilter.value);
+  const storeId = store.value.id;
+  // Today is still running: compare with yesterday up to this same hour, not the full day.
+  const isLiveToday = activeFilter.value === "today" && filters.endDate === localDateKey();
+  const prevEndISO = isLiveToday
+    ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    : localDayEndISO(prev.end);
+  const rows = await fetchAllRows((from, to) => {
+    let query = (supabase.from("transactions") as any)
+      .select("total, status, notes")
+      .eq("store_id", storeId)
+      .gte("created_at", localDayStartISO(prev.start))
+      .lte("created_at", prevEndISO)
+      .order("id");
+    if (filters.paymentMethod !== "all") query = query.eq("payment_method", filters.paymentMethod);
+    return query.range(from, to);
+  });
+  const valid = rows.filter((t: any) => !isReturnedTransaction(t));
+  previousStats.value = {
+    label: isLiveToday ? "kemarin di jam yang sama" : prev.label,
+    sales: valid.reduce((sum: number, t: any) => sum + (Number(t.total) || 0), 0),
+    count: valid.length,
+  };
+};
+
+// "▲ 12% dibanding bulan lalu" for one summary value.
+const comparisonFor = (current: number, previous: number | undefined) => {
+  if (!previousStats.value || previous === undefined) return null;
+  const pct = percentChange(current, previous);
+  const label = previousStats.value.label;
+  if (pct === null) {
+    return current > 0
+      ? { text: `Belum ada data ${label}`, tone: "neutral" }
+      : null;
+  }
+  if (pct === 0) return { text: `Sama dengan ${label}`, tone: "neutral" };
+  return {
+    text: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}% dibanding ${label}`,
+    tone: pct > 0 ? "up" : "down",
+  };
+};
+const comparisonToneClass = {
+  up: "text-emerald-600",
+  down: "text-red-600",
+  neutral: "text-gray-500",
+} as const;
+const salesComparison = computed(() => comparisonFor(totalSales.value, previousStats.value?.sales));
+const countComparison = computed(() => comparisonFor(totalTransactions.value, previousStats.value?.count));
 
 const loadData = async () => {
   
@@ -586,6 +642,9 @@ const loadData = async () => {
         }),
       ]);
       trendRange.value = { start: filters.startDate, end: filters.endDate };
+      previousStats.value = null;
+      // Comparison is extra info: a failure here must not break the report.
+      loadPreviousStats().catch((e) => console.warn("Gagal memuat perbandingan:", e));
     } catch (e: any) {
     } finally {
       loading.value = false;
@@ -1029,6 +1088,14 @@ watch(
             :variant="activeFilter === 'month' ? 'solid' : 'outline'"
             @click="setFilter('month')"
             class="whitespace-nowrap flex-none"
+            >Bulan Ini</UButton
+          >
+          <UButton
+            size="xs"
+            :color="activeFilter === 'month30' ? 'primary' : 'neutral'"
+            :variant="activeFilter === 'month30' ? 'solid' : 'outline'"
+            @click="setFilter('month30')"
+            class="whitespace-nowrap flex-none"
             >30 Hari</UButton
           >
           <UButton
@@ -1155,7 +1222,14 @@ watch(
           <p class="mt-3 text-xl sm:text-2xl font-black text-gray-950 leading-tight">
             {{ formatCurrency(totalSales) }}
           </p>
-          <p class="mt-1 text-xs text-gray-500">Total transaksi valid</p>
+          <p
+            v-if="salesComparison"
+            class="mt-1 text-xs font-semibold"
+            :class="comparisonToneClass[salesComparison.tone as keyof typeof comparisonToneClass]"
+          >
+            {{ salesComparison.text }}
+          </p>
+          <p v-else class="mt-1 text-xs text-gray-500">Total transaksi valid</p>
         </div>
 
         <div class="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-gray-200">
@@ -1166,7 +1240,14 @@ watch(
           <p class="mt-3 text-xl sm:text-2xl font-black text-gray-950 leading-tight">
             {{ totalTransactions }}
           </p>
-          <p class="mt-1 text-xs text-gray-500">Nota dalam periode ini</p>
+          <p
+            v-if="countComparison"
+            class="mt-1 text-xs font-semibold"
+            :class="comparisonToneClass[countComparison.tone as keyof typeof comparisonToneClass]"
+          >
+            {{ countComparison.text }}
+          </p>
+          <p v-else class="mt-1 text-xs text-gray-500">Nota dalam periode ini</p>
         </div>
 
         <div class="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-gray-200">

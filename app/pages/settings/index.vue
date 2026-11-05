@@ -1277,7 +1277,7 @@ watch(() => store.value?.id, syncFormFromStore, { immediate: true });
                           Aktifkan Data Pelanggan
                         </p>
                         <p class="text-xs text-gray-500 mt-0.5">
-                          Tampilkan menu Pelanggan & dropdown di kasir
+                          Pilih pelanggan terdaftar saat bayar di kasir
                         </p>
                       </div>
                     </div>
@@ -1293,6 +1293,14 @@ watch(() => store.value?.id, syncFormFromStore, { immediate: true });
                       "
                     />
                   </div>
+                  <NuxtLink
+                    v-if="storeSettings.customer_enabled"
+                    to="/customers"
+                    class="flex items-center justify-between gap-3 -mt-1 px-4 py-3 rounded-xl bg-white border border-emerald-200 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+                  >
+                    <span>Kelola daftar pelanggan</span>
+                    <UIcon name="i-heroicons-chevron-right" class="w-5 h-5" />
+                  </NuxtLink>
 
                   <!-- Weight Mode Toggle -->
                   <div

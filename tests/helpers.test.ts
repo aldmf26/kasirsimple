@@ -9,6 +9,8 @@ import {
   localDayStartISO,
   nextTransactionNumber,
   buildSalesTrend,
+  percentChange,
+  previousPeriod,
 } from '../app/utils/helpers'
 
 describe('localDateKey', () => {
@@ -112,5 +114,32 @@ describe('buildSalesTrend', () => {
   it('counts a sale just after local midnight on that local day', () => {
     const { rows } = buildSalesTrend([{ created_at: at(2026, 11, 5, 0), total: 700 }], '2026-11-04', '2026-11-05')
     expect(rows.map(r => r.sales)).toEqual([0, 700])
+  })
+})
+
+describe('previousPeriod', () => {
+  it('today compares with yesterday', () => {
+    expect(previousPeriod('2026-11-05', '2026-11-05', 'today')).toEqual({ start: '2026-11-04', end: '2026-11-04', label: 'kemarin' })
+  })
+
+  it('7 days compares with the 7 days before', () => {
+    expect(previousPeriod('2026-10-30', '2026-11-05', 'week')).toEqual({ start: '2026-10-23', end: '2026-10-29', label: '7 hari sebelumnya' })
+  })
+
+  it('this month compares with the same days last month, clamped to month end', () => {
+    expect(previousPeriod('2026-11-01', '2026-11-05', 'month')).toMatchObject({ start: '2026-10-01', end: '2026-10-05', label: 'bulan lalu' })
+    expect(previousPeriod('2026-03-01', '2026-03-31', 'month')).toMatchObject({ start: '2026-02-01', end: '2026-02-28' })
+  })
+
+  it('this year compares with the same dates last year', () => {
+    expect(previousPeriod('2026-01-01', '2026-11-05', 'year')).toMatchObject({ start: '2025-01-01', end: '2025-11-05', label: 'tahun lalu' })
+  })
+})
+
+describe('percentChange', () => {
+  it('rounds and handles an empty previous period', () => {
+    expect(percentChange(112, 100)).toBe(12)
+    expect(percentChange(80, 100)).toBe(-20)
+    expect(percentChange(50, 0)).toBeNull()
   })
 })

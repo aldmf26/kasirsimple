@@ -22,7 +22,7 @@
             @click="openModal()"
             icon="i-heroicons-plus"
             size="lg"
-            color="emerald"
+            color="success"
           >
             Tambah Pelanggan
           </UButton>
@@ -35,45 +35,46 @@
           <table class="w-full">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Nama
                 </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   No. WA
                 </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th class="hidden md:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Alamat / COD
                 </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th class="hidden sm:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th class="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Aksi
                 </th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
               <tr v-if="loading">
-                <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                <td colspan="5" class="px-3 sm:px-6 py-4 text-center text-gray-500">
                   Memuat...
                 </td>
               </tr>
               <tr v-else-if="filteredCustomers.length === 0">
-                <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                <td colspan="5" class="px-3 sm:px-6 py-4 text-center text-gray-500">
                   Belum ada pelanggan
                 </td>
               </tr>
               <tr v-for="customer in filteredCustomers" :key="customer.id" class="hover:bg-gray-50">
-                <td class="px-6 py-4 whitespace-nowrap">
+                <td class="px-3 sm:px-6 py-4 whitespace-nowrap">
                   <div class="text-sm font-medium text-gray-900">{{ customer.name }}</div>
+                  <div v-if="!customer.is_active" class="sm:hidden text-xs text-gray-500">Nonaktif</div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
+                <td class="px-3 sm:px-6 py-4 whitespace-nowrap">
                   <div class="text-sm text-gray-900">{{ customer.phone || '-' }}</div>
                 </td>
-                <td class="px-6 py-4">
+                <td class="hidden md:table-cell px-3 sm:px-6 py-4">
                   <div class="text-sm text-gray-900 max-w-xs truncate">{{ customer.address || '-' }}</div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
+                <td class="hidden sm:table-cell px-3 sm:px-6 py-4 whitespace-nowrap">
                   <span 
                     class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
                     :class="customer.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'"
@@ -81,24 +82,24 @@
                     {{ customer.is_active ? 'Aktif' : 'Nonaktif' }}
                   </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <td class="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <UButton
                     @click="openModal(customer)"
-                    color="gray"
+                    color="neutral"
                     variant="ghost"
                     icon="i-heroicons-pencil"
                     size="xs"
                   />
                   <UButton
                     @click="toggleActive(customer)"
-                    color="gray"
+                    color="neutral"
                     variant="ghost"
                     :icon="customer.is_active ? 'i-heroicons-x-circle' : 'i-heroicons-check-circle'"
                     size="xs"
                   />
                   <UButton
                     @click="removeCustomer(customer)"
-                    color="red"
+                    color="error"
                     variant="ghost"
                     icon="i-heroicons-trash"
                     size="xs"
@@ -112,7 +113,8 @@
     </div>
 
     <!-- Modal -->
-    <UModal v-model="isModalOpen">
+    <UModal v-model:open="isModalOpen">
+      <template #content>
       <UCard>
         <template #header>
           <h3 class="text-lg font-semibold">{{ editingCustomer ? 'Edit Pelanggan' : 'Tambah Pelanggan' }}</h3>
@@ -136,7 +138,7 @@
           </UFormField>
 
           <UFormField label="Status">
-            <URadioGroup v-model="form.is_active" :options="[
+            <URadioGroup v-model="form.is_active" orientation="horizontal" :items="[
               { label: 'Aktif', value: true },
               { label: 'Nonaktif', value: false }
             ]" />
@@ -145,17 +147,18 @@
 
         <template #footer>
           <div class="flex justify-end gap-2">
-            <UButton color="gray" variant="ghost" @click="isModalOpen = false">Batal</UButton>
-            <UButton color="emerald" @click="saveCustomer" :loading="loading">Simpan</UButton>
+            <UButton color="neutral" variant="ghost" @click="isModalOpen = false">Batal</UButton>
+            <UButton color="success" @click="saveCustomer" :loading="loading">Simpan</UButton>
           </div>
         </template>
       </UCard>
+      </template>
     </UModal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useCustomers } from '~/composables/useCustomers'
 import { useStore } from '~/composables/useStore'
 
@@ -245,7 +248,11 @@ const removeCustomer = async (customer: any) => {
   }
 }
 
-onMounted(async () => {
-  await fetchCustomers(false)
-})
+watch(
+  () => store.value?.id,
+  (storeId) => {
+    if (storeId) fetchCustomers(false).catch(() => {})
+  },
+  { immediate: true },
+)
 </script>
