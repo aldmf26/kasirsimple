@@ -9,7 +9,7 @@ function closeMenu() {
   mobileMenuOpen.value = false
 }
 
-const instagramDmUrl = 'https://ig.me/m/kasir.ok'
+const waHello = waLink('Halo KasirOK, saya mau tanya aplikasi kasirnya.')
 </script>
 
 <template>
@@ -18,25 +18,47 @@ const instagramDmUrl = 'https://ig.me/m/kasir.ok'
     <header class="landing-nav">
       <div class="nav-inner">
         <div class="nav-brand">
-          <img src="/images/logo-kasirok.png" alt="Logo" class="nav-logo">
+          <img
+            src="/images/logo-kasirok.png"
+            alt="Logo"
+            class="nav-logo"
+          >
           <span class="nav-brand-text">KasirOK</span>
         </div>
 
         <!-- Desktop nav -->
         <nav class="nav-links">
-          <a href="#features" class="nav-link">Fitur</a>
-          <a href="#pricing" class="nav-link">Harga</a>
+          <a
+            href="#features"
+            class="nav-link"
+          >Fitur</a>
+          <a
+            href="#pricing"
+            class="nav-link"
+          >Harga</a>
         </nav>
 
         <div class="nav-actions">
-          <NuxtLink to="/auth/login" class="nav-login">Masuk</NuxtLink>
-          <a :href="instagramDmUrl" target="_blank" rel="noopener" class="nav-register">
-            DM Instagram
+          <NuxtLink
+            to="/auth/login"
+            class="nav-login"
+          >Masuk</NuxtLink>
+          <a
+            :href="waHello"
+            target="_blank"
+            rel="noopener"
+            class="nav-register"
+          >
+            Chat WhatsApp
           </a>
         </div>
 
         <!-- Mobile hamburger -->
-        <button class="nav-hamburger" @click="toggleMenu" aria-label="Menu">
+        <button
+          class="nav-hamburger"
+          aria-label="Menu"
+          @click="toggleMenu"
+        >
           <span :class="['hamburger-line', { open: mobileMenuOpen }]" />
           <span :class="['hamburger-line', { open: mobileMenuOpen }]" />
           <span :class="['hamburger-line', { open: mobileMenuOpen }]" />
@@ -45,19 +67,34 @@ const instagramDmUrl = 'https://ig.me/m/kasir.ok'
 
       <!-- Mobile menu -->
       <Transition name="slide-menu">
-        <div v-if="mobileMenuOpen" class="mobile-menu">
-          <a href="#features" class="mobile-link" @click="closeMenu">Fitur</a>
-          <a href="#pricing" class="mobile-link" @click="closeMenu">Harga</a>
+        <div
+          v-if="mobileMenuOpen"
+          class="mobile-menu"
+        >
+          <a
+            href="#features"
+            class="mobile-link"
+            @click="closeMenu"
+          >Fitur</a>
+          <a
+            href="#pricing"
+            class="mobile-link"
+            @click="closeMenu"
+          >Harga</a>
           <div class="mobile-actions">
-            <NuxtLink to="/auth/login" class="mobile-login" @click="closeMenu">Masuk</NuxtLink>
+            <NuxtLink
+              to="/auth/login"
+              class="mobile-login"
+              @click="closeMenu"
+            >Masuk</NuxtLink>
             <a
-              :href="instagramDmUrl"
+              :href="waHello"
               target="_blank"
               rel="noopener"
               class="mobile-register"
               @click="closeMenu"
             >
-              DM Instagram
+              Chat WhatsApp
             </a>
           </div>
         </div>
@@ -72,7 +109,11 @@ const instagramDmUrl = 'https://ig.me/m/kasir.ok'
     <footer class="landing-footer">
       <div class="footer-inner">
         <div class="footer-brand">
-          <img src="/images/logo-kasirok.png" alt="Logo" class="footer-logo">
+          <img
+            src="/images/logo-kasirok.png"
+            alt="Logo"
+            class="footer-logo"
+          >
           <span class="footer-brand-text">KasirOK</span>
         </div>
 
@@ -83,7 +124,10 @@ const instagramDmUrl = 'https://ig.me/m/kasir.ok'
             class="social-link"
           >
             <div class="social-icon-wrap">
-              <UIcon name="i-simple-icons-instagram" class="w-5 h-5" />
+              <UIcon
+                name="i-simple-icons-instagram"
+                class="w-5 h-5"
+              />
             </div>
             <span>@kasir.ok</span>
           </a>
@@ -91,11 +135,14 @@ const instagramDmUrl = 'https://ig.me/m/kasir.ok'
 
         <p class="footer-copy">
           &copy; {{ new Date().getFullYear() }} KasirOK. All rights reserved.
+          Ikon 3D: <a
+            href="https://github.com/microsoft/fluentui-emoji"
+            target="_blank"
+            rel="noopener"
+          >Microsoft Fluent Emoji</a> (MIT).
         </p>
       </div>
     </footer>
-
-    <UNotifications />
   </div>
 </template>
 
@@ -175,13 +222,13 @@ const instagramDmUrl = 'https://ig.me/m/kasir.ok'
   left: 0;
   width: 0;
   height: 2px;
-  background: #6d28d9;
+  background: #2563eb;
   border-radius: 9999px;
   transition: width 0.3s ease;
 }
 
 .nav-link:hover {
-  color: #6d28d9;
+  color: #2563eb;
 }
 
 .nav-link:hover::after {
@@ -203,24 +250,24 @@ const instagramDmUrl = 'https://ig.me/m/kasir.ok'
 }
 
 .nav-login:hover {
-  color: #6d28d9;
+  color: #2563eb;
 }
 
 .nav-register {
-  background: #6d28d9;
+  background: #2563eb;
   color: #fff;
   padding: 0.5rem 1.25rem;
   border-radius: 9999px;
   font-size: 0.85rem;
   font-weight: 700;
   text-decoration: none;
-  box-shadow: 0 4px 14px rgba(109, 40, 217, 0.22);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.22);
   transition: all 0.3s;
 }
 
 .nav-register:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(109, 40, 217, 0.3);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.3);
 }
 
 /* Hamburger */
@@ -279,7 +326,7 @@ const instagramDmUrl = 'https://ig.me/m/kasir.ok'
 }
 
 .mobile-link:hover {
-  color: #6d28d9;
+  color: #2563eb;
 }
 
 .mobile-actions {
@@ -311,10 +358,10 @@ const instagramDmUrl = 'https://ig.me/m/kasir.ok'
   font-size: 0.95rem;
   font-weight: 700;
   color: #fff;
-  background: #6d28d9;
+  background: #2563eb;
   border-radius: 0.75rem;
   text-decoration: none;
-  box-shadow: 0 4px 14px rgba(109, 40, 217, 0.22);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.22);
 }
 
 /* Menu animation */

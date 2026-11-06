@@ -4,7 +4,7 @@ const { store, isSubscriptionExpired } = useStore();
 const waLink = computed(() => {
   const storeName = store.value?.name || "";
   const message = `Halo Admin, saya ingin konfirmasi pembayaran langganan untuk toko: ${storeName}`;
-  return `https://wa.me/62895413111053?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(message)}`;
 });
 </script>
 
